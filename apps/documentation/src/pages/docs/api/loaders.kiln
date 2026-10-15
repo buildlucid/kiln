@@ -48,6 +48,28 @@ const kvLoader = (kv: KVNamespace): Loader => ({
 {% endverbatim %}
 {% endapply %}
 
+<h2>Listing templates</h2>
+
+<p>A loader can also have a <code>list</code> method that returns the name of every template it holds, such as <code>pages/home.kiln</code>. Kiln never calls it while rendering. Tools use it, such as <a href="/docs/api/types/"><code>generateTypes</code></a>.</p>
+
+<ul>
+	<li><code>memoryLoader</code> lists every template you gave it.</li>
+	<li><code>fileLoader</code> lists every file under its root, skipping files and folders whose names start with a dot.</li>
+	<li>In your own loader, <code>list</code> is optional and can be async.</li>
+</ul>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+const kvLoader = (kv: KVNamespace): Loader => ({
+	load: (name) => kv.get(`templates/${name}`),
+	list: async () =>
+		(await kv.list({ prefix: "templates/" })).keys.map((key) =>
+			key.name.slice("templates/".length),
+		),
+});
+{% endverbatim %}
+{% endapply %}
+
 <h2>Names</h2>
 
 <p>Kiln resolves names before it calls the loader. The loader gets a clean path relative to its root, with the <code>.kiln</code> extension added when the name has none. Kiln rejects names that would point above the root. See <a href="/docs/language/syntax/#template-names">Template names</a>.</p>

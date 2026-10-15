@@ -70,6 +70,29 @@ describe("analyze", () => {
 		expect(analysis.templates.map((t) => t.name)).toContain("m.kiln");
 	});
 
+	test("reports variables set at the top level", async () => {
+		const analysis = await kiln.analyze(
+			"page",
+			'{% extends "base" %}{% set title = "T" %}{% set intro %}Hi{% endset %}{% block b %}{% set local = 1 %}{% endblock %}',
+		);
+		expect(analysis.sets).toEqual(["title", "intro"]);
+	});
+
+	test("reports list, shape and host types", async () => {
+		const analysis = await createKiln({
+			loader: memoryLoader({}),
+			types: { Post: () => true },
+		}).analyze("card", "{% props posts: Post[], link: { href?: string } %}");
+		expect(analysis.props.map((prop) => prop.type)).toEqual([
+			[{ list: [{ named: "Post" }] }],
+			[
+				{
+					shape: [{ name: "href", optional: true, type: ["string"] }],
+				},
+			],
+		]);
+	});
+
 	test("includes diagnostics for invalid templates", async () => {
 		const analysis = await kiln.analyze("bad", "{{ x|nope }}");
 		expect(analysis.diagnostics.map((d) => d.code)).toEqual(["unknown-filter"]);

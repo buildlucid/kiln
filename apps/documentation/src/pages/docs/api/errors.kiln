@@ -65,11 +65,22 @@ for (const problem of diagnostics) {
 {% endverbatim %}
 {% endapply %}
 
+<p>As well as syntax errors, <code>check</code> looks at the other templates this one uses, when their names are written out in full rather than built at render time. It reports:</p>
+
+<ul>
+	<li>A template that doesn't exist, unless the <code>include</code> says <code>ignore missing</code>.</li>
+	<li>An <code>include</code> or <code>component</code> that passes a prop the template doesn't declare, leaves out a required prop, or passes a written-out value of the wrong type, such as <code>variant: "danger"</code>.</li>
+	<li>A page with <code>props</code> that extends a layout, when the layout needs a prop the page neither declares nor sets. The page only accepts its own props, so the layout could never get it.</li>
+	<li>A warning for a variable that a template with <code>props</code> reads but doesn't declare, set or get from globals. Layouts may read their page's variables, so declare those as props to remove the warning.</li>
+</ul>
+
+<p>Apart from missing templates, these checks follow strict mode, so they are skipped when <code>strict</code> is off. <code>check</code> only knows what a template is passed when it can see the call, so it doesn't report unknown variables in templates without <code>props</code>.</p>
+
 <p>Each diagnostic has a <code>code</code>, a <code>message</code>, a <code>severity</code> of <code>"error"</code> or <code>"warning"</code>, the <code>template</code>, and <code>start</code> and <code>end</code> positions with a line and column. Codes are stable, so tools can match them.</p>
 
 <h2>Analysing templates</h2>
 
-<p><code>analyze</code> reports what a template uses: the variables it reads, its props, the functions, filters and tests it calls, the templates it extends, includes or imports, and its blocks and macros. Use it to build tooling, or to work out which data a page depends on.</p>
+<p><code>analyze</code> reports what a template uses: the variables it reads, its props, the variables it sets at its top level, the functions, filters and tests it calls, the templates it extends, includes or imports, and its blocks and macros. Use it to build tooling, or to work out which data a page depends on.</p>
 
 {% apply highlight("ts") %}
 {% verbatim %}

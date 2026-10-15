@@ -12,6 +12,7 @@ import {
 	type Expression,
 	type FilterCall,
 	type HashEntry,
+	type PropType,
 	type Statement,
 	type TemplateNode,
 } from "../parser/ast.js";
@@ -819,13 +820,15 @@ class Compiler {
 	}
 
 	#props(node: Extract<Statement, { type: "Props" }>): Stmt {
+		const types = this.#env.types;
 		const props = node.props.map((prop) => {
+			if (prop.type) this.#checkTypeNames(prop.type, prop.span);
 			const compiled = prop.default ? this.#expr(prop.default) : null;
 			if (
 				prop.type &&
 				prop.default &&
 				compiled?.constant &&
-				!matchesType(compiled.constant.value, prop.type)
+				!matchesType(compiled.constant.value, prop.type, types)
 			) {
 				this.#error(
 					"prop-type",
@@ -847,7 +850,7 @@ class Compiler {
 		const checkTypes = (run: Run, scope: Scope): void => {
 			for (const { name, type } of typed) {
 				const value = scope[name];
-				if (!matchesType(value, type)) {
+				if (!matchesType(value, type, types)) {
 					throw fail(
 						run,
 						span,
@@ -911,6 +914,23 @@ class Compiler {
 		// `props` is only valid at the top level, once, so this is the template's own.
 		this.#template.props = apply;
 		return apply;
+	}
+
+	/** Reports host type names, such as `Post`, that the environment has no check for. */
+	#checkTypeNames(type: readonly PropType[], span: Span): void {
+		for (const member of type) {
+			if (typeof member === "string" || "literal" in member) continue;
+			if ("list" in member) this.#checkTypeNames(member.list, span);
+			else if ("shape" in member) {
+				for (const key of member.shape) this.#checkTypeNames(key.type, span);
+			} else if (!this.#env.types.has(member.named)) {
+				this.#error(
+					"unknown-type",
+					`Unknown type "${member.named}". Register it with the "types" option`,
+					span,
+				);
+			}
+		}
 	}
 
 	#defineBlock(node: Extract<Statement, { type: "Block" }>): void {

@@ -193,6 +193,11 @@ export const navigation = [
 				description: "Handle errors and check templates before rendering.",
 			},
 			{
+				title: "TypeScript types",
+				url: "/docs/api/types/",
+				description: "Generate types for render from your templates' props.",
+			},
+			{
 				title: "Safety and limits",
 				url: "/docs/api/safety/",
 				description: "Run templates you didn't write.",

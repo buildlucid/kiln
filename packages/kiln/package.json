@@ -23,7 +23,7 @@
 	},
 	"sideEffects": false,
 	"scripts": {
-		"build": "tsc --noEmit && tsc --noEmit -p test && vp pack",
+		"build": "tsc --noEmit && tsc --noEmit -p test && tsc --noEmit -p test/types && vp pack",
 		"dev": "vp pack --watch"
 	},
 	"files": [

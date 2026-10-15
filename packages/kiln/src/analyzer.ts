@@ -29,6 +29,8 @@ export type Analysis = {
 	variables: string[];
 	/** `type` lists the members of the prop's type, or is `null` when the prop is untyped. */
 	props: AnalysedProp[];
+	/** Variables set at the top level. A layout sees those its child template sets. */
+	sets: string[];
 	functions: string[];
 	filters: string[];
 	tests: string[];
@@ -40,7 +42,7 @@ export type Analysis = {
 const MAX_DEPTH = 1000;
 
 /** The statement lists nested inside a statement. */
-const childStatements = (node: Statement): Statement[][] => {
+export const childStatements = (node: Statement): Statement[][] => {
 	switch (node.type) {
 		case "If":
 			return [
@@ -64,10 +66,15 @@ const childStatements = (node: Statement): Statement[][] => {
 	}
 };
 
-/** Walks a compiled template's syntax tree and reports what it uses. */
+/**
+ * Walks a compiled template's syntax tree and reports what it uses.
+ *
+ * When `reads` is given, it collects where each variable in `variables` is first read without a guard such as `??`, `?.`, `default` or `is defined`. Strict mode fails on those reads when the variable is missing.
+ */
 export const analyzeTemplate = (
 	template: CompiledTemplate,
 	globals: Scope,
+	reads?: Map<string, Span>,
 ): Analysis => {
 	const source = template.source;
 	const variables = new Set<string>();
@@ -148,19 +155,29 @@ export const analyzeTemplate = (
 		}
 	};
 
+	// A guarded expression, such as the left of `??`, is null rather than an error when its variable is missing.
+	const guarded = (node: Expression): void => {
+		if (node.type === "Name") read(node.name, node.span, true);
+		else if (node.type === "Member") {
+			guarded(node.object);
+			if (node.property.type !== "Literal") expression(node.property);
+		} else if (node.type === "OptionalChain") guarded(node.expression);
+		else expression(node);
+	};
+
+	const read = (name: string, span: Span, isGuarded: boolean) => {
+		if (name === "loop" || name === "slots" || declared(name)) return;
+		variables.add(name);
+		if (reads && !isGuarded && !reads.has(name)) reads.set(name, span);
+	};
+
 	const visitExpression = (node: Expression): void => {
 		switch (node.type) {
 			case "Literal":
 			case "Invalid":
 				return;
 			case "Name":
-				if (
-					node.name !== "loop" &&
-					node.name !== "slots" &&
-					!declared(node.name)
-				) {
-					variables.add(node.name);
-				}
+				read(node.name, node.span, false);
 				return;
 			case "Interpolation":
 				node.parts.forEach(expression);
@@ -182,7 +199,8 @@ export const analyzeTemplate = (
 				expression(node.operand);
 				return;
 			case "Binary":
-				expression(node.left);
+				if (node.operator === "??") guarded(node.left);
+				else expression(node.left);
 				expression(node.right);
 				return;
 			case "Conditional":
@@ -195,7 +213,7 @@ export const analyzeTemplate = (
 				if (node.property.type !== "Literal") expression(node.property);
 				return;
 			case "OptionalChain":
-				expression(node.expression);
+				guarded(node.expression);
 				return;
 			case "Call": {
 				const callee = node.callee;
@@ -223,12 +241,14 @@ export const analyzeTemplate = (
 			}
 			case "Filter":
 				filters.add(node.name);
-				expression(node.input);
+				if (node.name === "default") guarded(node.input);
+				else expression(node.input);
 				visitArguments(node.args);
 				return;
 			case "Test":
 				tests.add(node.name);
-				expression(node.input);
+				if (node.name === "defined") guarded(node.input);
+				else expression(node.input);
 				visitArguments(node.args);
 				return;
 			case "Arrow":
@@ -376,6 +396,9 @@ export const analyzeTemplate = (
 		diagnostics: template.diagnostics,
 		variables: [...variables],
 		props,
+		sets: template.ast.body.flatMap((node) =>
+			node.type === "Set" || node.type === "SetBlock" ? [node.name] : [],
+		),
 		functions: [...functions],
 		filters: [...filters],
 		tests: [...tests],

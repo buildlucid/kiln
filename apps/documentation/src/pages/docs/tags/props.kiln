@@ -51,7 +51,6 @@
 <ul>
 	<li>A prop that may be null must include <code>null</code> in its type.</li>
 	<li><code>string</code> also accepts safe markup.</li>
-	<li>Only the outer value is checked. <code>tags: array</code> doesn't check the items.</li>
 	<li>Untyped and typed props can be mixed.</li>
 </ul>
 
@@ -61,7 +60,73 @@
 {% endverbatim %}
 {% endapply %}
 
+<h2>Lists and shapes</h2>
+
+<p>Describe what a list holds with <code>[]</code>, and the keys a hash has with braces. Mark an optional key with <code>?</code>. Use brackets to group a union.</p>
+
+{% apply highlight("kiln") %}
+{% verbatim %}
+{% props
+	tags: string[],
+	levels: (2 | 3)[] = [],
+	author: { name: string, url?: string | null }
+%}
+{% endverbatim %}
+{% endapply %}
+
+<ul>
+	<li><code>string[]</code> accepts an array.</li>
+	<li>A shape accepts a hash or an object, such as a class instance.</li>
+	<li>Shapes and lists can be nested, such as <code>{ links: { href: string }[] }</code>.</li>
+</ul>
+
+<h2>Your own types</h2>
+
+<p>A type name that starts with a capital letter, such as <code>Post</code>, is one your app defines. Register a check for it when you create the environment. See <a href="/docs/api/types/#your-own-types">TypeScript types</a>.</p>
+
+{% apply example(context: { post: { title: "Hello, world", url: "/blog/hello-world/" } }) %}
+{% verbatim %}
+{% props post: Post %}
+<a href="{{ post.url }}">{{ post.title }}</a>
+{% endverbatim %}
+{% endapply %}
+
+<p>Using a type that isn't registered is an error.</p>
+
+<h2>How values are checked</h2>
+
+<p>Kiln checks types in strict mode, after defaults apply. It checks the outer value only, so it stays fast however much data a template gets:</p>
+
+<ul>
+	<li><code>tags: string[]</code> checks that <code>tags</code> is an array, not that every item is a string.</li>
+	<li>A shape checks that the value is a hash or an object, not each key.</li>
+	<li>Your own types run the check you registered.</li>
+</ul>
+
+<p>Strict mode still catches a missing key where the template reads it. For a full check of nested data before you deploy, generate <a href="/docs/api/types/">TypeScript types</a> from your templates.</p>
+
 <h2>In layouts</h2>
 
 <p>A layout reached through <code>extends</code> can use <code>props</code> too. It checks required props and applies defaults, but doesn't reject other variables, because the render data was meant for the page.</p>
+
+<p>A page can provide a layout's props with a top-level <code>set</code>, as well as through the data you render it with.</p>
+
+{% set base %}
+{% verbatim %}
+{% props title %}
+<title>{{ title }}</title>
+{% block content %}{% endblock %}
+{% endverbatim %}
+{% endset %}
+{% apply example(templates: { "layouts/base.kiln": base }) %}
+{% verbatim %}
+{% extends "layouts/base" %}
+{% set title = "About us" %}
+{% block content %}<h1>{{ title }}</h1>{% endblock %}
+{% endverbatim %}
+{% endapply %}
+
+<h2>Checking without rendering</h2>
+
+<p><code>check</code> compares each <code>include</code>, <code>component</code> and <code>extends</code> with the props of the template it uses, so a misspelt or missing prop shows up before the page renders. See <a href="/docs/api/errors/#checking-templates">Errors and checks</a>.</p>
 {% endblock %}

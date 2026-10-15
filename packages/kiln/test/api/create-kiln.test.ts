@@ -44,6 +44,16 @@ describe("createKiln", () => {
 		).toThrow(/valid/);
 	});
 
+	test("refuses type names that don't start with a capital letter", () => {
+		const loader = memoryLoader({});
+		expect(() => createKiln({ loader, types: { post: () => true } })).toThrow(
+			/capital letter/,
+		);
+		expect(() =>
+			createKiln({ loader, types: { Post: () => true } }),
+		).not.toThrow();
+	});
+
 	test("refuses an unknown escaping strategy", () => {
 		// A value from untyped code, which the types would otherwise reject.
 		const autoescape = "xml" as EscapeStrategy;

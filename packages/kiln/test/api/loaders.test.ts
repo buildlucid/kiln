@@ -17,6 +17,13 @@ describe("memoryLoader", () => {
 		expect(await kiln.render("a")).toBe("x");
 	});
 
+	test("lists every template by resolved name", () => {
+		expect(memoryLoader({ "pages/home": "", "a.html": "" }).list()).toEqual([
+			"pages/home.kiln",
+			"a.html",
+		]);
+	});
+
 	test("a missing top-level template is an error without a position", async () => {
 		const kiln = createKiln({ loader: memoryLoader({}) });
 		await expect(kiln.render("nope")).rejects.toMatchObject({
@@ -86,5 +93,19 @@ describe("fileLoader", () => {
 		await expect(kiln.render("missing")).rejects.toMatchObject({
 			code: "missing-template",
 		});
+	});
+
+	test("lists every file under the root, skipping dot files and folders", async () => {
+		const root = mkdtempSync(join(tmpdir(), "kiln-"));
+		mkdirSync(join(root, "pages/blog"), { recursive: true });
+		mkdirSync(join(root, ".cache"));
+		writeFileSync(join(root, "pages/blog/post.kiln"), "");
+		writeFileSync(join(root, "base.kiln"), "");
+		writeFileSync(join(root, ".DS_Store"), "");
+		writeFileSync(join(root, ".cache/old.kiln"), "");
+		expect((await fileLoader({ root }).list()).sort()).toEqual([
+			"base.kiln",
+			"pages/blog/post.kiln",
+		]);
 	});
 });

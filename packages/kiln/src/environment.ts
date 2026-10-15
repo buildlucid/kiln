@@ -1,6 +1,7 @@
 import { type Analysis, analyzeTemplate } from "./analyzer.js";
 import { builtinFilters } from "./builtins/filters.js";
 import { builtinFunctions, builtinTests } from "./builtins/functions.js";
+import { checkReferences } from "./checker.js";
 import { compileTemplate } from "./compiler/compiler.js";
 import { type Diagnostic, type KilnIssue, KilnRenderError } from "./errors.js";
 import { resolveTemplateName } from "./names.js";
@@ -15,6 +16,7 @@ import {
 	type RenderInfo,
 	RenderState,
 	type Scope,
+	type TypeCheck,
 } from "./runtime/types.js";
 import { hashKeys, isPlainObject, setOwn } from "./runtime/values.js";
 
@@ -24,7 +26,54 @@ export type { RenderInfo };
 export type Loader = {
 	/** Returns the source for a resolved name, such as `pages/page.kiln`, or `null` if it does not exist. */
 	load(name: string): string | null | Promise<string | null>;
+	/** Returns every resolved name the loader holds. Rendering never calls it; tools such as `generateTypes` do. */
+	list?(): string[] | Promise<string[]>;
 };
+
+/**
+ * TypeScript types for host prop types, such as `Post`. Empty until the host adds to it:
+ *
+ * ```ts
+ * declare module "@lucidcms/kiln" {
+ * 	interface KilnTypes { Post: PostView }
+ * }
+ * ```
+ */
+// oxlint-disable-next-line typescript/no-empty-interface, typescript/no-empty-object-type -- filled in by declaration merging
+export interface KilnTypes {}
+
+/**
+ * The data and block names of each template, keyed by name without `.kiln`. Empty until the file `generateTypes` writes fills it in, so `render` accepts any name and data.
+ */
+// oxlint-disable-next-line typescript/no-empty-interface, typescript/no-empty-object-type -- filled in by declaration merging
+export interface KilnTemplates {}
+
+/** The `types` option: a type guard for each type in `KilnTypes`, plus any other checks. */
+export type TypeChecks = {
+	[Name in keyof KilnTypes]: (value: unknown) => value is KilnTypes[Name];
+} & Record<string, TypeCheck>;
+
+/** A template name. Names from `KilnTemplates` complete in editors, and any other string is accepted. */
+// oxlint-disable-next-line typescript/no-redundant-type-constituents -- `KilnTemplates` is empty until the host's generated file fills it in
+export type TemplateName = (keyof KilnTemplates & string) | (string & {});
+
+type TemplateEntry<Name extends string> = (
+	Name extends `${infer Base}.kiln` ? Base : Name
+) extends infer Key
+	? Key extends keyof KilnTemplates
+		? KilnTemplates[Key]
+		: undefined
+	: undefined;
+
+/** The data `render` takes for a template. Any data for a name `KilnTemplates` doesn't list. */
+export type TemplateContext<Name extends string> =
+	TemplateEntry<Name> extends { context: infer Context }
+		? Context
+		: Record<string, unknown>;
+
+/** The block names `renderBlock` takes for a template. Any name for a template `KilnTemplates` doesn't list. */
+export type TemplateBlock<Name extends string> =
+	TemplateEntry<Name> extends { blocks: infer Block } ? Block : string;
 
 const renderAware: unique symbol = Symbol("kiln.renderAware");
 
@@ -53,6 +102,8 @@ export type KilnOptions<State = undefined> = {
 	functions?: Record<string, KilnCallable<State>>;
 	filters?: Record<string, KilnCallable<State>>;
 	tests?: Record<string, KilnCallable<State>>;
+	/** Checks for host prop types, such as `Post`. Names start with a capital letter. */
+	types?: TypeChecks;
 	globals?: Record<string, unknown>;
 	/** Undefined variables and missing properties are errors. Default `true`. */
 	strict?: boolean;
@@ -78,25 +129,28 @@ type BaseRenderOptions = {
 export type RenderOptions<State = undefined> = BaseRenderOptions &
 	(undefined extends State ? { state?: State } : { state: State });
 
-type RenderOptionsArgument<State> = undefined extends State
-	? [options?: RenderOptions<State>]
-	: [options: RenderOptions<State>];
+/** The data and options after a template name: the data is optional when every key is, and the options when `State` allows it. */
+type RenderArguments<Context, State> = [
+	// oxlint-disable-next-line typescript/no-empty-object-type -- `{}` is the data with no keys
+	...({} extends Context ? [context?: Context] : [context: Context]),
+	...(undefined extends State
+		? [options?: RenderOptions<State>]
+		: [options: RenderOptions<State>]),
+];
 
 export type Kiln<State = undefined> = {
 	/** Renders a template. Rejects with `KilnSyntaxError` or `KilnRenderError`. */
-	render(
-		name: string,
-		context?: Record<string, unknown>,
-		...options: RenderOptionsArgument<State>
+	render<Name extends TemplateName>(
+		name: Name,
+		...args: RenderArguments<TemplateContext<Name>, State>
 	): Promise<string>;
 	/**
 	 * Renders one block of a template, such as a fragment for an htmx or fetch request. Child templates' top-level statements run first, as in `render`.
 	 */
-	renderBlock(
-		name: string,
-		block: string,
-		context?: Record<string, unknown>,
-		...options: RenderOptionsArgument<State>
+	renderBlock<Name extends TemplateName>(
+		name: Name,
+		block: TemplateBlock<Name>,
+		...args: RenderArguments<TemplateContext<Name>, State>
 	): Promise<string>;
 	/** Parses and checks a template without rendering it. Pass `source` to check unsaved text. */
 	check(name: string, source?: string): Promise<Diagnostic[]>;
@@ -127,6 +181,7 @@ const DEFAULT_LIMITS: Limits = {
 };
 
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const TYPE_NAME = /^[A-Z][A-Za-z0-9_]*$/;
 const TEST_NAME = /^[A-Za-z_][A-Za-z0-9_]*( [A-Za-z_][A-Za-z0-9_]*)?$/;
 const RESERVED = {
 	function: new Set(["parent", "block"]),
@@ -179,6 +234,7 @@ class Environment<State> implements EnvironmentCore {
 	readonly functions: Map<string, CallableEntry>;
 	readonly filters: Map<string, CallableEntry>;
 	readonly tests: Map<string, CallableEntry>;
+	readonly types: Map<string, TypeCheck>;
 	readonly globals: Scope;
 	readonly limits: Limits;
 	readonly locale: string;
@@ -212,6 +268,20 @@ class Environment<State> implements EnvironmentCore {
 		this.functions = registry("function", builtinFunctions, options.functions);
 		this.filters = registry("filter", builtinFilters, options.filters);
 		this.tests = registry("test", builtinTests, options.tests);
+		this.types = new Map();
+		for (const [name, check] of Object.entries<TypeCheck>(
+			options.types ?? {},
+		)) {
+			if (!TYPE_NAME.test(name)) {
+				throw new TypeError(
+					`"${name}" is not a valid type name. Type names start with a capital letter`,
+				);
+			}
+			if (typeof check !== "function") {
+				throw new TypeError(`type "${name}" must be a function`);
+			}
+			this.types.set(name, check);
+		}
 
 		const globals = Object.create(null) as Record<string, unknown>;
 		const provided = options.globals ?? {};
@@ -339,24 +409,27 @@ export const createKiln = <State = undefined>(
 	options: KilnOptions<State>,
 ): Kiln<State> => {
 	const env = new Environment<State>(options);
+	type Options = BaseRenderOptions & { state?: State };
+	// The typed signatures only narrow what callers may pass, so these take the plain shapes.
+	const render = (
+		name: string,
+		context?: Record<string, unknown>,
+		renderOptions?: Options,
+	) => env.render(name, context, renderOptions ?? {});
+	const renderBlock = (
+		name: string,
+		block: string,
+		context?: Record<string, unknown>,
+		renderOptions?: Options,
+	) => {
+		if (typeof block !== "string") {
+			throw new TypeError("renderBlock needs a block name");
+		}
+		return env.render(name, context, renderOptions ?? {}, block);
+	};
 	return {
-		render: (name, context, ...rest) =>
-			env.render(
-				name,
-				context,
-				(rest[0] ?? {}) as BaseRenderOptions & { state?: State },
-			),
-		renderBlock: (name, block, context, ...rest) => {
-			if (typeof block !== "string") {
-				throw new TypeError("renderBlock needs a block name");
-			}
-			return env.render(
-				name,
-				context,
-				(rest[0] ?? {}) as BaseRenderOptions & { state?: State },
-				block,
-			);
-		},
+		render: render as Kiln<State>["render"],
+		renderBlock: renderBlock as Kiln<State>["renderBlock"],
 		check: async (name, source) => {
 			const template = await env.compileFor(name, source);
 			if (!template) {
@@ -372,7 +445,10 @@ export const createKiln = <State = undefined>(
 					},
 				];
 			}
-			return template.diagnostics;
+			const references = await checkReferences(env, template);
+			return [...template.diagnostics, ...references].sort(
+				(a, b) => a.start.offset - b.start.offset,
+			);
 		},
 		analyze: async (name, source) => {
 			const template = await env.compileFor(name, source);
@@ -396,12 +472,12 @@ export const createKiln = <State = undefined>(
  */
 export const memoryLoader = (
 	templates: Record<string, string> | Map<string, string>,
-): Loader => {
+): Omit<Loader, "list"> & { list(): string[] } => {
 	const map = new Map<string, string>();
 	const entries =
 		templates instanceof Map ? templates : Object.entries(templates);
 	for (const [name, source] of entries) {
 		map.set(resolveTemplateName(name), source);
 	}
-	return { load: (name) => map.get(name) ?? null };
+	return { load: (name) => map.get(name) ?? null, list: () => [...map.keys()] };
 };

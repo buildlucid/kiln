@@ -94,6 +94,9 @@ export type CallableEntry =
 			render: boolean;
 	  };
 
+/** Checks a value against a host type, such as `Post`. Hosts register these with the `types` option. */
+export type TypeCheck = (value: unknown) => boolean;
+
 /** What the runtime needs from the environment. */
 export interface EnvironmentCore {
 	readonly strict: boolean;
@@ -102,6 +105,7 @@ export interface EnvironmentCore {
 	readonly functions: ReadonlyMap<string, CallableEntry>;
 	readonly filters: ReadonlyMap<string, CallableEntry>;
 	readonly tests: ReadonlyMap<string, CallableEntry>;
+	readonly types: ReadonlyMap<string, TypeCheck>;
 	load(
 		name: string,
 	): CompiledTemplate | null | Promise<CompiledTemplate | null>;

@@ -1,0 +1,116 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>Kiln can write a TypeScript file that describes every template's <a href="/docs/tags/props/"><code>props</code></a>. With it, your editor completes template names in <code>render</code>, checks the data you pass, and knows which blocks <code>renderBlock</code> can render.</p>
+
+<h2>Generating types</h2>
+
+<p>Pass <code>generateTypes</code> your environment and the names of your templates. It returns the contents of a declaration file. Write it somewhere your <code>tsconfig.json</code> includes.</p>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+import { writeFile } from "node:fs/promises";
+import { createKiln, generateTypes } from "@lucidcms/kiln";
+import { fileLoader } from "@lucidcms/kiln/node";
+
+const loader = fileLoader({ root: "src/templates" });
+const kiln = createKiln({ loader });
+
+const types = await generateTypes(kiln, await loader.list());
+await writeFile("src/kiln.d.ts", types);
+{% endverbatim %}
+{% endapply %}
+
+<ul>
+	<li>Run it when templates change, for example as part of your build or dev server.</li>
+	<li><code>generateTypes</code> doesn't touch the file system, so you can run it anywhere, including on Workers.</li>
+	<li>Templates are listed in name order, so the file only changes when a template's props or blocks change.</li>
+	<li>The file holds only types, so it adds nothing to your bundle.</li>
+</ul>
+
+<p>The built-in loaders have a <code>list</code> method. For your own loader, see <a href="/docs/api/loaders/#listing-templates">Listing templates</a>.</p>
+
+<h2>What it checks</h2>
+
+<p>Once the file exists, <code>render</code> and <code>renderBlock</code> use it:</p>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+// pages/post.kiln starts with {% props post: Post, related: Post[] = [] %}
+
+await kiln.render("pages/post", { post }); // OK
+await kiln.render("pages/post", { pots: post }); // Type error: "pots" isn't a prop
+await kiln.render("pages/post"); // Type error: "post" is required
+
+await kiln.renderBlock("pages/post", "content", { post }); // OK
+await kiln.renderBlock("pages/post", "sidebar", { post }); // Type error: no such block
+{% endverbatim %}
+{% endapply %}
+
+<p>Names are checked the same way with or without <code>.kiln</code>. A name that isn't in the file, such as one built at runtime, still works. Kiln can't know which template it is, so it accepts any data.</p>
+
+<h2>How the data type is worked out</h2>
+
+<ul>
+	<li>A template with <code>props</code> accepts exactly those props. This matches strict mode, which rejects anything else.</li>
+	<li>A prop with a default is optional, and also accepts null.</li>
+	<li>A page without <code>props</code> accepts any data. If its layout declares required props, the page must pass them, unless it sets them at its top level.</li>
+	<li>An untyped prop accepts any value.</li>
+</ul>
+
+<p>Kiln's types become these TypeScript types:</p>
+
+<table>
+	<thead><tr><th>Kiln</th><th>TypeScript</th></tr></thead>
+	<tbody>
+		<tr><td><code>null</code>, <code>boolean</code>, <code>number</code></td><td>The same</td></tr>
+		<tr><td><code>string</code></td><td><code>string | Markup</code></td></tr>
+		<tr><td><code>markup</code></td><td><code>Markup</code></td></tr>
+		<tr><td><code>array</code></td><td><code>readonly unknown[]</code></td></tr>
+		<tr><td><code>hash</code></td><td>A plain object or a <code>Map</code></td></tr>
+		<tr><td><code>set</code></td><td><code>ReadonlySet&lt;unknown&gt;</code></td></tr>
+		<tr><td><code>date</code></td><td><code>Date</code></td></tr>
+		<tr><td><code>object</code></td><td><code>object</code></td></tr>
+		<tr><td><code>"primary"</code>, <code>2</code></td><td>The same literal</td></tr>
+		<tr><td><code>string[]</code></td><td><code>readonly (string | Markup)[]</code></td></tr>
+		<tr><td><code>{ name: string, url?: string }</code></td><td><code>{ name: string | Markup; url?: string | Markup }</code></td></tr>
+		<tr><td><code>Post</code></td><td>The type you declare for <code>Post</code></td></tr>
+	</tbody>
+</table>
+
+<h2>Your own types</h2>
+
+<p>A prop type such as <code>Post</code> is one your app defines. Give it two things:</p>
+
+<ul>
+	<li>A TypeScript type, by adding it to <code>KilnTypes</code>.</li>
+	<li>A check that runs when a template receives the value, in the <code>types</code> option.</li>
+</ul>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+import { createKiln } from "@lucidcms/kiln";
+
+declare module "@lucidcms/kiln" {
+	interface KilnTypes {
+		Post: PostView;
+	}
+}
+
+const kiln = createKiln({
+	loader,
+	types: {
+		Post: (value) => value instanceof PostView,
+	},
+});
+{% endverbatim %}
+{% endapply %}
+
+<ul>
+	<li>Type names start with a capital letter, followed by letters, digits or underscores.</li>
+	<li>A check gets the value and returns true when it fits. It must not be async.</li>
+	<li>Once <code>KilnTypes</code> lists a type, TypeScript makes sure <code>types</code> has a check for it, and that the check narrows to the right type.</li>
+	<li>Checks run in strict mode only, like every other prop check. See <a href="/docs/tags/props/#how-values-are-checked">How values are checked</a>.</li>
+	<li>A type with a check but no <code>KilnTypes</code> entry is <code>unknown</code> in the generated file.</li>
+</ul>
+{% endblock %}

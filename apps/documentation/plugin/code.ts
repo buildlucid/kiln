@@ -158,6 +158,13 @@ export const createCodeFilters = async (render: RenderTemplate) => {
 				),
 				strict: options.strict ?? true,
 				globals: { site: { name: "Example" } },
+				types: {
+					Post: (value) =>
+						typeof value === "object" &&
+						value !== null &&
+						"title" in value &&
+						"url" in value,
+				},
 				functions: {
 					document: async (collection: string) => ({
 						...posts[0],

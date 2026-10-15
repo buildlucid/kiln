@@ -106,8 +106,24 @@ export type Param = { name: string; default: Expression | null; span: Span };
 /** Type names a prop can declare. See `TYPE_NAMES`. */
 export type TypeName = (typeof TYPE_NAMES)[number];
 
-/** One member of a prop's type: a type name or a literal value. */
-export type PropType = TypeName | { literal: string | number };
+/**
+ * One member of a prop's type. A full type is a list of members, read as a union.
+ *
+ * - A built-in type name, such as `string`.
+ * - `{ literal }`: one exact string or number, such as `"primary"`.
+ * - `{ list }`: `T[]`, an array of the inner type.
+ * - `{ shape }`: `{ name: string }`, a hash or object with these keys.
+ * - `{ named }`: a type the host registers, such as `Post`.
+ */
+export type PropType =
+	| TypeName
+	| { literal: string | number }
+	| { list: PropType[] }
+	| { shape: ShapeKey[] }
+	| { named: string };
+
+/** One key of a shape type, such as `url?: string`. */
+export type ShapeKey = { name: string; optional: boolean; type: PropType[] };
 
 /** A `props` entry. `type` is null when the prop is untyped. */
 export type PropParam = Param & { type: PropType[] | null };

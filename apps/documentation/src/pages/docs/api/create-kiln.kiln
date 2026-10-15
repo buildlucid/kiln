@@ -32,6 +32,7 @@ const html = await kiln.render("pages/home", { route: { path: "/" } });
 		<tr><td><code>functions</code></td><td><code>{}</code></td><td>Functions templates can call</td></tr>
 		<tr><td><code>filters</code></td><td><code>{}</code></td><td>Filters templates can use</td></tr>
 		<tr><td><code>tests</code></td><td><code>{}</code></td><td>Tests templates can use with <code>is</code></td></tr>
+		<tr><td><code>types</code></td><td><code>{}</code></td><td>Checks for your own prop types, such as <code>Post</code>. See <a href="/docs/api/types/#your-own-types">TypeScript types</a></td></tr>
 		<tr><td><code>globals</code></td><td><code>{}</code></td><td>Variables every template can read</td></tr>
 		<tr><td><code>strict</code></td><td><code>true</code></td><td>Whether missing variables and properties are errors. See <a href="/docs/language/strict-mode/">Strict mode</a></td></tr>
 		<tr><td><code>autoescape</code></td><td><code>"html"</code></td><td>The escaping strategy for output, or <code>false</code> to turn it off</td></tr>

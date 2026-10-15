@@ -11,6 +11,7 @@ import {
 	type Param,
 	type PropParam,
 	type PropType,
+	type ShapeKey,
 	type Spread,
 	type Statement,
 	type TemplateNode,
@@ -584,25 +585,81 @@ class Parser {
 		return params;
 	}
 
-	/** Reads a prop type such as `string | null` or `"primary" | "secondary"`. */
+	/** Reads a prop type such as `string | null`, `"primary" | "secondary"`, `Post[]` or `{ name: string }`. */
 	#parsePropType(): PropType[] {
 		const members: PropType[] = [];
 		for (;;) {
-			const token = this.#peek();
-			if (token.type === "string") members.push({ literal: token.value });
-			else if (token.type === "number") {
-				members.push({ literal: Number(token.value) });
-			} else if (token.type === "name" && isTypeName(token.value)) {
-				members.push(token.value);
-			} else if (token.type === "name") {
-				this.#problem("unknown-type", `Unknown type "${token.value}"`, token);
-			} else {
-				this.#fail(`Expected a type but found ${describeToken(token)}`);
+			let type = this.#parsePropTypeTerm();
+			while (this.#isPunct("[") && this.#isPunct("]", 1)) {
+				this.#next();
+				this.#next();
+				type = [{ list: type }];
 			}
-			this.#next();
+			members.push(...type);
 			if (!this.#isPunct("|")) return members;
 			this.#next();
 		}
+	}
+
+	/** Reads one part of a union. Brackets return the union inside them, so `(2 | 3)[]` lists either. */
+	#parsePropTypeTerm(): PropType[] {
+		const token = this.#peek();
+		if (token.type === "punct" && token.value === "(") {
+			this.#next();
+			const inner = this.#parsePropType();
+			this.#expectPunct(")");
+			return inner;
+		}
+		if (token.type === "punct" && token.value === "{") {
+			return [{ shape: this.#parseShape() }];
+		}
+		this.#next();
+		if (token.type === "string") return [{ literal: token.value }];
+		if (token.type === "number") return [{ literal: Number(token.value) }];
+		if (token.type === "name" && isTypeName(token.value)) return [token.value];
+		// Host types start with a capital letter, so they never clash with built-in names.
+		if (token.type === "name" && /^[A-Z]/.test(token.value)) {
+			return [{ named: token.value }];
+		}
+		if (token.type === "name") {
+			this.#problem("unknown-type", `Unknown type "${token.value}"`, token);
+			return [];
+		}
+		return this.#fail(
+			`Expected a type but found ${describeToken(token)}`,
+			token,
+		);
+	}
+
+	/** Reads a shape type such as `{ name: string, url?: string }`. */
+	#parseShape(): ShapeKey[] {
+		this.#expectPunct("{");
+		const keys: ShapeKey[] = [];
+		while (!this.#isPunct("}")) {
+			const token = this.#next();
+			if (token.type !== "name" && token.type !== "string") {
+				this.#fail(`Expected a key but found ${describeToken(token)}`, token);
+			}
+			if (keys.some((key) => key.name === token.value)) {
+				this.#problem(
+					"duplicate-key",
+					`"${token.value}" is declared more than once`,
+					token,
+				);
+			}
+			// The lexer reads `?:` as one token, as in `url?: string`.
+			const optional = this.#isPunct("?:") || this.#isPunct("?");
+			if (this.#isPunct("?:")) this.#next();
+			else {
+				if (optional) this.#next();
+				this.#expectPunct(":");
+			}
+			keys.push({ name: token.value, optional, type: this.#parsePropType() });
+			if (!this.#isPunct(",")) break;
+			this.#next();
+		}
+		this.#expectPunct("}");
+		return keys;
 	}
 
 	#parseProps(open: Token): Statement {

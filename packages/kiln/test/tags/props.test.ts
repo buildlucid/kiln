@@ -118,6 +118,14 @@ describe("edge cases", () => {
 			}),
 		).toBe("missing-prop");
 	});
+
+	test("a page's top-level set provides a layout's prop", async () => {
+		expect(
+			await render('{% extends "base" %}{% set lang = "en" %}', {
+				templates: { base: "{% props lang %}{{ lang }}" },
+			}),
+		).toBe("en");
+	});
 });
 
 describe("types", () => {
@@ -252,5 +260,101 @@ describe("types", () => {
 			"{{ title }}-{{ size }}",
 		);
 		expect(await render(template, { context: { title: "T" } })).toBe("T-md");
+	});
+});
+
+describe("lists and shapes", () => {
+	test("a list accepts an array, without checking its items", async () => {
+		const template = "{% props tags: string[] %}{{ tags|length }}";
+		expect(await render(template, { context: { tags: ["a", 1] } })).toBe("2");
+		expect(await errorCode(template, { context: { tags: "a" } })).toBe(
+			"prop-type",
+		);
+	});
+
+	test("a shape accepts a hash or an object, without checking its keys", async () => {
+		class Author {}
+		const template = "{% props author: { name: string, url?: string } %}ok";
+		expect(await render(template, { context: { author: {} } })).toBe("ok");
+		expect(await render(template, { context: { author: new Author() } })).toBe(
+			"ok",
+		);
+		expect(await errorCode(template, { context: { author: "Ada" } })).toBe(
+			"prop-type",
+		);
+	});
+
+	test("brackets group a union, and errors describe the type", async () => {
+		const error = await renderError(
+			"{% props levels: (2 | 3)[] | null, link: { href: string, label?: string } %}",
+			{ context: { levels: 2, link: {} } },
+		);
+		expect(error.message).toContain(
+			'Prop "levels" of index.kiln must be (2 | 3)[] | null, but got a number',
+		);
+	});
+
+	test("lists and shapes can be nested", async () => {
+		const template =
+			"{% props nav: { links: { href: string }[] }[] = [] %}{{ nav|length }}";
+		expect(await render(template)).toBe("0");
+	});
+
+	test("a shape can't declare a key twice", async () => {
+		expect(await errorCode("{% props a: { b: string, b: number } %}")).toBe(
+			"duplicate-key",
+		);
+	});
+});
+
+describe("host types", () => {
+	const types = {
+		Post: (value: unknown) =>
+			typeof value === "object" && value !== null && "title" in value,
+	};
+
+	test("run the check the host registered", async () => {
+		const template = "{% props post: Post %}{{ post.title }}";
+		expect(
+			await render(template, { types, context: { post: { title: "T" } } }),
+		).toBe("T");
+		const error = await renderError(template, {
+			types,
+			context: { post: { name: "T" } },
+		});
+		expect(error).toMatchObject({ code: "prop-type" });
+		expect(error.message).toContain("must be Post, but got a hash");
+	});
+
+	test("can be used in lists, shapes and unions", async () => {
+		expect(
+			await render(
+				"{% props posts: Post[], featured: Post | null = null, card: { post: Post } %}ok",
+				{ types, context: { posts: [], card: {} } },
+			),
+		).toBe("ok");
+	});
+
+	test("are not checked in lenient mode", async () => {
+		expect(
+			await render("{% props post: Post %}{{ post }}", {
+				types,
+				strict: false,
+				context: { post: 1 },
+			}),
+		).toBe("1");
+	});
+
+	test("an unregistered type is a syntax error, wherever it appears", async () => {
+		expect(await errorCode("{% props post: Post %}")).toBe("unknown-type");
+		expect(await errorCode("{% props posts: { items: Post[] } %}")).toBe(
+			"unknown-type",
+		);
+	});
+
+	test("a literal default must pass the check", async () => {
+		expect(await errorCode("{% props post: Post = null %}", { types })).toBe(
+			"prop-type",
+		);
 	});
 });

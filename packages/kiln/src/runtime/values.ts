@@ -2,6 +2,7 @@ import { issue } from "../errors.js";
 import type { PropType } from "../parser/ast.js";
 import { BLOCKED_NAMES, exposedMembers } from "./exposure.js";
 import { Markup } from "./markup.js";
+import type { TypeCheck } from "./types.js";
 
 export { BLOCKED_NAMES };
 
@@ -112,28 +113,50 @@ export const typeName = (value: unknown): string => {
 	return typeof value;
 };
 
-/** Whether a value fits one member of a prop's type. `string` also accepts markup, and `object` any class instance. */
+/**
+ * Whether a value fits one member of a prop's type. `string` also accepts markup, and `object` any class instance.
+ *
+ * Only the outer value is checked: a list must be an array and a shape a hash or object, whatever they hold. Host types run their check from `types`.
+ */
 export const matchesType = (
 	value: unknown,
 	type: readonly PropType[],
+	types: ReadonlyMap<string, TypeCheck>,
 ): boolean => {
 	const name = typeName(value);
-	return type.some((member) =>
-		typeof member === "object"
-			? unwrap(value) === member.literal
-			: member === name ||
+	return type.some((member) => {
+		if (typeof member === "string") {
+			return (
+				member === name ||
 				(member === "string" && name === "markup") ||
-				(member === "object" && name.endsWith("object")),
-	);
+				(member === "object" && name.endsWith("object"))
+			);
+		}
+		if ("literal" in member) return unwrap(value) === member.literal;
+		if ("list" in member) return name === "array";
+		if ("shape" in member) return name === "hash" || name.endsWith("object");
+		return types.get(member.named)?.(value) === true;
+	});
 };
 
 /** Writes a prop's type as it appears in a template, such as `"primary" | "secondary"`. */
 export const describeType = (type: readonly PropType[]): string =>
-	type
-		.map((member) =>
-			typeof member === "object" ? JSON.stringify(member.literal) : member,
-		)
-		.join(" | ");
+	type.map(describeMember).join(" | ");
+
+const describeMember = (member: PropType): string => {
+	if (typeof member === "string") return member;
+	if ("literal" in member) return JSON.stringify(member.literal);
+	if ("named" in member) return member.named;
+	if ("list" in member) {
+		const inner = describeType(member.list);
+		return member.list.length > 1 ? `(${inner})[]` : `${inner}[]`;
+	}
+	if (member.shape.length === 0) return "{}";
+	const keys = member.shape.map(
+		(key) => `${key.name}${key.optional ? "?" : ""}: ${describeType(key.type)}`,
+	);
+	return `{ ${keys.join(", ")} }`;
+};
 
 /** Describes a value for a type error: literal strings and numbers when the type lists literals, otherwise its type. */
 export const describeValue = (
@@ -143,7 +166,7 @@ export const describeValue = (
 	const plain = unwrap(value);
 	if (
 		(typeof plain === "string" || typeof plain === "number") &&
-		type.some((member) => typeof member === "object")
+		type.some((member) => typeof member === "object" && "literal" in member)
 	) {
 		return JSON.stringify(plain);
 	}
