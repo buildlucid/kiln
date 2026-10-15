@@ -28,7 +28,19 @@ export type Token = {
 
 export type LexProblem = { code: string; message: string; span: Span };
 
-export type LexResult = { tokens: Token[]; problems: LexProblem[] };
+export type LexResult = {
+	tokens: Token[];
+	problems: LexProblem[];
+	/** Tags and comments on lines that hold nothing else, which the lexer removed, as start offset to end offset. */
+	standalone: Map<number, number>;
+	/** Lines of template text that hold content, in source order. See `TextLine`. */
+	lines: TextLine[];
+};
+
+/**
+ * A line of template text that holds content, from its start to the end of its spaces and tabs. Leaves out blank lines, lines the lexer removed, lines whose start a `-` marker trimmed, and lines inside tags, outputs and comments.
+ */
+export type TextLine = { start: number; indentEnd: number };
 
 type TextPart = {
 	kind: "text";
@@ -127,7 +139,8 @@ class Lexer {
 	run(): LexResult {
 		const parts = this.#scanParts();
 		applyTrimMarkers(this.#text, parts);
-		applyStandaloneLines(this.#text, parts);
+		const standalone = applyStandaloneLines(this.#text, parts);
+		const lines = textLines(this.#text, parts, standalone);
 
 		const tokens: Token[] = [];
 		for (const part of parts) {
@@ -150,7 +163,7 @@ class Lexer {
 			start: this.#text.length,
 			end: this.#text.length,
 		});
-		return { tokens, problems: this.#problems };
+		return { tokens, problems: this.#problems, standalone, lines };
 	}
 
 	#scanParts(): Part[] {
@@ -610,9 +623,13 @@ const isInlineBlank = (text: string, start: number, end: number): boolean => {
 /**
  * Removes lines that hold only block tags and comments, including their indentation and line ending.
  *
- * Decisions use the original text, so they do not depend on what trim markers removed.
+ * Decisions use the original text, so they do not depend on what trim markers removed. Returns the start of each tag and comment it removed.
  */
-const applyStandaloneLines = (text: string, parts: Part[]): void => {
+const applyStandaloneLines = (
+	text: string,
+	parts: Part[],
+): Map<number, number> => {
+	const removed = new Map<number, number>();
 	const isBlockLike = (part: Part | undefined) =>
 		part !== undefined && (part.kind === "tag" || part.kind === "comment");
 
@@ -688,9 +705,39 @@ const applyStandaloneLines = (text: string, parts: Part[]): void => {
 			for (let k = i; k <= last; k++) {
 				const part = parts[k] as Part;
 				if (part.kind === "text") part.from = part.to;
+				else removed.set(part.start, part.end);
 			}
 			if (next?.kind === "text") next.from = Math.max(next.from, cutAfter);
 		}
 		i = last + 1;
 	}
+	return removed;
+};
+
+/** Finds the lines of text that hold content. See `TextLine`. */
+const textLines = (
+	text: string,
+	parts: Part[],
+	removed: ReadonlyMap<number, number>,
+): TextLine[] => {
+	const lines: TextLine[] = [];
+	for (const part of parts) {
+		if (part.kind !== "text") continue;
+		for (
+			let newline = text.indexOf("\n", part.start);
+			newline !== -1 && newline < part.end;
+			newline = text.indexOf("\n", newline + 1)
+		) {
+			const start = newline + 1;
+			// A `-` marker trimmed the line break or the whole line.
+			if (start < part.from || start > part.to) continue;
+			let indentEnd = start;
+			while (text[indentEnd] === " " || text[indentEnd] === "\t") indentEnd++;
+			const next = text[indentEnd];
+			if (next === undefined || next === "\n" || next === "\r") continue;
+			if (removed.has(indentEnd)) continue;
+			lines.push({ start, indentEnd });
+		}
+	}
+	return lines;
 };

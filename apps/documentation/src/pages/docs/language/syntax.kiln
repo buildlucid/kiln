@@ -51,6 +51,32 @@
 
 <p>Every delimiter supports it: <code>&#123;{-</code>, <code>-}}</code>, <code>&#123;%-</code>, <code>-%}</code>, <code>&#123;#-</code> and <code>-#}</code>.</p>
 
+<h2>Indentation</h2>
+
+<p>Kiln removes the extra indentation inside a tag, so you can indent a template for reading without it showing in the HTML.</p>
+
+{% apply example(context: { items: ["Tea", "Coffee"] }) %}
+{% verbatim %}
+<ul>
+	{% for item in items %}
+		<li>{{ item }}</li>
+	{% endfor %}
+</ul>
+{% endverbatim %}
+{% endapply %}
+
+<ul>
+	<li>It applies when an opening tag, such as <code>for</code> or <code>if</code>, is on a line of its own.</li>
+	<li>Kiln removes the indentation that every line inside shares, beyond the tag's own. If one line is indented less, or uses tabs where the others use spaces, nothing is removed.</li>
+	<li>Blank lines don't count.</li>
+	<li>Nested tags each remove their own step.</li>
+	<li>Content that lines up with its tag, as in the example under Whitespace, is unchanged.</li>
+	<li>Only text in the template changes. Values you output and the templates you include keep their own whitespace.</li>
+	<li>It happens when the template is compiled, so rendering is no slower.</li>
+</ul>
+
+<p>Preformatted text counts as lines inside the tag too. Text in a <code>&lt;pre&gt;</code> that starts at the margin stops any indentation being removed.</p>
+
 <h2>Strings</h2>
 
 <p>Strings use single or double quotes. Double-quoted strings can include expressions with <code>#{ }</code>:</p>

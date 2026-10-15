@@ -18,6 +18,7 @@ import {
 	TYPE_NAMES,
 	type TypeName,
 } from "./ast.js";
+import { removeIndentation } from "./indent.js";
 
 const isTypeName = (name: string): name is TypeName =>
 	(TYPE_NAMES as readonly string[]).includes(name);
@@ -45,10 +46,11 @@ export const RESERVED_NAMES = new Set([
 
 /** Parses template source into a syntax tree, collecting every problem instead of stopping at the first. */
 export const parse = (text: string, options: ParseOptions): ParseResult => {
-	const { tokens, problems } = lex(text);
-	const parser = new Parser(tokens, options);
+	const lexed = lex(text);
+	const parser = new Parser(lexed.tokens, options);
 	const ast = parser.parseTemplate(text.length);
-	return { ast, problems: [...problems, ...parser.problems] };
+	removeIndentation(ast, text, lexed);
+	return { ast, problems: [...lexed.problems, ...parser.problems] };
 };
 
 class ParseFailure {
