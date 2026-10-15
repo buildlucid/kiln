@@ -297,26 +297,35 @@ class Environment<State> implements EnvironmentCore {
 		const cached = this.#cache.get(name);
 		if (cached !== undefined) return cached;
 
-		const finish = (source: string | null) => {
+		const compile = (source: string | null) => {
 			if (source !== null && typeof source !== "string") {
 				throw new TypeError(`Loader returned a ${typeof source} for "${name}"`);
 			}
-			const template =
-				source === null ? null : compileTemplate(this, name, source);
-			this.#cache.set(name, template);
-			return template;
+			return source === null ? null : compileTemplate(this, name, source);
 		};
 
 		const loaded = this.#loader.load(name);
 		if (isPromise(loaded)) {
-			const pending = loaded.then(finish, (error: unknown) => {
-				this.#cache.delete(name);
-				throw error;
-			});
+			// An invalidate while this load is in flight replaces or drops the
+			// entry, so only touch the cache if it still holds this load.
+			const pending: Promise<CompiledTemplate | null> = loaded.then(
+				(source) => {
+					const template = compile(source);
+					if (this.#cache.get(name) === pending)
+						this.#cache.set(name, template);
+					return template;
+				},
+				(error: unknown) => {
+					if (this.#cache.get(name) === pending) this.#cache.delete(name);
+					throw error;
+				},
+			);
 			this.#cache.set(name, pending);
 			return pending;
 		}
-		return finish(loaded);
+		const template = compile(loaded);
+		this.#cache.set(name, template);
+		return template;
 	}
 
 	invalidate(name?: string): void {

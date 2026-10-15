@@ -6,10 +6,9 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vp dev",
-		"build": "tsc --noEmit && vp build",
 		"preview": "vp preview",
-		"deploy": "npm run build && cf-wrangler build && cf deploy --prebuilt",
-		"deploy:preview": "npm run build && CLOUDFLARE_PREVIEW_BUILD=true cf-wrangler build && cf previews deploy --prebuilt"
+		"deploy": "vp run build && cf-wrangler build && cf deploy --prebuilt",
+		"deploy:preview": "vp run build && CLOUDFLARE_PREVIEW_BUILD=true cf-wrangler build && cf previews deploy --prebuilt"
 	},
 	"devDependencies": {
 		"@fontsource-variable/geist": "^5.3.0",

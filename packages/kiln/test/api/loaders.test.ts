@@ -80,6 +80,50 @@ describe("caching", () => {
 		fail = false;
 		expect(await kiln.render("a")).toBe("ok");
 	});
+
+	test("a load still pending at invalidate does not refill the cache", async () => {
+		let source = "old";
+		const load = vi.fn(async () => {
+			const captured = source;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			return captured;
+		});
+		const kiln = createKiln({ loader: { load } });
+		const first = kiln.render("t");
+		source = "new";
+		kiln.invalidate("t");
+		expect(await first).toBe("old");
+		expect(await kiln.render("t")).toBe("new");
+
+		const second = kiln.render("t");
+		source = "newer";
+		kiln.invalidate();
+		expect(await second).toBe("new");
+		expect(await kiln.render("t")).toBe("newer");
+	});
+
+	test("a load that fails after invalidate leaves the newer load cached", async () => {
+		const loads: Array<{
+			resolve: (s: string) => void;
+			reject: (e: Error) => void;
+		}> = [];
+		const load = vi.fn(
+			() =>
+				new Promise<string>((resolve, reject) =>
+					loads.push({ resolve, reject }),
+				),
+		);
+		const kiln = createKiln({ loader: { load } });
+		const first = kiln.render("t");
+		kiln.invalidate("t");
+		const second = kiln.render("t");
+		loads[0]?.reject(new Error("offline"));
+		await expect(first).rejects.toThrow("offline");
+		const third = kiln.render("t");
+		for (const pending of loads.slice(1)) pending.resolve("ok");
+		expect(await Promise.all([second, third])).toEqual(["ok", "ok"]);
+		expect(load).toHaveBeenCalledTimes(2);
+	});
 });
 
 describe("fileLoader", () => {

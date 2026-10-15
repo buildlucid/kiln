@@ -18,4 +18,13 @@ export default defineConfig({
 		}),
 		tailwindcss(),
 	],
+	run: {
+		tasks: {
+			build: {
+				command: ["tsc --noEmit", "vp build"],
+				dependsOn: ["@lucidcms/kiln#build"],
+				cache: false,
+			},
+		},
+	},
 });
