@@ -1,0 +1,17 @@
+{# The docs navigation, shared by the desktop sidebar and the mobile menu. #}
+{% props current %}
+<nav aria-label="Docs" class="text-[14px]">
+	{% for section in navigation %}
+	<div class="{{ loop.first ? "" : "mt-7" }}">
+		<p class="mb-2 px-2.5 text-[13px] font-medium text-fg">{{ section.title }}</p>
+		<ul class="space-y-px">
+			{% for item in section.items %}
+			{% set active = item.url == current %}
+			<li>
+				<a href="{{ item.url }}" class="block rounded-md px-2.5 py-1.5 transition-colors {{ active ? "bg-raised text-fg" : "text-muted hover:text-fg" }}"{{ attrs({ "aria-current": active ? "page" }) }}>{{ item.title }}</a>
+			</li>
+			{% endfor %}
+		</ul>
+	</div>
+	{% endfor %}
+</nav>

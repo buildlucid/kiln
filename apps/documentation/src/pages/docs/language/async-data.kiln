@@ -1,0 +1,53 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>Templates can load their own data by calling async functions you provide. A page can fetch what it needs without the server code knowing about every page.</p>
+
+{% apply example %}
+{% verbatim %}
+{% set posts = documents("post", limit: 2) %}
+
+<h2>Latest posts</h2>
+{% for post in posts %}
+<a href="{{ post.url }}">{{ post.title }}</a>
+{% endfor %}
+{% endverbatim %}
+{% endapply %}
+
+<p>Here, <code>documents</code> is a function the host registered. It returns a promise, and Kiln waits for it before carrying on. See <a href="/docs/api/extending/">Functions, filters and tests</a> to register your own.</p>
+
+<h2>How Kiln waits</h2>
+
+<ul>
+	<li>Any function, filter or test can return a promise.</li>
+	<li>Kiln only waits where a call returns one. Everything else runs straight through, so a template with no async calls never waits.</li>
+	<li>Output always follows the order of the template, whatever order the promises finish in.</li>
+	<li>Values in the render data and globals are not awaited. Pass data that is ready, or a function the template can call.</li>
+</ul>
+
+<h2>Async in filters</h2>
+
+<p><code>map</code> and <code>filter</code> run async arrow functions for every item at once and keep the original order. <code>reduce</code> runs them one at a time. <code>sort</code> needs synchronous arrow functions.</p>
+
+{% apply highlight("kiln") %}
+{% verbatim %}
+{% set authors = post.authorIds|map(id => document("author", id: id)) %}
+{% endverbatim %}
+{% endapply %}
+
+<h2>Errors</h2>
+
+<p>If a promise rejects, the render stops with a render error. Its <code>cause</code> holds the original error.</p>
+
+<p>You can use this on purpose. For example, a <code>notFound()</code> function can throw an error your server catches and turns into a 404 page.</p>
+
+{% apply highlight("kiln") %}
+{% verbatim %}
+{% set page = document("page", slug: route.path) ?? notFound() %}
+{% endverbatim %}
+{% endapply %}
+
+{% component "components/callout" with { title: "Don't rely on call order" } %}
+<p>A later version of Kiln may run independent <code>set</code> tags at the same time. Write functions that don't depend on being called in a particular order.</p>
+{% endcomponent %}
+{% endblock %}

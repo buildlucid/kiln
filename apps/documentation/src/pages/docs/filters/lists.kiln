@@ -1,0 +1,120 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>These filters work with arrays, hashes and other collections. Filters never change the original value. They return a new one.</p>
+
+<p>The examples use this data:</p>
+
+{% set postsCode %}
+{% verbatim %}
+posts = [
+	{ title: "Hello", author: "Ada", date: "2026-03-01", views: 120 },
+	{ title: "Layouts", author: "Grace", date: "2026-01-15", views: 340 },
+	{ title: "Workers", author: "Ada", date: "2026-02-10", views: 90 },
+]
+{% endverbatim %}
+{% endset %}
+{{ postsCode|highlight("ts") }}
+
+{% set data = { posts: [
+	{ title: "Hello", author: "Ada", date: "2026-03-01", views: 120 },
+	{ title: "Layouts", author: "Grace", date: "2026-01-15", views: 340 },
+	{ title: "Workers", author: "Ada", date: "2026-02-10", views: 90 },
+] } %}
+
+<h2><code>length</code></h2>
+
+<p>Counts the items in an array, the keys in a hash, or the characters in a string. Null has a length of 0.</p>
+
+{{ '{{ posts|length }} posts, {{ "héllo"|length }} letters'|example(context: data) }}
+
+<h2><code>first</code> and <code>last</code></h2>
+
+<p>Return the first or last item, or null when there are none. On a string they return a character.</p>
+
+{{ '{{ (posts|first).title }} and {{ (posts|last).title }}'|example(context: data) }}
+
+<h2><code>slice</code></h2>
+
+<p>Returns part of an array or string, from a start index up to, but not including, an end index. Negative numbers count from the end, as in JavaScript.</p>
+
+{{ '{{ [1, 2, 3, 4, 5]|slice(1, 3)|join(", ") }}
+{{ [1, 2, 3, 4, 5]|slice(-2)|join(", ") }}'|example }}
+
+<h2><code>join</code></h2>
+
+<p>Joins items into a string. A second separator goes between the last two items.</p>
+
+{{ '{{ ["tea", "coffee", "water"]|join(", ", " and ") }}'|example }}
+
+<h2><code>keys</code></h2>
+
+<p>Returns the keys of a hash or map, or the indexes of an array.</p>
+
+{{ '{{ { a: 1, b: 2 }|keys|join(", ") }}'|example }}
+
+<h2><code>merge</code></h2>
+
+<p>Joins arrays together, or combines hashes. For hashes, later keys win. Mixing arrays and hashes is an error.</p>
+
+{{ '{{ [1, 2]|merge([3], [4])|join(", ") }}
+{{ ({ size: "md", tone: "plain" }|merge({ size: "lg" })).size }}'|example }}
+
+<h2><code>reverse</code></h2>
+
+<p>Reverses an array or string.</p>
+
+{{ '{{ [1, 2, 3]|reverse|join(", ") }} {{ "kiln"|reverse }}'|example }}
+
+<h2><code>sort</code></h2>
+
+<p>Returns a sorted copy. Without an argument, it sorts numbers, strings or dates in natural order. With a one-parameter arrow function, it sorts by the result. With a two-parameter one, it uses it to compare items, like JavaScript's <code>sort</code>.</p>
+
+{{ '{{ [3, 1, 2]|sort|join(", ") }}
+{{ posts|sort(p => p.date)|column("title")|join(", ") }}
+{{ posts|sort((a, b) => b.views - a.views)|column("title")|join(", ") }}'|example(context: data) }}
+
+<h2><code>map</code></h2>
+
+<p>Calls an arrow function for each item and returns the results. The function gets the value and the key.</p>
+
+{{ '{{ posts|map(p => p.title|upper)|join(", ") }}'|example(context: data) }}
+
+<h2><code>filter</code></h2>
+
+<p>Keeps the items for which the arrow function returns true.</p>
+
+{{ '{{ posts|filter(p => p.author == "Ada")|column("title")|join(", ") }}'|example(context: data) }}
+
+<h2><code>reduce</code></h2>
+
+<p>Combines the items into one value. The arrow function gets the running total, the value and the key. The second argument is the starting value.</p>
+
+{{ '{{ posts|reduce((total, p) => total + p.views, 0) }} views'|example(context: data) }}
+
+<h2><code>find</code></h2>
+
+<p>Returns the first item for which the arrow function returns true, or null.</p>
+
+{{ '{{ (posts|find(p => p.views > 200)).title }}'|example(context: data) }}
+
+<h2><code>column</code></h2>
+
+<p>Reads one property from each item.</p>
+
+{{ '{{ posts|column("author")|join(", ") }}'|example(context: data) }}
+
+<h2><code>batch</code></h2>
+
+<p>Splits an array into groups of a given size. Pass a second argument to fill up the last group.</p>
+
+{{ '{% for row in [1, 2, 3, 4, 5]|batch(2, "-") %}
+<div>{{ row|join(" ") }}</div>
+{% endfor %}'|example }}
+
+<h2><code>default</code></h2>
+
+<p>Returns a fallback when the value is <a href="/docs/language/values/#empty-values">empty</a> or missing. In strict mode, it also stops a missing value from being an error.</p>
+
+{{ '{{ page.subtitle|default("No subtitle") }}'|example(context: { page: { title: "Home" } }) }}
+{% endblock %}

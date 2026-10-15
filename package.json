@@ -1,0 +1,34 @@
+{
+	"name": "kiln",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "vp run -r build",
+		"test": "vp test run",
+		"test:watch": "vp test watch",
+		"format": "vp fmt --check",
+		"format:fix": "vp fmt",
+		"lint": "vp lint",
+		"lint:fix": "vp lint --fix",
+		"check": "vp check",
+		"check:fix": "vp check --fix"
+	},
+	"devDependencies": {
+		"vite-plus": "1.2.0"
+	},
+	"packageManager": "npm@12.2.0",
+	"workspaces": [
+		"packages/*",
+		"apps/*"
+	],
+	"volta": {
+		"node": "24.22.0"
+	},
+	"engines": {
+		"node": "^24.0.0"
+	},
+	"license": "MIT",
+	"overrides": {
+		"vite": "npm:@voidzero-dev/vite-plus-core@1.2.0"
+	}
+}

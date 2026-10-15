@@ -1,0 +1,16 @@
+{
+	"compilerOptions": {
+		"verbatimModuleSyntax": true,
+		"moduleDetection": "force",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"target": "ESNext",
+		"lib": ["ESNext"],
+		"types": ["node"],
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"skipLibCheck": true,
+		"noEmit": true
+	},
+	"include": ["plugin", "src", "vite.config.ts", "cloudflare.config.ts"]
+}

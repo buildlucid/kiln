@@ -1,0 +1,10 @@
+{% extends "layouts/base" %}
+
+{% block main %}
+<main id="content" class="mx-auto flex max-w-xl flex-col items-center px-4 py-32 text-center">
+	<p class="font-mono text-sm text-ember">404</p>
+	<h1 class="mt-3 text-3xl font-semibold tracking-tight text-fg">Page not found</h1>
+	<p class="mt-3 text-muted">The page you're looking for doesn't exist or has moved.</p>
+	<a href="/docs/" class="mt-8 rounded-full bg-fg px-5 py-2.5 text-sm font-medium text-bg transition-opacity hover:opacity-90">Go to the docs</a>
+</main>
+{% endblock %}

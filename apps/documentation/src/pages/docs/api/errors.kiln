@@ -1,0 +1,84 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>When something goes wrong, <code>render</code> rejects with an error that says which template failed, where, and often how to fix it. Kiln never returns half a page.</p>
+
+{% apply highlight("text") %}
+{% verbatim %}
+KilnRenderError: Unknown variable "titel" in pages/page.kiln at line 4, column 9. Did you mean "title"?
+
+  3 | {% block content %}
+> 4 |   <h1>{{ titel }}</h1>
+    |          ^^^^^
+  5 | {% endblock %}
+{% endverbatim %}
+{% endapply %}
+
+<h2>Error types</h2>
+
+<p>There are two kinds of error, both exported from <code>@lucidcms/kiln</code>:</p>
+
+<ul>
+	<li><code>KilnSyntaxError</code> means a template couldn't be parsed. Its <code>diagnostics</code> list every problem found, not just the first.</li>
+	<li><code>KilnRenderError</code> means something failed while rendering, such as a missing variable or a function that threw.</li>
+</ul>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+import { KilnRenderError, KilnSyntaxError } from "@lucidcms/kiln";
+
+try {
+	return await kiln.render("pages/page", context);
+} catch (error) {
+	if (error instanceof KilnRenderError && error.cause instanceof NotFound) {
+		return notFoundPage();
+	}
+	throw error;
+}
+{% endverbatim %}
+{% endapply %}
+
+<p>A <code>KilnRenderError</code> has these properties:</p>
+
+<table>
+	<thead><tr><th>Property</th><th>Description</th></tr></thead>
+	<tbody>
+		<tr><td><code>code</code></td><td>A stable code, such as <code>undefined-variable</code> or <code>limit-steps</code></td></tr>
+		<tr><td><code>template</code>, <code>line</code>, <code>column</code></td><td>Where the error happened</td></tr>
+		<tr><td><code>frame</code></td><td>The lines of source around the error, with a marker</td></tr>
+		<tr><td><code>templateStack</code></td><td>The templates involved, from the page down to the one that failed</td></tr>
+		<tr><td><code>cause</code></td><td>The original error, when one of your functions threw</td></tr>
+	</tbody>
+</table>
+
+<h2>Checking templates</h2>
+
+<p><code>check</code> parses a template and returns its problems without rendering it. Pass the source as the second argument to check text that isn't saved yet, such as a template being edited in a CMS.</p>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+const diagnostics = await kiln.check("pages/home", draftSource);
+
+for (const problem of diagnostics) {
+	console.log(`${problem.start.line}:${problem.start.column} ${problem.message}`);
+}
+{% endverbatim %}
+{% endapply %}
+
+<p>Each diagnostic has a <code>code</code>, a <code>message</code>, a <code>severity</code> of <code>"error"</code> or <code>"warning"</code>, the <code>template</code>, and <code>start</code> and <code>end</code> positions with a line and column. Codes are stable, so tools can match them.</p>
+
+<h2>Analysing templates</h2>
+
+<p><code>analyze</code> reports what a template uses: the variables it reads, its props, the functions, filters and tests it calls, the templates it extends, includes or imports, and its blocks and macros. Use it to build tooling, or to work out which data a page depends on.</p>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+const analysis = await kiln.analyze("pages/post");
+
+analysis.functions; // ["document"]
+analysis.templates; // [{ kind: "extends", name: "layouts/base.kiln", ... }]
+{% endverbatim %}
+{% endapply %}
+
+<p>A name built at render time, such as <code>"sections/" ~ section.type</code>, is reported with a <code>name</code> of null.</p>
+{% endblock %}

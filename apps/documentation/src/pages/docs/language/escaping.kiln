@@ -1,0 +1,69 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>Kiln escapes everything you output with <code>&#123;{ }}</code>, so data can't break your HTML or inject scripts. Text outside the delimiters is never escaped.</p>
+
+{% apply example(context: { comment: "<script>alert('hi')</script>" }) %}
+{% verbatim %}
+<p>{{ comment }}</p>
+{% endverbatim %}
+{% endapply %}
+
+<h2>Output trusted HTML</h2>
+
+<p>If a value is HTML you trust, such as rich text from your own editor, mark it safe with <code>raw</code>:</p>
+
+{% apply example(context: { body: "<p>Hello <strong>world</strong></p>" }) %}
+{% verbatim %}
+<article>{{ body|raw }}</article>
+{% endverbatim %}
+{% endapply %}
+
+<p><code>raw</code> must be the last filter. Other filters return plain strings, even when given safe markup, so <code>&#123;{ body|raw|upper }}</code> is escaped again. Write <code>&#123;{ body|upper|raw }}</code> instead.</p>
+
+<p>Never use <code>raw</code> on data from visitors. Functions and filters you write can also return safe HTML. See <a href="/docs/api/safe-markup/">Safe markup and classes</a>.</p>
+
+<h2>Strategies</h2>
+
+<p>The default strategy, <code>html</code>, is right for page content and quoted attributes. Other places need other rules. Use the <code>escape</code> filter to pick one:</p>
+
+<table>
+	<thead><tr><th>Strategy</th><th>Use it for</th></tr></thead>
+	<tbody>
+		<tr><td><code>html</code></td><td>Page content and quoted attribute values. The default</td></tr>
+		<tr><td><code>attr</code></td><td>Attribute values, including unquoted ones</td></tr>
+		<tr><td><code>js</code></td><td>Inside JavaScript strings</td></tr>
+		<tr><td><code>css</code></td><td>Inside CSS values</td></tr>
+		<tr><td><code>url</code></td><td>One part of a URL, such as a query value</td></tr>
+	</tbody>
+</table>
+
+{% apply example(context: { query: "tea & cake" }) %}
+{% verbatim %}
+<a href="/search?q={{ query|escape("url") }}">Search</a>
+{% endverbatim %}
+{% endapply %}
+
+<p>To change the strategy for a whole section, use the <a href="/docs/tags/autoescape/"><code>autoescape</code></a> tag. To change it everywhere, use the <a href="/docs/api/create-kiln/#options"><code>autoescape</code> option</a>.</p>
+
+<h2>Safe markup</h2>
+
+<p>Some things produce markup that is already safe, so Kiln doesn't escape it again:</p>
+
+<ul>
+	<li>the <code>raw</code> and <code>escape</code> filters;</li>
+	<li><code>set</code> blocks, macros, <code>include</code>, <code>component</code>, <code>block()</code> and <code>parent()</code>;</li>
+	<li>the <code>nl2br</code> filter and the <code>attrs</code> function;</li>
+	<li>values your own code marks with <code>safe()</code>.</li>
+</ul>
+
+<h2>JSON in scripts</h2>
+
+<p>The <code>json</code> filter escapes characters that could close a script tag, so its output is safe inside <code>&lt;script&gt;</code> with <code>raw</code>:</p>
+
+{% apply example(context: { schema: { "@type": "Article", headline: "</script> is escaped" } }) %}
+{% verbatim %}
+<script type="application/ld+json">{{ schema|json|raw }}</script>
+{% endverbatim %}
+{% endapply %}
+{% endblock %}

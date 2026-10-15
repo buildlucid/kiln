@@ -1,0 +1,18 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p><code>with</code> adds variables for a section of a template. They disappear at <code>endwith</code>.</p>
+
+{% apply example(context: { posts: [{ title: "One" }, { title: "Two" }, { title: "Three" }, { title: "Four" }] }) %}
+{% verbatim %}
+{% with { heading: "Latest", items: posts|slice(0, 3) } %}
+	<h2>{{ heading }}</h2>
+	{% for item in items %}
+	<p>{{ item.title }}</p>
+	{% endfor %}
+{% endwith %}
+{% endverbatim %}
+{% endapply %}
+
+<p>The section can still read the variables around it. Variables you <code>set</code> inside it stay inside it.</p>
+{% endblock %}

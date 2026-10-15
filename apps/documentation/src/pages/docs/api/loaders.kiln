@@ -1,0 +1,54 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>A loader tells Kiln where to find templates. Kiln asks it for a template by name the first time the template is used.</p>
+
+<h2><code>memoryLoader</code></h2>
+
+<p>Holds templates in memory, as an object or a <code>Map</code>. It works everywhere, including Cloudflare Workers.</p>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+import { createKiln, memoryLoader } from "@lucidcms/kiln";
+
+const kiln = createKiln({
+	loader: memoryLoader({
+		"layouts/base.kiln": layoutSource,
+		"pages/home.kiln": homeSource,
+	}),
+});
+{% endverbatim %}
+{% endapply %}
+
+<h2><code>fileLoader</code></h2>
+
+<p>Reads templates from a folder. It is for Node only, so it lives in a separate entry point that never ends up in a Workers bundle.</p>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+import { fileLoader } from "@lucidcms/kiln/node";
+
+const kiln = createKiln({
+	loader: fileLoader({ root: "src/templates" }),
+});
+{% endverbatim %}
+{% endapply %}
+
+<h2>Your own loader</h2>
+
+<p>A loader is an object with a <code>load</code> method. It gets a resolved name, such as <code>pages/home.kiln</code>, and returns the source, or null if the template doesn't exist. It can be async.</p>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+import type { Loader } from "@lucidcms/kiln";
+
+const kvLoader = (kv: KVNamespace): Loader => ({
+	load: (name) => kv.get(`templates/${name}`),
+});
+{% endverbatim %}
+{% endapply %}
+
+<h2>Names</h2>
+
+<p>Kiln resolves names before it calls the loader. The loader gets a clean path relative to its root, with the <code>.kiln</code> extension added when the name has none. Kiln rejects names that would point above the root. See <a href="/docs/language/syntax/#template-names">Template names</a>.</p>
+{% endblock %}

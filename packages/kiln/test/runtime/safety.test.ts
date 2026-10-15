@@ -1,0 +1,204 @@
+import { describe, expect, test } from "vite-plus/test";
+import { expose, lookup } from "../../src/index.js";
+import { errorCode, render } from "../helpers.js";
+
+describe("hashes and arrays", () => {
+	test("prototype properties cannot be read", async () => {
+		expect(
+			await errorCode("{{ obj.constructor }}", { context: { obj: {} } }),
+		).toBe("missing-property");
+	});
+
+	test("__proto__ and constructor cannot be read even as own keys", async () => {
+		const data = JSON.parse(
+			'{"__proto__": {"polluted": true}, "constructor": "x"}',
+		) as unknown;
+		expect(
+			await render(
+				'{{ data.__proto__ ?? "blocked" }}|{{ data["constructor"] ?? "blocked" }}',
+				{ context: { data } },
+			),
+		).toBe("blocked|blocked");
+	});
+
+	test("__proto__ cannot be used as a hash key, computed key or named argument", async () => {
+		expect(await errorCode('{% set h = { "__proto__": { "x": 1 } } %}')).toBe(
+			"invalid-key",
+		);
+		expect(
+			await errorCode("{% set h = { (key): 1 } %}", {
+				context: { key: "__proto__" },
+			}),
+		).toBe("invalid-key");
+		expect(
+			await errorCode("{{ f(__proto__: 1) }}", { functions: { f: () => "" } }),
+		).toBe("invalid-key");
+	});
+
+	test("templates cannot pollute prototypes", async () => {
+		const data = JSON.parse('{"__proto__": {"polluted": true}}') as unknown;
+		expect(
+			await render("{{ data|merge({ a: 1 })|keys|join }}|{{ data|json }}", {
+				context: { data },
+			}),
+		).toBe("a|{}");
+		expect(Object.prototype).not.toHaveProperty("polluted");
+	});
+
+	test("array and string methods cannot be called", async () => {
+		expect(
+			await errorCode('{{ items.join(",") }}', { context: { items: [1] } }),
+		).toBe("method-not-exposed");
+		expect(
+			await errorCode("{{ name.toUpperCase() }}", { context: { name: "x" } }),
+		).toBe("method-not-exposed");
+	});
+});
+
+describe("functions in data", () => {
+	const fns = [() => "DATA"];
+
+	test("cannot be read or called", async () => {
+		expect(await errorCode("{{ fn }}", { context: { fn: () => "x" } })).toBe(
+			"function-value",
+		);
+		expect(
+			await errorCode("{{ obj.fn }}", { context: { obj: { fn: () => "x" } } }),
+		).toBe("function-value");
+		expect(
+			await errorCode("{{ obj.fn() }}", {
+				context: { obj: { fn: () => "x" } },
+			}),
+		).toBe("method-not-exposed");
+	});
+
+	test.each([
+		"{{ [1, 2]|map(fns|first)|join }}",
+		"{{ [1, 2]|map(cycle(fns, 0))|join }}",
+		"{{ [1, 2]|filter(nofn ?? (fns|first))|join }}",
+		"{{ [1, 2]|sort(fns|slice(0)|first)|join }}",
+	])("cannot be passed as callbacks: %s", async (template) => {
+		expect(await errorCode(template, { context: { fns, nofn: null } })).toBe(
+			"type-error",
+		);
+	});
+});
+
+describe("class instances", () => {
+	class Secret {
+		password = "hunter2";
+		get name() {
+			return "n";
+		}
+		toString() {
+			return "secret";
+		}
+	}
+
+	test("expose nothing by default", async () => {
+		const context = { s: new Secret() };
+		expect(await errorCode("{{ s.password }}", { context })).toBe(
+			"missing-property",
+		);
+		expect(await errorCode("{{ s.name }}", { context })).toBe(
+			"missing-property",
+		);
+		expect(await errorCode("{{ s }}", { context })).toBe("not-printable");
+		expect(await render("{{ s|json }}", { context })).toBe("{}");
+	});
+
+	class Base {
+		static [expose]: readonly string[] = ["id"];
+		id = 7;
+	}
+
+	class Post extends Base {
+		static override [expose] = ["title", "excerpt", "toString", "constructor"];
+		hidden = "no";
+		get title() {
+			return "Hello world";
+		}
+		excerpt(length: number) {
+			return this.title.slice(0, length);
+		}
+		override toString() {
+			return "Post";
+		}
+	}
+
+	test("expose lists members to read and methods to call, including inherited ones", async () => {
+		expect(
+			await render("{{ p.id }}|{{ p.title }}|{{ p.excerpt(5) }}|{{ p }}", {
+				context: { p: new Post() },
+			}),
+		).toBe("7|Hello world|Hello|Post");
+	});
+
+	test("json includes only exposed values", async () => {
+		expect(
+			await render("{{ p|json|raw }}", { context: { p: new Post() } }),
+		).toBe('{"title":"Hello world","id":7}');
+	});
+
+	test("unlisted members, blocked names and uncalled methods stay hidden", async () => {
+		const context = { p: new Post() };
+		expect(await errorCode("{{ p.hidden }}", { context })).toBe(
+			"missing-property",
+		);
+		expect(await errorCode("{{ p.constructor }}", { context })).toBe(
+			"missing-property",
+		);
+		expect(await errorCode("{{ p.excerpt }}", { context })).toBe(
+			"function-value",
+		);
+	});
+
+	class Fields {
+		static [expose] = ["id"];
+		id = 1;
+		#values = new Map([["heroTitle", "Hero"]]);
+		[lookup](name: string) {
+			return this.#values.get(name);
+		}
+	}
+
+	test("lookup answers dynamic names", async () => {
+		expect(
+			await render("{{ f.id }}|{{ f.heroTitle }}|{{ f.nope ?? 'none' }}", {
+				context: { f: new Fields() },
+			}),
+		).toBe("1|Hero|none");
+		expect(
+			await errorCode("{{ f.nope }}", { context: { f: new Fields() } }),
+		).toBe("missing-property");
+	});
+});
+
+describe("dangerous names", () => {
+	test("set __proto__ does not change any prototype", async () => {
+		expect(
+			await render(
+				'{% set __proto__ = { polluted: 1 } %}{{ polluted ?? "safe" }}',
+			),
+		).toBe("safe");
+	});
+
+	test("blocked names stay blocked when built at render time or read from a map", async () => {
+		expect(
+			await render('{{ h[("__pro" ~ "to__")] ?? "blocked" }}', {
+				context: { h: {} },
+			}),
+		).toBe("blocked");
+		expect(
+			await render('{{ m.constructor ?? "blocked" }}', {
+				context: { m: new Map([["constructor", 1]]) },
+			}),
+		).toBe("blocked");
+	});
+
+	test("arrow functions cannot reach a constructor", async () => {
+		expect(await errorCode("{{ [1]|map(x => x.constructor)|first }}")).toBe(
+			"missing-property",
+		);
+	});
+});

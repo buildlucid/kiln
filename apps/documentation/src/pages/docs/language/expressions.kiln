@@ -1,0 +1,127 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>Expressions appear inside <code>&#123;{ }}</code> and in tags. They look and behave much like JavaScript.</p>
+
+<h2>Literals</h2>
+
+{% apply highlight("kiln") %}
+{% verbatim %}
+null  true  false
+42  3.14  1_000_000
+"double"  'single'  "with #{ interpolation }"
+[1, 2, 3]
+{ title: "Home", "data-id": 1, (key): value }
+{% endverbatim %}
+{% endapply %}
+
+<ul>
+	<li>Hash keys can be names, strings, numbers or any expression in brackets.</li>
+	<li><code>{ title }</code> is short for <code>{ title: title }</code>.</li>
+	<li><code>...</code> spreads an array or hash into a new one: <code>[...posts, extra]</code> or <code>{ ...defaults, size: "lg" }</code>.</li>
+	<li>Trailing commas are allowed.</li>
+</ul>
+
+<h2>Operators</h2>
+
+<table>
+	<thead><tr><th>Operators</th><th>Meaning</th></tr></thead>
+	<tbody>
+		<tr><td><code>and</code> <code>or</code> <code>not</code></td><td>Logic. Always return <code>true</code> or <code>false</code></td></tr>
+		<tr><td><code>==</code> <code>!=</code></td><td>Strict equality, like JavaScript's <code>===</code>. Null and undefined are equal</td></tr>
+		<tr><td><code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code></td><td>Compare two numbers, two strings or two dates</td></tr>
+		<tr><td><code>+</code> <code>-</code> <code>*</code> <code>/</code> <code>%</code> <code>**</code></td><td>Arithmetic. Numbers only</td></tr>
+		<tr><td><code>//</code></td><td>Divide and round down</td></tr>
+		<tr><td><code>~</code></td><td>Join two values as strings</td></tr>
+		<tr><td><code>in</code> <code>not in</code></td><td>Whether an array or set contains a value, a string contains a substring, or a hash has a key</td></tr>
+		<tr><td><code>starts with</code> <code>ends with</code></td><td>Compare the start or end of two strings</td></tr>
+		<tr><td><code>a..b</code></td><td>An array of whole numbers from <code>a</code> to <code>b</code>, including both</td></tr>
+		<tr><td><code>a ? b : c</code></td><td>If <code>a</code> is true, <code>b</code>, otherwise <code>c</code>. Without <code>: c</code>, null</td></tr>
+		<tr><td><code>a ?: b</code></td><td><code>a</code> if it is true, otherwise <code>b</code></td></tr>
+		<tr><td><code>a ?? b</code></td><td><code>a</code> unless it is null or missing, otherwise <code>b</code></td></tr>
+	</tbody>
+</table>
+
+{% apply example(context: { price: 12, quantity: 3, user: { name: "Ada", role: "admin" }, path: "/blog/hello" }) %}
+{% verbatim %}
+{{ "Total: " ~ price * quantity }}
+{{ user.role in ["admin", "editor"] ? "Can edit" : "Read only" }}
+{{ path starts with "/blog/" }}
+{{ user.nickname ?? user.name }}
+{{ (1..5)|join(", ") }}
+{% endverbatim %}
+{% endapply %}
+
+<p><code>+</code> never joins strings, and adding a number to a string is an error. Use <code>~</code> to join text. It runs after arithmetic, so <code>"Total: " ~ price * quantity</code> works without brackets.</p>
+
+<h2>Reading properties</h2>
+
+<p>Use <code>.</code> or <code>[]</code> to read a property. They read the same things, so use whichever fits.</p>
+
+{% apply highlight("kiln") %}
+{% verbatim %}
+{{ page.title }}
+{{ page["title"] }}
+{{ page[fieldName] }}
+{{ items[0] }}
+{{ page?.author?.name }}
+{% endverbatim %}
+{% endapply %}
+
+<p><code>?.</code> returns null when the left side is null, and stops there. In <a href="/docs/language/strict-mode/">strict mode</a>, reading a missing property is an error unless you guard it with <code>?.</code>, <code>??</code>, <code>default</code> or <code>is defined</code>.</p>
+
+<h2>Calling functions</h2>
+
+<p>Call a function by name with brackets. Arguments can be positional, named, or both.</p>
+
+{% apply highlight("kiln") %}
+{% verbatim %}
+{{ range(1, 10, 2)|join(", ") }}
+{% set page = document("page", slug: route.path) %}
+{% endverbatim %}
+{% endapply %}
+
+<p>Named arguments are gathered into one hash at the end. <code>document("page", slug: route.path)</code> passes exactly the same arguments as <code>document("page", { slug: route.path })</code>. Built-in filters and functions also accept their parameter names, such as <code>round(precision: 2)</code>.</p>
+
+<p><code>...</code> spreads an array into positional arguments: <code>max(...prices)</code>.</p>
+
+<h2>Filters</h2>
+
+<p>A filter changes a value. Write it after a <code>|</code>. Filters run left to right, and brackets are optional when there are no arguments.</p>
+
+{% apply example(context: { title: "  kiln templates  ", tags: ["fast", "safe", "async"] }) %}
+{% verbatim %}
+{{ title|trim|title }}
+{{ tags|join(", ", " and ") }}
+{% endverbatim %}
+{% endapply %}
+
+<p>Filters bind tighter than a leading minus sign, so <code>-1|abs</code> is <code>-(1|abs)</code>. Write <code>(-1)|abs</code> instead. See the <a href="/docs/filters/strings/">filter reference</a> for every built-in filter.</p>
+
+<h2>Tests</h2>
+
+<p>A test checks a value and returns <code>true</code> or <code>false</code>. Write it after <code>is</code> or <code>is not</code>.</p>
+
+{% apply highlight("kiln") %}
+{% verbatim %}
+{% if user is defined %}
+{% if loop.index is divisible by(3) %}
+{% if items is not empty %}
+{% endverbatim %}
+{% endapply %}
+
+<p>See <a href="/docs/tests/">Tests</a> for every built-in test.</p>
+
+<h2>Arrow functions</h2>
+
+<p>Filters such as <code>map</code>, <code>filter</code>, <code>sort</code> and <code>reduce</code> take a short function. Write its parameters, then <code>=&gt;</code>, then one expression.</p>
+
+{% apply example(context: { posts: [{ title: "Draft", published: false, price: 5 }, { title: "Launch", published: true, price: 10 }, { title: "Update", published: true, price: 15 }] }) %}
+{% verbatim %}
+{{ posts|filter(p => p.published)|map(p => p.title)|join(", ") }}
+{{ posts|reduce((total, p) => total + p.price, 0) }}
+{% endverbatim %}
+{% endapply %}
+
+<p>Arrow functions can only be passed to filters and functions. You can't store them with <code>set</code> or print them.</p>
+{% endblock %}

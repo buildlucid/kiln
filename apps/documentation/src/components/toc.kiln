@@ -1,0 +1,11 @@
+{% props headings %}
+{% if headings %}
+<nav aria-labelledby="toc-title" class="text-[13px]">
+	<p id="toc-title" class="mb-3 font-medium text-fg">On this page</p>
+	<ul class="space-y-2 border-l border-line">
+		{% for heading in headings %}
+		<li><a href="#{{ heading.id }}" class="-ml-px block border-l border-transparent pl-3 text-muted transition-colors hover:border-muted hover:text-fg">{{ heading.text }}</a></li>
+		{% endfor %}
+	</ul>
+</nav>
+{% endif %}

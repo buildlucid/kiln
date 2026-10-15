@@ -1,0 +1,17 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p><code>apply</code> renders its content, then runs the result through one or more filters.</p>
+
+{% apply example(context: { name: "ada" }) %}
+{% verbatim %}
+{% apply upper|trim %}
+	Hello, {{ name }}
+{% endapply %}
+{% endverbatim %}
+{% endapply %}
+
+<p>The content was escaped as it rendered, so the result isn't escaped again. <code>apply</code> doesn't create a scope.</p>
+
+<p>This site uses <code>apply</code> with its own filters to highlight every code example.</p>
+{% endblock %}

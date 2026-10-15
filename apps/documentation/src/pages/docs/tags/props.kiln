@@ -1,0 +1,67 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p><code>props</code> declares the variables a template expects, with optional types and defaults. It is most useful in components and included templates, where it documents and checks their inputs.</p>
+
+{% set button %}
+{% verbatim %}
+{% props label: string, href: string | null = null, variant: "primary" | "secondary" = "primary" %}
+{% if href %}
+<a class="button button--{{ variant }}" href="{{ href }}">{{ label }}</a>
+{% else %}
+<button class="button button--{{ variant }}">{{ label }}</button>
+{% endif %}
+{% endverbatim %}
+{% endset %}
+{% apply example(templates: { "components/button.kiln": button }) %}
+{% verbatim %}
+{% include "components/button" with { label: "Sign up", href: "/join" } %}
+{% include "components/button" with { label: "Cancel", variant: "secondary" } %}
+{% endverbatim %}
+{% endapply %}
+
+<h2>Rules</h2>
+
+<ul>
+	<li><code>props</code> must come before any other output, and a template can have only one.</li>
+	<li>A prop without a default is required.</li>
+	<li>A default is used when the caller passes nothing or null.</li>
+	<li>In strict mode, passing a variable the template doesn't declare is an error. This catches typos in the caller.</li>
+	<li>Templates without <code>props</code> accept any variables.</li>
+</ul>
+
+<h2>Types</h2>
+
+<p>Add a type after a colon. Join several with <code>|</code>. Kiln checks the value after the default applies.</p>
+
+{% apply highlight("kiln") %}
+{% verbatim %}
+{% props
+	title: string,
+	href: string | null = null,
+	level: 2 | 3 = 2,
+	variant: "primary" | "secondary" = "primary",
+	tags: array = []
+%}
+{% endverbatim %}
+{% endapply %}
+
+<p>The types are <code>null</code>, <code>boolean</code>, <code>number</code>, <code>string</code>, <code>array</code>, <code>hash</code>, <code>set</code>, <code>date</code>, <code>markup</code> and <code>object</code>. A string or number, such as <code>"primary"</code>, accepts only that exact value.</p>
+
+<ul>
+	<li>A prop that may be null must include <code>null</code> in its type.</li>
+	<li><code>string</code> also accepts safe markup.</li>
+	<li>Only the outer value is checked. <code>tags: array</code> doesn't check the items.</li>
+	<li>Untyped and typed props can be mixed.</li>
+</ul>
+
+{% apply example(error: true, templates: { "components/button.kiln": button }) %}
+{% verbatim %}
+{% include "components/button" with { label: "Go", variant: "danger" } %}
+{% endverbatim %}
+{% endapply %}
+
+<h2>In layouts</h2>
+
+<p>A layout reached through <code>extends</code> can use <code>props</code> too. It checks required props and applies defaults, but doesn't reject other variables, because the render data was meant for the page.</p>
+{% endblock %}

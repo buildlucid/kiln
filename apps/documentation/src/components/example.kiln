@@ -1,0 +1,14 @@
+{# A Kiln example and the output it rendered at build time. Used by the example filter. #}
+{% props files, output, failed %}
+<figure class="code">
+	{% for file in files %}
+	<div class="{{ loop.first ? "" : "border-t border-line" }}">
+		<div class="code-label">{{ file.name }}</div>
+		{{ file.code }}
+	</div>
+	{% endfor %}
+	<div class="code-output {{ failed ? "code-error" : "" }}">
+		<div class="code-label">{{ failed ? "Error" : "Output" }}</div>
+		{{ output }}
+	</div>
+</figure>

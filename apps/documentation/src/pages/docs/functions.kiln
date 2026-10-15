@@ -1,0 +1,69 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>Call a function by name, with its arguments in brackets. Your own functions sit alongside these. See <a href="/docs/api/extending/">Functions, filters and tests</a>.</p>
+
+<h2><code>range</code></h2>
+
+<p>Returns an array of numbers from a start to an end, including both. The optional third argument is the step.</p>
+
+{{ '{{ range(1, 5)|join(", ") }}
+{{ range(0, 10, 5)|join(", ") }}
+{{ range(3, 1)|join(", ") }}'|example }}
+
+<p>For a step of 1, <code>1..5</code> is shorter.</p>
+
+<h2><code>max</code> and <code>min</code></h2>
+
+<p>Return the largest or smallest argument, or the largest or smallest item of one array.</p>
+
+{{ '{{ max(3, 8, 1) }} {{ min([4, 2, 9]) }}'|example }}
+
+<h2><code>cycle</code></h2>
+
+<p>Returns the item at a position, starting again from the beginning when it runs out. Useful for alternating classes.</p>
+
+{{ '{% for item in ["a", "b", "c"] %}
+<li class="{{ cycle(["odd", "even"], loop.index0) }}">{{ item }}</li>
+{% endfor %}'|example }}
+
+<h2><code>date</code></h2>
+
+<p>Returns a <code>Date</code> from a date, an ISO 8601 string or milliseconds. With no argument, it returns the current time. With null, it returns null, so a missing date never becomes today.</p>
+
+{{ '{% if date(post.publishedAt) < date("2026-06-01") %}Older post{% endif %}'|example(context: { post: { publishedAt: "2026-03-01" } }) }}
+
+<h2><code>attrs</code></h2>
+
+<p>Builds HTML attributes from a hash. It handles the fiddly cases for you:</p>
+
+<ul>
+	<li>null and <code>false</code> leave the attribute out;</li>
+	<li><code>true</code> writes the name on its own;</li>
+	<li>arrays are joined with spaces, skipping empty values;</li>
+	<li>everything else is escaped.</li>
+</ul>
+
+{{ '<a{{ attrs({
+	href: post.url,
+	class: ["card", featured ? "card--featured"],
+	hidden: false,
+	"aria-current": current ? "page",
+}) }}>{{ post.title }}</a>'|example(context: { post: { url: "/blog/hello/", title: "Hello" }, featured: true, current: false }) }}
+
+<p>Each attribute starts with a space, so write <code>attrs</code> straight after the tag name.</p>
+
+<h2><code>parent</code> and <code>block</code></h2>
+
+<p><code>parent()</code> outputs the layout's version of the current block. <code>block("name")</code> outputs a block of the current template. See <a href="/docs/tags/extends/#reusing-blocks">extends and block</a>.</p>
+
+<h2><code>dump</code></h2>
+
+<p>Outputs a readable view of its arguments, for debugging. It only works when the environment has <code>debug: true</code>. Otherwise it outputs nothing, so a forgotten <code>dump</code> never leaks data.</p>
+
+{% apply highlight("kiln") %}
+{% verbatim %}
+{{ dump(page, route) }}
+{% endverbatim %}
+{% endapply %}
+{% endblock %}

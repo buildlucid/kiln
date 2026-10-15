@@ -1,0 +1,47 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>A test checks a value and returns <code>true</code> or <code>false</code>. Write it after <code>is</code>, or <code>is not</code> to flip the result.</p>
+
+{% apply highlight("kiln") %}
+{% verbatim %}
+{% if items is not empty %}
+{% endverbatim %}
+{% endapply %}
+
+<h2><code>defined</code></h2>
+
+<p>True when a variable or property exists. It never raises a <a href="/docs/language/strict-mode/">strict mode</a> error, so it is the safe way to check for optional data.</p>
+
+{{ '{% if page.subtitle is defined %}{{ page.subtitle }}{% else %}No subtitle{% endif %}'|example(context: { page: {} }) }}
+
+<h2><code>null</code></h2>
+
+<p>True when the value is null or undefined.</p>
+
+{{ '{{ page.image is null ? "No image" : "Has image" }}'|example(context: { page: { image: null } }) }}
+
+<h2><code>empty</code></h2>
+
+<p>True when the value is <a href="/docs/language/values/#empty-values">empty</a>: null, <code>false</code>, an empty string, array, hash, set or map. <code>0</code> is not empty.</p>
+
+{{ '{{ [] is empty }} {{ 0 is empty }}'|example }}
+
+<h2><code>even</code> and <code>odd</code></h2>
+
+<p>True when the value is an even or odd whole number.</p>
+
+{{ '{% for n in 1..4 %}{{ n }} is {{ n is even ? "even" : "odd" }}. {% endfor %}'|example }}
+
+<h2><code>iterable</code></h2>
+
+<p>True for arrays, hashes, sets, maps and other values <code>for</code> can loop over. Strings are not iterable.</p>
+
+{{ '{{ [1, 2] is iterable }} {{ "abc" is iterable }}'|example }}
+
+<h2><code>divisible by</code></h2>
+
+<p>True when the value is a multiple of the argument.</p>
+
+{{ '{% for n in 1..6 %}{{ n }}{% if n is divisible by(3) %} |{% endif %} {% endfor %}'|example }}
+{% endblock %}

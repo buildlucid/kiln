@@ -1,0 +1,53 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>Kiln is built to run templates written by other people, such as editors in a CMS or AI agents. A template can only read what you give it, and limits stop templates that would run for too long.</p>
+
+<h2>What templates can read</h2>
+
+<ul>
+	<li><strong>Plain objects:</strong> their own properties only. Nothing inherited from <code>Object.prototype</code>.</li>
+	<li><strong>Arrays:</strong> items by index, and <code>length</code>.</li>
+	<li><strong>Strings:</strong> no properties. Use filters such as <code>length</code> instead.</li>
+	<li><strong>Class instances:</strong> only the members their class <a href="/docs/api/safe-markup/#class-instances">exposes</a>.</li>
+	<li><strong>Never:</strong> <code>constructor</code>, <code>prototype</code> or <code>__proto__</code>, even when they are an object's own properties.</li>
+</ul>
+
+<p>Templates can only call functions you registered, the built-ins, macros, their own arrow functions and exposed methods. A function stored in your data can't be called.</p>
+
+<h2>Limits</h2>
+
+<p>Every render has limits. Exceeding one stops the render with an error.</p>
+
+<table>
+	<thead><tr><th>Limit</th><th>Default</th><th>What it counts</th></tr></thead>
+	<tbody>
+		<tr><td><code>maxOutputLength</code></td><td>5,000,000</td><td>Characters of output</td></tr>
+		<tr><td><code>maxSteps</code></td><td>1,000,000</td><td>Tags, outputs, loop passes and calls</td></tr>
+		<tr><td><code>maxDepth</code></td><td>64</td><td>Nested includes, components, macro calls and layouts</td></tr>
+	</tbody>
+</table>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+const kiln = createKiln({
+	loader,
+	limits: { maxSteps: 200_000, maxDepth: 32 },
+});
+{% endverbatim %}
+{% endapply %}
+
+<p>Built-in filters count the items they process, so one call to <code>sort</code> or <code>merge</code> can't do unlimited work.</p>
+
+<p>Pass an <code>AbortSignal</code> as the <code>signal</code> render option to stop a render from outside, for example when the visitor disconnects. On Cloudflare Workers, the platform's CPU limit is a final backstop.</p>
+
+<h2>Other safeguards</h2>
+
+<ul>
+	<li>Output is <a href="/docs/language/escaping/">escaped</a> by default.</li>
+	<li>Templates can't build regular expressions, so they can't cause slow pattern matching.</li>
+	<li>Templates can't compile other templates from strings.</li>
+	<li><code>dump</code> outputs nothing unless you turn on <code>debug</code>.</li>
+	<li>A failed render returns no partial output.</li>
+</ul>
+{% endblock %}

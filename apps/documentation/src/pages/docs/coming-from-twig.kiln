@@ -1,0 +1,58 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>Kiln's syntax is close to Twig's, so most templates read the same. The differences fix things that tend to cause bugs, follow JavaScript where Twig follows PHP, or remove features a website doesn't need.</p>
+
+<h2>Renamed</h2>
+
+<table>
+	<thead><tr><th>Twig</th><th>Kiln</th></tr></thead>
+	<tbody>
+		<tr><td><code>embed</code></td><td><a href="/docs/tags/component/"><code>component</code></a> with <code>slot</code> and <code>fill</code></td></tr>
+		<tr><td><code>types</code></td><td><a href="/docs/tags/props/"><code>props</code></a>, which also checks values and sets defaults</td></tr>
+		<tr><td><code>json_encode</code></td><td><code>json</code></td></tr>
+		<tr><td><code>number_format</code></td><td><code>formatNumber</code>, with <code>Intl</code> options</td></tr>
+		<tr><td><code>date</code> filter</td><td><code>formatDate</code>, with <code>Intl</code> options instead of formats like <code>"Y-m-d"</code></td></tr>
+		<tr><td><code>striptags</code>, <code>url_encode</code></td><td><code>stripTags</code>, <code>urlEncode</code></td></tr>
+		<tr><td><code>loop.revindex</code></td><td><code>loop.revIndex</code></td></tr>
+		<tr><td><code>escape("html_attr")</code></td><td><code>escape("attr")</code></td></tr>
+		<tr><td><code>_self.macro()</code></td><td><code>macro()</code></td></tr>
+	</tbody>
+</table>
+
+<p>All of Kiln's names are camelCase, like JavaScript.</p>
+
+<h2>Changed</h2>
+
+<table>
+	<thead><tr><th>Area</th><th>Twig</th><th>Kiln</th></tr></thead>
+	<tbody>
+		<tr><td>Missing variables</td><td>Empty, unless <code>strict_variables</code> is on</td><td>An error, unless you turn off <a href="/docs/language/strict-mode/">strict mode</a></td></tr>
+		<tr><td><code>include</code> and components</td><td>Share the caller's variables unless you add <code>only</code></td><td>Only see what you pass, plus globals</td></tr>
+		<tr><td>Imports</td><td>Hidden in some places, such as inside an embed</td><td>Work everywhere in the template that declares them</td></tr>
+		<tr><td><code>==</code></td><td>Loose, with PHP's rules</td><td>Strict, like <code>===</code></td></tr>
+		<tr><td>True and false</td><td><code>"0"</code> is false</td><td><code>"0"</code> is true. Empty arrays and hashes are false</td></tr>
+		<tr><td>Printing booleans</td><td><code>1</code> and nothing</td><td><code>true</code> and <code>false</code></td></tr>
+		<tr><td><code>+</code></td><td>Converts numeric strings</td><td>Numbers only</td></tr>
+		<tr><td><code>in</code> on a hash</td><td>Checks values</td><td>Checks keys</td></tr>
+		<tr><td><code>~</code></td><td>Runs before <code>+</code></td><td>Runs after <code>+</code></td></tr>
+		<tr><td>Named arguments</td><td>Matched to parameter names</td><td>Gathered into one hash at the end, except for macros</td></tr>
+		<tr><td>Property access</td><td><code>attribute()</code> for dynamic names</td><td><code>obj[name]</code> works everywhere</td></tr>
+		<tr><td>Method calls</td><td>Any public method</td><td>Only methods a class <a href="/docs/api/safe-markup/#class-instances">exposes</a></td></tr>
+		<tr><td>Timestamps</td><td>Seconds</td><td>Milliseconds, like JavaScript</td></tr>
+		<tr><td><code>slice</code></td><td>Start and length</td><td>Start and end, like JavaScript</td></tr>
+		<tr><td>Whitespace</td><td>Removes the first newline after a tag</td><td>Removes lines that only hold tags</td></tr>
+		<tr><td>Async</td><td>Not supported</td><td>Any call can return a promise</td></tr>
+	</tbody>
+</table>
+
+<h2>Removed</h2>
+
+<ul>
+	<li><strong>Tags:</strong> <code>sandbox</code>, <code>use</code>, <code>deprecated</code>, <code>flush</code>, <code>do</code>, <code>cache</code> and <code>guard</code>. Kiln's <a href="/docs/api/safety/">safety model</a> replaces the sandbox.</li>
+	<li><strong>Functions:</strong> <code>include()</code>, <code>attribute</code>, <code>constant</code>, <code>source</code>, <code>template_from_string</code> and <code>random</code>. Use the <code>include</code> tag and <code>[]</code> instead of the first two.</li>
+	<li><strong>Filters:</strong> <code>spaceless</code>, <code>convert_encoding</code>, <code>format</code>, <code>date_modify</code> and the <code>e</code> alias. Use <code>-</code> to trim whitespace, and <code>#{ }</code> to build strings.</li>
+	<li><strong>Tests:</strong> <code>same as</code>, <code>constant</code> and <code>none</code>. <code>==</code> is already strict, and <code>null</code> replaces <code>none</code>.</li>
+	<li><strong>Syntax:</strong> the <code>matches</code> operator, bitwise operators, <code>items[1:3]</code> slices, letter ranges such as <code>'a'..'z'</code>, <code>loop.parent</code>, the <code>only</code> keyword, upper-case <code>TRUE</code>, <code>FALSE</code> and <code>NULL</code>, and custom delimiters.</li>
+</ul>
+{% endblock %}

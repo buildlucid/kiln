@@ -1,0 +1,50 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>A macro is a small piece of markup you call like a function. Define macros in a template, then import them where you need them.</p>
+
+{% set forms %}
+{% verbatim %}
+{% macro input(name, value = "", type = "text") -%}
+	<input type="{{ type }}" name="{{ name }}" value="{{ value }}">
+{%- endmacro %}
+{% endverbatim %}
+{% endset %}
+{% apply example(templates: { "macros/forms.kiln": forms }) %}
+{% verbatim %}
+{% import "macros/forms" as forms %}
+
+{{ forms.input("email", type: "email") }}
+{{ forms.input("name", "Ada") }}
+{% endverbatim %}
+{% endapply %}
+
+<h2>Importing</h2>
+
+<p><code>import</code> gives you all of a template's macros under one name. <code>from</code> imports chosen macros by name, optionally with an alias:</p>
+
+{% apply highlight("kiln") %}
+{% verbatim %}
+{% import "macros/forms" as forms %}
+{% from "macros/forms" import input, textarea as area %}
+{% endverbatim %}
+{% endapply %}
+
+<p>Imports work everywhere in the template that declares them: at the top level, and inside every block, macro and fill. They are not passed on to layouts, included templates or components, which import what they need themselves.</p>
+
+<p>Macros defined in the same template can be called by name, without importing.</p>
+
+<h2>Arguments</h2>
+
+<ul>
+	<li>Parameters can have defaults. Missing arguments without a default are null.</li>
+	<li>Named arguments match parameter names, so you can skip ones in the middle: <code>input("email", type: "email")</code>.</li>
+	<li>Passing more arguments than the macro has parameters is an error.</li>
+	<li>A macro only sees its arguments and globals.</li>
+	<li>A macro can call itself, for example to render a nested menu.</li>
+</ul>
+
+<h2>Macro or component?</h2>
+
+<p>Use a macro for a small snippet that only needs arguments. Use a <a href="/docs/tags/component/">component</a> when the caller passes markup inside it.</p>
+{% endblock %}

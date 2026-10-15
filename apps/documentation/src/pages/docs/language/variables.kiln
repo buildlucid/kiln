@@ -1,0 +1,52 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>A template gets its variables from the data you render it with, from globals, and from tags that create variables, such as <code>set</code> and <code>for</code>.</p>
+
+<h2>Where variables come from</h2>
+
+<p>When a template uses a name, Kiln looks for it in this order:</p>
+
+<ol>
+	<li>The parameters of the arrow function it is in.</li>
+	<li>Local scopes, from the innermost outwards.</li>
+	<li>The template scope: the render data, <code>props</code>, and top-level <code>set</code> tags.</li>
+	<li><a href="/docs/api/extending/#globals">Globals</a> registered with the environment.</li>
+</ol>
+
+<p>Functions, filters and tests have their own names, separate from variables. A variable called <code>range</code> never hides the <code>range()</code> function.</p>
+
+<h2>Scopes</h2>
+
+<p>These tags create a new scope: each <code>for</code> iteration, <code>with</code>, <code>block</code>, <code>macro</code>, <code>include</code>, <code>component</code> and <code>fill</code>. Variables made inside a scope disappear when it ends.</p>
+
+<p><code>if</code>, <code>apply</code> and <code>autoescape</code> don't create a scope.</p>
+
+<h2>Assigning variables</h2>
+
+<p><code>set</code> updates a variable where it already exists. If the variable doesn't exist yet, <code>set</code> creates it in the current scope.</p>
+
+{% apply example(context: { items: [{ title: "Pen", price: 2 }, { title: "Ink", price: 5 }] }) %}
+{% verbatim %}
+{% set total = 0 %}
+{% for item in items %}
+	{% set total = total + item.price %}
+{% endfor %}
+Total: {{ total }}
+{% endverbatim %}
+{% endapply %}
+
+<p>Because <code>total</code> existed before the loop, the loop updates it. A variable first set inside the loop only exists inside the loop.</p>
+
+<p>You can't assign to <code>loop</code>, <code>slots</code> or a global.</p>
+
+<h2>Isolated templates</h2>
+
+<p>Included templates, components and macros don't see the caller's variables. They only see what you pass them, plus globals. This keeps each template's inputs clear.</p>
+
+{% apply highlight("kiln") %}
+{% verbatim %}
+{% include "partials/header" with { page, nav } %}
+{% endverbatim %}
+{% endapply %}
+{% endblock %}

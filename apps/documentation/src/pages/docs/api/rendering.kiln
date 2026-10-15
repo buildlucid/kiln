@@ -1,0 +1,73 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p><code>render</code> turns a template into a string. Pass the template's name and the variables it should see.</p>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+const html = await kiln.render("pages/post", {
+	route: { path: "/blog/hello/" },
+	post,
+});
+{% endverbatim %}
+{% endapply %}
+
+<ul>
+	<li><code>render</code> always returns a promise, but only waits when a template calls something async.</li>
+	<li>If anything goes wrong, the promise rejects and no partial output is returned. See <a href="/docs/api/errors/">Errors and checks</a>.</li>
+</ul>
+
+<h2>Render options</h2>
+
+<p>The third argument sets options for one render:</p>
+
+<table>
+	<thead><tr><th>Option</th><th>Description</th></tr></thead>
+	<tbody>
+		<tr><td><code>state</code></td><td>Data for this request, passed to functions made with <code>withRender</code>. See <a href="/docs/api/extending/#request-data">Request data</a></td></tr>
+		<tr><td><code>locale</code></td><td>Overrides the environment's locale</td></tr>
+		<tr><td><code>timeZone</code></td><td>Overrides the environment's time zone</td></tr>
+		<tr><td><code>signal</code></td><td>An <code>AbortSignal</code>. Kiln stops the render when it is aborted</td></tr>
+	</tbody>
+</table>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+const html = await kiln.render("pages/home", context, {
+	locale: "fr-FR",
+	timeZone: "Europe/Paris",
+	signal: request.signal,
+});
+{% endverbatim %}
+{% endapply %}
+
+<h2>Rendering one block</h2>
+
+<p><code>renderBlock</code> renders a single block of a template. Use it to send a fragment of a page, for example in reply to an htmx or <code>fetch</code> request.</p>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+const results = await kiln.renderBlock("pages/search", "results", { query });
+{% endverbatim %}
+{% endapply %}
+
+<ul>
+	<li>Kiln picks the block the full page would use, so a page's version wins over its layout's.</li>
+	<li>Top-level <code>set</code> tags in the page still run, so data the page loads is available.</li>
+	<li>The block doesn't see variables the layout creates around it, such as a <code>for</code> loop's variable.</li>
+	<li>Asking for a block that doesn't exist is an error.</li>
+</ul>
+
+<h2>Caching</h2>
+
+<p>Kiln compiles each template the first time it is used, then keeps the compiled version. The loader is called once per template name.</p>
+
+<p>When a template changes, for example after an edit in your CMS, call <code>invalidate</code>:</p>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+kiln.invalidate("pages/home"); // one template
+kiln.invalidate(); // all templates
+{% endverbatim %}
+{% endapply %}
+{% endblock %}

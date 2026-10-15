@@ -1,0 +1,55 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>A component is a template that takes props and content from its caller. Use it for cards, buttons, dialogs and other reusable pieces with markup inside.</p>
+
+{% set card %}
+{% verbatim %}
+{% props title, href %}
+<article class="card">
+	<h2><a href="{{ href }}">{{ title }}</a></h2>
+	{% slot %}{% endslot %}
+	{% if slots.footer %}
+	<footer>
+		{% slot "footer" %}{% endslot %}
+	</footer>
+	{% endif %}
+</article>
+{% endverbatim %}
+{% endset %}
+{% apply example(templates: { "components/card.kiln": card }, context: { post: { title: "Hello, world", url: "/blog/hello/", excerpt: "Our first post." } }) %}
+{% verbatim %}
+{% component "components/card" with { title: post.title, href: post.url } %}
+	<p>{{ post.excerpt }}</p>
+	{% fill "footer" %}
+		<a href="{{ post.url }}">Read more</a>
+	{% endfill %}
+{% endcomponent %}
+{% endverbatim %}
+{% endapply %}
+
+<h2>Slots</h2>
+
+<ul>
+	<li><code>&#123;% slot %}</code> outputs the caller's content. Content outside any <code>fill</code> goes into this default slot.</li>
+	<li><code>&#123;% fill "name" %}</code> in the caller provides content for a named slot, and <code>&#123;% slot "name" %}</code> in the component outputs it.</li>
+	<li>Content inside <code>slot</code> is a fallback, shown when the caller didn't fill that slot.</li>
+	<li><code>slots</code> is a hash that says which slots were filled, such as <code>slots.footer</code>.</li>
+</ul>
+
+{% apply highlight("kiln") %}
+{% verbatim %}
+<h2>{% slot "title" %}Untitled{% endslot %}</h2>
+{% endverbatim %}
+{% endapply %}
+
+<h2>Scope</h2>
+
+<p>The component only sees the variables passed with <code>with</code>, plus globals and <code>slots</code>. Fill content renders in the caller's scope, so in the example above, <code>post</code> is the caller's variable.</p>
+
+<p>Slots belong to the component that received them. A template the component includes can't output them.</p>
+
+<h2>Without content</h2>
+
+<p>A component with no content can be rendered with <a href="/docs/tags/include/"><code>include</code></a>. Every slot then shows its fallback.</p>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% props previous, next %}
+{% if previous or next %}
+<nav aria-label="Pages" class="mt-16 grid gap-3 border-t border-line pt-8 sm:grid-cols-2">
+	{% if previous %}
+	<a href="{{ previous.url }}" class="group rounded-xl border border-line px-4 py-3.5 transition-colors hover:border-line-strong hover:bg-surface">
+		<span class="block text-[13px] text-muted">Previous</span>
+		<span class="mt-0.5 block font-medium text-fg">{{ previous.title }}</span>
+	</a>
+	{% endif %}
+	{% if next %}
+	<a href="{{ next.url }}" class="group rounded-xl border border-line px-4 py-3.5 text-right transition-colors hover:border-line-strong hover:bg-surface sm:col-start-2">
+		<span class="block text-[13px] text-muted">Next</span>
+		<span class="mt-0.5 block font-medium text-fg">{{ next.title }}</span>
+	</a>
+	{% endif %}
+</nav>
+{% endif %}

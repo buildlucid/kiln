@@ -1,0 +1,51 @@
+{
+	"name": "@lucidcms/kiln",
+	"version": "0.0.0",
+	"private": true,
+	"description": "A fast, safe, async-aware template language for building websites. Runs on Node and Cloudflare Workers.",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/buildlucid/kiln.git",
+		"directory": "packages/kiln"
+	},
+	"type": "module",
+	"types": "./dist/index.d.ts",
+	"module": "dist/index.js",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./node": {
+			"types": "./dist/node.d.ts",
+			"import": "./dist/node.js"
+		}
+	},
+	"sideEffects": false,
+	"scripts": {
+		"build": "tsc --noEmit && tsc --noEmit -p test && vp pack",
+		"dev": "vp pack --watch"
+	},
+	"files": [
+		"dist"
+	],
+	"keywords": [
+		"template",
+		"template engine",
+		"twig",
+		"kiln",
+		"cloudflare workers"
+	],
+	"devDependencies": {
+		"@types/node": "^24.19.2",
+		"typescript": "^7.0.2",
+		"vite-plus": "1.2.0"
+	},
+	"volta": {
+		"node": "24.22.0"
+	},
+	"engines": {
+		"node": "^24.0.0"
+	},
+	"license": "MIT"
+}

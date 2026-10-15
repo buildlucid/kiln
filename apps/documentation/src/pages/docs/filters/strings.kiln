@@ -1,0 +1,89 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>These filters change and encode text. Apply a filter with <code>|</code>, as in <code>&#123;{ title|upper }}</code>. Lengths and positions count characters as people see them (Unicode code points), not JavaScript's UTF-16 units.</p>
+
+<p>Most string filters return an empty string for null, so optional fields print nothing.</p>
+
+<h2><code>upper</code> and <code>lower</code></h2>
+
+<p>Change text to upper or lower case.</p>
+
+{{ '{{ "Hello"|upper }} {{ "Hello"|lower }}'|example }}
+
+<h2><code>capitalize</code></h2>
+
+<p>Makes the first character upper case and the rest lower case.</p>
+
+{{ '{{ "hELLO wORLD"|capitalize }}'|example }}
+
+<h2><code>title</code></h2>
+
+<p>Starts each word with an upper-case letter and makes the rest lower case.</p>
+
+{{ '{{ "the QUICK brown fox"|title }}'|example }}
+
+<h2><code>trim</code></h2>
+
+<p>Removes whitespace from both ends. Pass characters to remove instead, and <code>"start"</code> or <code>"end"</code> to trim one side.</p>
+
+{{ '{{ "  hello  "|trim }}|{{ "--hello--"|trim("-", "end") }}'|example }}
+
+<h2><code>replace</code></h2>
+
+<p>Replaces every match of a piece of text. Pass a hash to replace several at once. It matches plain text, not regular expressions.</p>
+
+{{ '{{ "I like tea"|replace("tea", "coffee") }}
+{{ "Hi NAME, welcome to PLACE"|replace({ NAME: "Ada", PLACE: "Kiln" }) }}'|example }}
+
+<h2><code>split</code></h2>
+
+<p>Splits text into an array. An optional limit caps the number of items. An empty separator splits into characters.</p>
+
+{{ '{{ "a,b,c"|split(",")|join(" / ") }}
+{{ "a,b,c"|split(",", 2)|join(" / ") }}'|example }}
+
+<h2><code>truncate</code></h2>
+
+<p>Shortens text to a length, trims trailing spaces and adds an ellipsis if it cut anything. Pass a different ending as the second argument.</p>
+
+{{ '{{ "Kiln is a template language"|truncate(13) }}
+{{ "Short"|truncate(13) }}'|example }}
+
+<h2><code>stripTags</code></h2>
+
+<p>Removes HTML tags and comments. It doesn't decode entities such as <code>&amp;amp;amp;</code>.</p>
+
+{{ '{{ "<p>Hello <b>world</b></p>"|stripTags }}'|example }}
+
+<h2><code>nl2br</code></h2>
+
+<p>Escapes the text, then adds a <code>&lt;br&gt;</code> before each line break. The result is safe HTML.</p>
+
+{{ '{{ "Line one\nLine two"|nl2br }}'|example }}
+
+<h2><code>urlEncode</code></h2>
+
+<p>Encodes a string for use in a URL, or turns a hash into a query string.</p>
+
+{{ '/search?q={{ "tea & cake"|urlEncode }}
+/search?{{ { q: "tea", page: 2 }|urlEncode }}'|example }}
+
+<h2><code>json</code></h2>
+
+<p>Turns a value into JSON. Pass a number to indent it. The output escapes <code>&lt;</code>, <code>&gt;</code> and <code>&amp;</code>, so it is safe inside a <code>&lt;script&gt;</code> tag with <code>raw</code>.</p>
+
+{{ '<script>const page = {{ { title: "Home", tags: ["a", "b"] }|json|raw }};</script>'|example }}
+
+<h2><code>escape</code></h2>
+
+<p>Escapes a value with a strategy: <code>"html"</code> (the default), <code>"attr"</code>, <code>"js"</code>, <code>"css"</code> or <code>"url"</code>. See <a href="/docs/language/escaping/">Escaping</a>.</p>
+
+{{ '<a href="/tags/{{ "a&b"|escape("url") }}">Tag</a>'|example }}
+
+<h2><code>raw</code></h2>
+
+<p>Marks a value as safe, so it is output without escaping. Only use it for HTML you trust, and put it last in a chain of filters.</p>
+
+{{ '{{ html|raw }}'|example(context: { html: "<em>Trusted</em>" }) }}
+{% endblock %}

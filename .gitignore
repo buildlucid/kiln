@@ -1,0 +1,15 @@
+node_modules
+dist
+coverage
+*.tsbuildinfo
+.DS_Store
+._*
+.idea/
+.vscode/
+*.swp
+.env
+.env.*local
+.vitest/
+.cloudflare/
+.wrangler/
+AGENTS.md

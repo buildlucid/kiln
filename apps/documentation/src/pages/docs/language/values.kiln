@@ -1,0 +1,65 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>Kiln works with ordinary JavaScript values. Your data goes into a template as it is, with no conversion.</p>
+
+<h2>Types</h2>
+
+<table>
+	<thead><tr><th>Kiln</th><th>JavaScript</th></tr></thead>
+	<tbody>
+		<tr><td>null</td><td><code>null</code> or <code>undefined</code>. Kiln treats them the same</td></tr>
+		<tr><td>boolean</td><td><code>true</code> or <code>false</code></td></tr>
+		<tr><td>number</td><td>A <code>number</code>. There is no separate integer type</td></tr>
+		<tr><td>string</td><td>A <code>string</code></td></tr>
+		<tr><td>array</td><td>An <code>Array</code></td></tr>
+		<tr><td>hash</td><td>A plain object, or a <code>Map</code> with string keys</td></tr>
+		<tr><td>set</td><td>A <code>Set</code></td></tr>
+		<tr><td>date</td><td>A <code>Date</code></td></tr>
+		<tr><td>markup</td><td>A string marked safe to output. See <a href="/docs/language/escaping/">Escaping</a></td></tr>
+		<tr><td>object</td><td>A class instance that opts in. See <a href="/docs/api/safe-markup/">Safe markup and classes</a></td></tr>
+	</tbody>
+</table>
+
+<h2>True and false</h2>
+
+<p>Conditions such as <code>if</code> treat these values as false: <code>null</code>, <code>false</code>, <code>0</code>, <code>NaN</code>, <code>""</code>, an empty array, an empty hash, and an empty set or map. Everything else is true, including <code>"0"</code> and <code>" "</code>.</p>
+
+{% apply example(context: { tags: [], title: "0" }) %}
+{% verbatim %}
+{% if tags %}Has tags{% else %}No tags{% endif %}
+{% if title %}Has a title{% endif %}
+{% endverbatim %}
+{% endapply %}
+
+<h2>Printing values</h2>
+
+<p>When you output a value, Kiln turns it into a string:</p>
+
+<table>
+	<thead><tr><th>Value</th><th>Output</th></tr></thead>
+	<tbody>
+		<tr><td>null</td><td>Nothing</td></tr>
+		<tr><td>boolean</td><td><code>true</code> or <code>false</code></td></tr>
+		<tr><td>number</td><td>The number, as JavaScript writes it</td></tr>
+		<tr><td>string</td><td>The string, escaped</td></tr>
+		<tr><td>date</td><td>An ISO 8601 date, such as <code>2026-10-15T09:30:00.000Z</code></td></tr>
+		<tr><td>array, hash, set</td><td>An error. Use <code>join</code>, <code>json</code> or a loop</td></tr>
+	</tbody>
+</table>
+
+<p>Printing an array is an error rather than a silent "[object Object]", so mistakes show up straight away. Use <a href="/docs/filters/strings/#json"><code>json</code></a> to print data for debugging.</p>
+
+<h2>Empty values</h2>
+
+<p>Some features check whether a value is empty rather than false. A value is empty if it is null, <code>false</code>, <code>""</code>, an empty array, an empty hash, or an empty set or map. Unlike false values, <code>0</code> is not empty.</p>
+
+{% apply example(context: { stock: 0, name: "" }) %}
+{% verbatim %}
+{{ stock|default("Unknown") }}
+{{ name|default("Anonymous") }}
+{% endverbatim %}
+{% endapply %}
+
+<p>The <a href="/docs/filters/lists/#default"><code>default</code></a> filter and the <a href="/docs/tests/#empty"><code>empty</code></a> test use this rule.</p>
+{% endblock %}

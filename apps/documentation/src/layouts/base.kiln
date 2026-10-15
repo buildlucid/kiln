@@ -1,0 +1,22 @@
+{# The HTML shell every page shares. Pages and layouts fill the "main" block. #}
+{% props page, previous = null, next = null %}
+<!doctype html>
+<html lang="en-GB">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{% block title %}{{ page.title }} · {{ site.name }}{% endblock %}</title>
+	<meta name="description" content="{{ page.description }}">
+	<meta name="theme-color" content="#09090b">
+	<meta property="og:title" content="{{ block("title") }}">
+	<meta property="og:description" content="{{ page.description }}">
+	<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+	<link rel="stylesheet" href="/src/styles.css">
+</head>
+<body class="min-h-dvh bg-bg">
+	<a href="#content" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-fg focus:px-3 focus:py-2 focus:text-sm focus:text-bg">Skip to content</a>
+	{% include "components/header" with { current: page.url } %}
+	{% block main %}{% endblock %}
+	{% include "components/footer" %}
+</body>
+</html>

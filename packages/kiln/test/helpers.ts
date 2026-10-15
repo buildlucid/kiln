@@ -1,0 +1,80 @@
+import {
+	createKiln,
+	type KilnOptions,
+	KilnRenderError,
+	KilnSyntaxError,
+	memoryLoader,
+} from "../src/index.js";
+
+export type TestOptions = Omit<KilnOptions, "loader"> & {
+	/** Variables passed to `render`. */
+	context?: Record<string, unknown>;
+	/** Other templates the test template uses, by name, such as `{ "layouts/base": "..." }`. */
+	templates?: Record<string, string>;
+};
+
+export type KilnError = KilnRenderError | KilnSyntaxError;
+
+/** Renders `template` as `index.kiln`, with any other templates alongside it. */
+export const render = (
+	template: string,
+	options: TestOptions = {},
+): Promise<string> => {
+	const { context, templates = {}, ...kilnOptions } = options;
+	const kiln = createKiln({
+		...kilnOptions,
+		loader: memoryLoader({ ...templates, index: template }),
+	});
+	return kiln.render("index", context);
+};
+
+/** Renders a template that should fail, and returns its error. Fails the test if the render succeeds. */
+export const renderError = async (
+	template: string,
+	options: TestOptions = {},
+): Promise<KilnError> => {
+	try {
+		const output = await render(template, options);
+		throw new Error(
+			`Expected the render to fail, but it returned ${JSON.stringify(output)}`,
+		);
+	} catch (error) {
+		if (error instanceof KilnRenderError || error instanceof KilnSyntaxError)
+			return error;
+		throw error;
+	}
+};
+
+/** The code of the error a template fails with. For syntax errors, the first problem's code. */
+export const errorCode = async (
+	template: string,
+	options: TestOptions = {},
+): Promise<string> => {
+	const error = await renderError(template, options);
+	if (error instanceof KilnRenderError) return error.code;
+	return (
+		error.diagnostics.find((diagnostic) => diagnostic.severity === "error")
+			?.code ?? ""
+	);
+};
+
+/** Every error code a template fails with, in source order. A render error has one. */
+export const errorCodes = async (
+	template: string,
+	options: TestOptions = {},
+): Promise<string[]> => {
+	const error = await renderError(template, options);
+	if (error instanceof KilnRenderError) return [error.code];
+	return error.diagnostics.map((diagnostic) => diagnostic.code);
+};
+
+/** Joins lines with newlines, for templates and output where line breaks matter. */
+export const lines = (...parts: string[]): string => parts.join("\n");
+
+/** A host function that resolves to `value` after `ms` milliseconds, for async tests. */
+export const later = <T>(value: T, ms = 0): Promise<T> =>
+	new Promise((resolve) => setTimeout(() => resolve(value), ms));
+
+/** Lets a stray unhandled rejection surface before the test ends. Vitest fails the run if one does. */
+export const settle = (): Promise<void> =>
+	new Promise((resolve) => setTimeout(resolve, 10));
