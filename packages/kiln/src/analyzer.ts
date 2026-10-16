@@ -10,7 +10,7 @@ import type { CompiledTemplate, Scope } from "./runtime/types.js";
 import type { Position, Span } from "./source.js";
 
 export type TemplateReference = {
-	kind: "extends" | "include" | "component" | "import";
+	kind: "extends" | "include" | "component" | "island" | "import";
 	/** Resolved name, or `null` when the name is computed at render time. */
 	name: string | null;
 	start: Position;
@@ -55,6 +55,7 @@ export const childStatements = (node: Statement): Statement[][] => {
 			return [node.body, node.alternate ?? []];
 		case "Component":
 			return [node.body, ...node.fills.map((fill) => fill.body)];
+		case "Island":
 		case "SetBlock":
 		case "Block":
 		case "Slot":
@@ -331,6 +332,12 @@ export const analyzeTemplate = (
 				withScope([], () => statements(node.body));
 				for (const fill of node.fills)
 					withScope([], () => statements(fill.body));
+				return;
+			case "Island":
+				expression(node.template);
+				if (node.with) expression(node.with);
+				reference("island", node.template, node.span);
+				withScope([], () => statements(node.body));
 				return;
 			case "Slot":
 				withScope([], () => statements(node.body));

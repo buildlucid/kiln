@@ -141,6 +141,8 @@
   "include"
   "component"
   "endcomponent"
+  "island"
+  "endisland"
   "fill"
   "endfill"
   "slot"

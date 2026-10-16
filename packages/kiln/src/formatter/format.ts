@@ -106,6 +106,7 @@ const BLOCK_TAGS = new Set([
 	"macro",
 	"with",
 	"cache",
+	"island",
 	"add",
 	"apply",
 	"autoescape",

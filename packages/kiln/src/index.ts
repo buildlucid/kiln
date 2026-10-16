@@ -34,6 +34,17 @@ export type {
 } from "./parser/ast.js";
 export { generateManifest, type KilnManifest } from "./manifest.js";
 export { expose, lookup } from "./runtime/exposure.js";
+export {
+	type DeferredIslands,
+	deferIslands,
+	type IslandEntry,
+	type IslandManifest,
+	type IslandMode,
+	islandScript,
+	type JsonValue,
+	type StreamedIslands,
+	streamIslands,
+} from "./runtime/islands.js";
 export { isSafe, Markup, safe } from "./runtime/markup.js";
 export type { AbortSignalLike, KilnCache } from "./runtime/types.js";
 export type { Position } from "./source.js";

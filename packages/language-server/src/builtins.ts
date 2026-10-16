@@ -52,6 +52,11 @@ export const TAGS: Record<string, TagDoc> = {
 		snippet: 'component "${1}" with { $2 } %}\n\t$0\n{% endcomponent %}',
 		description: "Renders a component, passing it props and filling its slots.",
 	},
+	island: {
+		snippet: 'island "${1}" with { $2 } %}\n\t$0\n{% endisland %}',
+		description:
+			"Renders a component that can load after the page. The content is the fallback shown until it does.",
+	},
 	fill: {
 		snippet: block("fill", ' "${1:name}"'),
 		description: "Fills a named slot of a component.",
@@ -117,6 +122,7 @@ export const BLOCK_TAGS = new Set([
 	"set",
 	"block",
 	"component",
+	"island",
 	"fill",
 	"slot",
 	"macro",

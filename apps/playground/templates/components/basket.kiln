@@ -1,0 +1,6 @@
+{% set name = visitor() %}
+{% if name %}
+	<p>{{ name }}, you have 2 mugs in your basket. <span class="meta">at {{ clock() }}</span></p>
+{% else %}
+	<p>You're not signed in. <a href="/">Sign in</a> to see your basket.</p>
+{% endif %}

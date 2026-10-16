@@ -1,0 +1,219 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+	<p>An island is a component that can load after the rest of the page. Use islands in a site you build to static files, for the few parts that need live data, such as stock levels, a basket or a visitor's name. On a server, use them to send the page before its slowest parts are ready.</p>
+
+	{% apply highlight("kiln") %}
+		{% verbatim %}
+{% island "components/stock" with { productId: product.id } %}
+	<p>Checking stock…</p>
+{% endisland %}
+		{% endverbatim %}
+	{% endapply %}
+
+	<p><code>island</code> takes a template and props, like <a href="/docs/tags/component/"><code>component</code></a>. The content inside the tag is the fallback, which the page shows until the island loads.</p>
+
+	<h2>How islands render</h2>
+
+	<p>The template doesn't decide when an island renders. The code that renders the page does, with the <code>islands</code> render option:</p>
+
+	<ul>
+		<li>By default, an island renders in place, exactly like a component, and its fallback isn't used. This suits development, tests, pages your server renders for each request, and static sites with no server.</li>
+		<li>With <code>islands: deferIslands(…)</code>, each island becomes a <code>&lt;kiln-island&gt;</code> element holding its fallback. In the browser, it fetches the island's HTML from your server and swaps it in. See <a href="#deferring-islands">Deferring islands</a>.</li>
+		<li>With <code>islands: streamIslands()</code> and <code>renderStream</code>, the page is sent with each island's fallback, and each island follows in the same response when it is ready. See <a href="#streaming-islands">Streaming islands</a>.</li>
+	</ul>
+
+	<p>So the same templates work for a static build, a server and your tests.</p>
+
+	<h2>Props</h2>
+
+	<ul>
+		<li>Props must be JSON values: null, booleans, numbers, strings, lists and hashes. Pass dates as strings or timestamps. The rule is the same when islands render in place, so a template that works in development also works deferred.</li>
+		<li>The island only sees its props and globals, like a component.</li>
+		<li>An island has no slots. The content inside the tag is only the fallback, and it renders in the caller's scope.</li>
+		<li>A deferred or streamed island renders on its own, so it can't <a href="/docs/tags/outlet/">add to the page's outlets</a>.</li>
+	</ul>
+
+	<p>Make the fallback the same size as the island, so the page doesn't jump when the island loads.</p>
+
+	<h2>Deferring islands</h2>
+
+	<p>Pass the same <code>deferIslands</code> object to every page you render in a build. It records each island it meets, and its <code>manifest</code> lists them all. Save the manifest with your server code.</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { writeFile } from "node:fs/promises";
+import { deferIslands } from "@lucidkiln/core";
+
+const islands = deferIslands({ url: "/_islands/" });
+
+for (const page of pages) {
+	await writeFile(page.file, await kiln.render(page.template, page.data, { islands }));
+}
+
+await writeFile("build/islands.json", JSON.stringify(islands.manifest));
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>The island from the top of this page becomes:</p>
+
+	{% apply highlight("html") %}
+		{% verbatim %}
+<kiln-island src="/_islands/4f0b6c1d9e2a7385">
+	<p>Checking stock…</p>
+</kiln-island>
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>The manifest holds each island's template and props, by id:</p>
+
+	{% apply highlight("json") %}
+		{% verbatim %}
+{
+	"4f0b6c1d9e2a7385": {
+		"template": "components/stock.kiln",
+		"props": { "productId": 42 }
+	}
+}
+		{% endverbatim %}
+	{% endapply %}
+
+	<ul>
+		<li>Only the id reaches the browser. The props stay in the manifest, on your server.</li>
+		<li>An id comes from the template and props, so an island has the same id on every page and in every build. After you deploy, a page that's still cached somewhere asks for an id that either means the same island or doesn't exist.</li>
+		<li>Kiln adds the id to the end of <code>url</code>, so <code>"/_islands?id="</code> works too.</li>
+	</ul>
+
+	<table>
+		<thead><tr><th>Option</th><th>Default</th><th>Description</th></tr></thead>
+		<tbody>
+			<tr><td><code>url</code></td><td>Required</td><td>The text before each island's id in its <code>src</code></td></tr>
+			<tr><td><code>script</code></td><td><code>true</code></td><td>Whether Kiln adds the script that runs <code>&lt;kiln-island&gt;</code>. See <a href="#content-security-policy">Content Security Policy</a></td></tr>
+		</tbody>
+	</table>
+
+	<h2>Serving islands</h2>
+
+	<p>Your server looks up the id in the manifest and renders the island with <a href="/docs/api/rendering/"><code>render</code></a>, as it would a page. Kiln doesn't add a route, so this works with any server. Here it is in a Cloudflare Worker:</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import type { IslandManifest } from "@lucidkiln/core";
+import islands from "./build/islands.json";
+
+const manifest: IslandManifest = islands;
+
+export default {
+	async fetch(request: Request) {
+		const { pathname } = new URL(request.url);
+		if (pathname.startsWith("/_islands/")) {
+			const id = pathname.slice("/_islands/".length);
+			if (!Object.hasOwn(manifest, id)) {
+				return new Response("Not found", { status: 404 });
+			}
+			const { template, props } = manifest[id];
+			const html = await kiln.render(template, props, {
+				state: { cookie: request.headers.get("cookie") },
+			});
+			return new Response(html, {
+				headers: {
+					"content-type": "text/html; charset=utf-8",
+					"cache-control": "private, no-store",
+					"x-robots-tag": "noindex",
+				},
+			});
+		}
+		return fetch(request);
+	},
+};
+		{% endverbatim %}
+	{% endapply %}
+
+	<ul>
+		<li>Each island loads with its own request, which carries the visitor's cookies. Pass what the island needs from the request as <a href="/docs/api/extending/#request-data"><code>state</code></a>.</li>
+		<li>Check who is signed in here, as you would for any page. An id says which island to render, not who may see it.</li>
+		<li>Choose the caching for each island. Use <code>public</code> with a short <code>max-age</code> for data everyone sees, and <code>private</code> for one visitor's data.</li>
+		<li><code>x-robots-tag: noindex</code> stops search engines listing island responses as pages.</li>
+		<li>Islands inside an island render in place, since the island is already live.</li>
+	</ul>
+
+	<h2>Streaming islands</h2>
+
+	<p>On a server, pass <code>streamIslands()</code> to <a href="/docs/api/streaming/"><code>renderStream</code></a>. The page doesn't wait for its islands: each one starts rendering when the page reaches it, and its fallback is sent in its place. When the page is done, each island's HTML follows as soon as it is ready, in the same response.</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { streamIslands } from "@lucidkiln/core";
+
+const stream = await kiln.renderStream("pages/product", { product }, {
+	islands: streamIslands(),
+	signal: request.signal,
+});
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>The island from the top of this page is sent first as:</p>
+
+	{% apply highlight("html") %}
+		{% verbatim %}
+<kiln-island stream="1">
+	<p>Checking stock…</p>
+</kiln-island>
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>And once it is ready, after the rest of the page:</p>
+
+	{% apply highlight("html") %}
+		{% verbatim %}
+<template><p>Stock for 42</p></template><kiln-island fill="1"></kiln-island>
+		{% endverbatim %}
+	{% endapply %}
+
+	<ul>
+		<li>Islands arrive in the order they finish, not the order they appear in the page.</li>
+		<li>Kiln adds them after everything the page writes, even <code>&lt;/html&gt;</code>. Browsers put them in the body, where the script moves each into its place. Without JavaScript, the fallbacks stay.</li>
+		<li>An island renders with the same <code>state</code>, locale and time zone as the page.</li>
+		<li>If an island fails, the stream ends with its error, as for any error once the page has been sent. Islands that haven't arrived keep their fallbacks.</li>
+		<li><code>maxOutputLength</code> counts the islands as part of the page.</li>
+		<li>Islands inside <code>cache</code>, <code>set</code>, <code>apply</code> or a macro render in place, since their output may be reused or never sent.</li>
+		<li><code>render</code> and <code>renderBlock</code> can't stream, so with <code>streamIslands()</code> they render islands in place.</li>
+	</ul>
+
+	<table>
+		<thead><tr><th>Option</th><th>Default</th><th>Description</th></tr></thead>
+		<tbody>
+			<tr><td><code>script</code></td><td><code>true</code></td><td>Whether Kiln adds the script that runs <code>&lt;kiln-island&gt;</code>. See <a href="#content-security-policy">Content Security Policy</a></td></tr>
+		</tbody>
+	</table>
+
+	<h2>The kiln-island element</h2>
+
+	<p>Kiln adds a small script before the first deferred or streamed island in each page. It defines <code>&lt;kiln-island&gt;</code>:</p>
+
+	<ul>
+		<li>As soon as a deferred island's element is on the page, it fetches its <code>src</code>. A streamed island waits for its HTML to arrive.</li>
+		<li>If the response succeeds and is HTML, the element replaces itself with it. Scripts in the HTML run.</li>
+		<li>If the request fails, or JavaScript is off, the fallback stays.</li>
+		<li>The element has <code>display: contents</code>, so it doesn't change the page's layout.</li>
+	</ul>
+
+	<h3>Content Security Policy</h3>
+
+	<p>If your Content Security Policy blocks inline scripts, pass <code>script: false</code> and serve the script as a file, or add it with your nonce. <code>islandScript</code> holds its source.</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { deferIslands, islandScript } from "@lucidkiln/core";
+
+const islands = deferIslands({ url: "/_islands/", script: false });
+await writeFile("build/kiln-island.js", islandScript);
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>Then load it in your layout, with <code>&lt;script src="/kiln-island.js" defer&gt;&lt;/script&gt;</code>. Islands already on the page start loading when it runs.</p>
+
+	<h2>Islands in cached sections</h2>
+
+	<p>A <a href="/docs/tags/cache/"><code>cache</code></a> section can hold islands. A saved copy remembers its deferred islands, so reusing it in a later render still adds them to the manifest. Copies rendered in place and copies with deferred islands are saved separately. Streamed islands render in place inside a cached section.</p>
+{% endblock %}

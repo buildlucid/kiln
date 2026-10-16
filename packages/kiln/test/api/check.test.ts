@@ -98,6 +98,9 @@ describe("check across templates", () => {
 		expect(await codes('{% component "card" %}Body{% endcomponent %}')).toEqual(
 			["missing-prop"],
 		);
+		expect(await codes('{% island "card" %}Loading{% endisland %}')).toEqual([
+			"missing-prop",
+		]);
 	});
 
 	test("reports written-out values of the wrong type", async () => {

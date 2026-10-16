@@ -187,6 +187,19 @@ export type Statement =
 			span: Span;
 	  } & Placement)
 	| ({ type: "Slot"; name: string; body: Statement[]; span: Span } & Placement)
+	/**
+	 * A component that can load after the page. `body` is the fallback, shown until a deferred island loads. `closing`
+	 * is set when `endisland` stands on a line of its own: its indentation, or null when it shares that line with the
+	 * `island` tag, and whether a line break followed it.
+	 */
+	| ({
+			type: "Island";
+			template: Expression;
+			with: Expression | null;
+			body: Statement[];
+			closing?: { indent: string | null; newline: boolean };
+			span: Span;
+	  } & Placement)
 	| {
 			type: "Macro";
 			name: string;
@@ -235,7 +248,7 @@ export type TemplateNode = { type: "Template"; body: Statement[]; span: Span };
 /** Tags that insert content, which lines up with them when they stand on a line of their own. See `Placement`. */
 export type PlacedStatement = Extract<
 	Statement,
-	{ type: "Include" | "Component" | "Slot" | "Block" | "Outlet" }
+	{ type: "Include" | "Component" | "Island" | "Slot" | "Block" | "Outlet" }
 >;
 
 /** The name of the default slot, filled by content outside any `fill`. */

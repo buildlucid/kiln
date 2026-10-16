@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>{{ title }} · Kiln playground</title>
+		<style>
+			body { font: 16px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; color: #222; }
+			nav { display: flex; gap: 1rem; margin-bottom: 2rem; }
+			section { border: 1px solid #ddd; border-radius: 8px; padding: 0 1rem; margin: 1rem 0; }
+			.meta { color: #777; font-size: 0.875rem; }
+			.fallback { color: #999; font-style: italic; }
+		</style>
+	</head>
+	{% flush %}
+	<body>
+		<nav>
+			<a href="/">Home</a>
+			<a href="/static/">Static build</a>
+			<a href="/stream/">Streamed</a>
+			<a href="/in-place/">In place</a>
+		</nav>
+		<main>
+			{% block content %}{% endblock %}
+		</main>
+	</body>
+</html>

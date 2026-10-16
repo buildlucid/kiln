@@ -1,0 +1,18 @@
+{
+	"compilerOptions": {
+		"verbatimModuleSyntax": true,
+		"erasableSyntaxOnly": true,
+		"allowImportingTsExtensions": true,
+		"moduleDetection": "force",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"target": "ESNext",
+		"lib": ["ESNext"],
+		"types": ["node"],
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"skipLibCheck": true,
+		"noEmit": true
+	},
+	"include": ["src", "scripts"]
+}

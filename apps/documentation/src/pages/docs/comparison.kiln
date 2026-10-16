@@ -42,6 +42,7 @@
 		rows: [
 			{ feature: "Async data", link: "/docs/language/async-data/", cells: [true, false, "Callback API", true, false] },
 			{ feature: "Streaming", link: "/docs/api/streaming/", cells: [true, true, false, "Node streams only", false] },
+			{ feature: "Server islands", link: "/docs/tags/island/", cells: [true, false, false, false, false] },
 			{ feature: "Fragment caching", link: "/docs/tags/cache/", cells: [true, "Extension", false, false, false] },
 			{ feature: "Number and date formatting with Intl", link: "/docs/filters/numbers-and-dates/", cells: [true, "Extension", false, "Dates only", false] },
 			{ feature: "Plurals for any locale", link: "/docs/filters/numbers-and-dates/#plural", cells: [true, false, false, false, false] },

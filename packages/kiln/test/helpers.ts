@@ -1,5 +1,6 @@
 import {
 	createKiln,
+	type IslandMode,
 	type KilnOptions,
 	KilnRenderError,
 	KilnSyntaxError,
@@ -12,6 +13,8 @@ export type TestOptions = Omit<KilnOptions, "loader"> & {
 	context?: Record<string, unknown>;
 	/** Other templates the test template uses, by name, such as `{ "layouts/base": "..." }`. */
 	templates?: Record<string, string>;
+	/** The `islands` render option, to defer or stream `island` tags. */
+	islands?: IslandMode;
 };
 
 export type KilnError = KilnRenderError | KilnSyntaxError;
@@ -53,7 +56,12 @@ const precompileAll = async (
 
 /** An environment holding `template` as `index.kiln`, with any other templates alongside it. */
 const environment = async (template: string, options: TestOptions) => {
-	const { templates = {}, context: _context, ...kilnOptions } = options;
+	const {
+		templates = {},
+		context: _context,
+		islands: _islands,
+		...kilnOptions
+	} = options;
 	const sources = { ...templates, index: template };
 	return createKiln({
 		...kilnOptions,
@@ -68,14 +76,20 @@ export const render = async (
 	template: string,
 	options: TestOptions = {},
 ): Promise<string> =>
-	(await environment(template, options)).render("index", options.context);
+	(await environment(template, options)).render("index", options.context, {
+		islands: options.islands,
+	});
 
 /** Streams `template` as `index.kiln`, as `render` renders it. */
 export const renderStream = async (
 	template: string,
 	options: TestOptions = {},
 ): Promise<ReadableStream<Uint8Array>> =>
-	(await environment(template, options)).renderStream("index", options.context);
+	(await environment(template, options)).renderStream(
+		"index",
+		options.context,
+		{ islands: options.islands },
+	);
 
 /** Reads a stream to its end, and returns each part it sent as text. */
 export const readParts = async (

@@ -494,3 +494,28 @@ Outlet and add
       (string_content))
     (text)
     (end_clause)))
+
+============================================================
+Island
+============================================================
+
+{% island "components/stock" with { id: product.id } %}<p>Loading</p>{% endisland %}
+
+------------------------------------------------------------
+
+(template
+  (island_statement
+    (string
+      (string_content))
+    (hash
+      (pair
+        (property_identifier)
+        (member_expression
+          (identifier)
+          (property_identifier))))
+    (start_tag
+      (tag_name))
+    (text)
+    (end_tag
+      (tag_name))
+    (end_clause)))

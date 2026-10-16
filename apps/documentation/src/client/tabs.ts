@@ -22,7 +22,11 @@ export const initTabs = () => {
 			}
 			if (focus) tab.focus();
 			// Bring a tab that was partly hidden by the scrolling row fully into view.
-			tab.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+			tab.scrollIntoView({
+				block: "nearest",
+				inline: "nearest",
+				behavior: "smooth",
+			});
 		};
 
 		root.addEventListener("click", (event) => {

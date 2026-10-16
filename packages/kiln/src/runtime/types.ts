@@ -1,6 +1,7 @@
 import type { Diagnostic, KilnSyntaxError } from "../errors.js";
 import type { EscapeStrategy, TemplateNode } from "../parser/ast.js";
 import type { Source, Span } from "../source.js";
+import type { IslandMode } from "./islands.js";
 import type { Addition, OutletMark } from "./outlets.js";
 import { childScope, type Scope } from "./scope.js";
 import type { RenderStream } from "./stream.js";
@@ -224,6 +225,14 @@ export class RenderState {
 	once: Map<string, string> | null = null;
 	/** How many cached sections are rendering, where an outlet can't go. */
 	caching = 0;
+	/** Whether `island` tags are deferred or streamed, or null to render them in place. */
+	islands: IslandMode | null = null;
+	/** The HTML of each streamed island, filling `<kiln-island stream="n">` at index n - 1, for `renderStream` to send. */
+	streamed: Promise<string>[] | null = null;
+	/** The ids of the islands deferred so far, in order, so a cached section can save the ones it made. */
+	deferred: string[] | null = null;
+	/** Whether the `<kiln-island>` script is in the render's output yet. */
+	islandScript = false;
 
 	constructor(
 		readonly env: EnvironmentCore,

@@ -404,6 +404,8 @@ class Parser {
 				return this.#parseWith(open);
 			case "cache":
 				return this.#parseCache(open);
+			case "island":
+				return this.#parseIsland(open);
 			case "outlet": {
 				const name = this.#parseStringLiteral("an outlet name");
 				const close = this.#expectTagEnd();
@@ -980,6 +982,30 @@ class Parser {
 			body,
 			span: { start: open.start, end: this.#lastEnd },
 		};
+	}
+
+	#parseIsland(open: Token): Statement {
+		const header = this.#header(
+			() => {
+				const template = this.#parseExpression();
+				let withValue: Expression | null = null;
+				if (this.#isName("with")) {
+					this.#next();
+					withValue = this.#parseExpression();
+				}
+				return { template, with: withValue };
+			},
+			{ template: this.#invalid(), with: null },
+		);
+		const { body, end } = this.#parseBody(["endisland"]);
+		if (end) this.#finishEndTag();
+		else this.#unclosed("island", open, "endisland");
+		return this.#placed({
+			type: "Island",
+			...header,
+			body,
+			span: { start: open.start, end: this.#lastEnd },
+		});
 	}
 
 	#parseApply(open: Token): Statement {

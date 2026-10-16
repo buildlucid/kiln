@@ -1,0 +1,30 @@
+{% extends "layouts/base" %}
+{% props product, mode, renderedAt, fail %}
+{% set title = product.name %}
+
+{% block content %}
+	<h1>{{ product.name }}</h1>
+	<p class="meta">{{ mode }} · page rendered at {{ renderedAt }}</p>
+	<p>{{ product.description }}</p>
+
+	<section>
+		<h2>Stock</h2>
+		{% island "components/stock" with { id: product.id } %}
+			<p class="fallback">Checking stock…</p>
+		{% endisland %}
+	</section>
+
+	<section>
+		<h2>Your basket</h2>
+		{% island "components/basket" %}
+			<p class="fallback">Loading your basket…</p>
+		{% endisland %}
+	</section>
+
+	<section>
+		<h2>Reviews</h2>
+		{% island "components/reviews" with { id: product.id, fail: fail } %}
+			<p class="fallback">Loading reviews…</p>
+		{% endisland %}
+	</section>
+{% endblock %}

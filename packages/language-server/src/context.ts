@@ -4,10 +4,10 @@ import { BLOCK_TAGS } from "./builtins.js";
  * What the text before the cursor is in the middle of, for completions. `start` is where the word being typed starts.
  *
  * - `tag`: a tag's name, just after `{%`. `end` is where an existing `%}` on the line ends, so a snippet can replace it.
- * - `template`: a template name in the string after `extends`, `include`, `component`, `import` or `from`.
+ * - `template`: a template name in the string after `extends`, `include`, `component`, `island`, `import` or `from`.
  * - `filter`, `test`: a name after `|`, or after `is` or `is not`.
  * - `loop`: a property after `loop.`.
- * - `prop`: a key in the `with { }` hash of an `include` or `component` of `template`.
+ * - `prop`: a key in the `with { }` hash of an `include`, `component` or `island` of `template`.
  * - `expression`: a variable or function name.
  */
 export type CursorContext =
@@ -79,7 +79,9 @@ export const cursorContext = (
 	}
 
 	const template =
-		/\b(?:extends|include|component|import|from)\s+(["'])([^"']*)$/.exec(inner);
+		/\b(?:extends|include|component|island|import|from)\s+(["'])([^"']*)$/.exec(
+			inner,
+		);
 	if (template) {
 		const prefix = template[2] as string;
 		return { kind: "template", start: offset - prefix.length, prefix };
@@ -89,7 +91,7 @@ export const cursorContext = (
 	if (/\bis\s+(?:not\s+)?$/.test(head)) return { kind: "test", start };
 
 	const props =
-		/\b(?:include|component)\s+(["'])([^"']+)\1\s+with\s+\{([^{}]*)$/.exec(
+		/\b(?:include|component|island)\s+(["'])([^"']+)\1\s+with\s+\{([^{}]*)$/.exec(
 			head,
 		);
 	if (props && /(?:^|,)\s*$/.test(props[3] as string)) {
@@ -107,13 +109,13 @@ export type CursorSymbol = {
 	end: number;
 };
 
-/** Every template name written as a string after `extends`, `include`, `component`, `import` or `from`, with the name's offsets. */
+/** Every template name written as a string after `extends`, `include`, `component`, `island`, `import` or `from`, with the name's offsets. */
 export const templateStrings = (
 	text: string,
 ): { name: string; start: number; end: number }[] => {
 	const found: { name: string; start: number; end: number }[] = [];
 	const pattern =
-		/\{%-?\s*(?:extends|include|component|import|from)\s+(["'])([^"'\n]*)\1/g;
+		/\{%-?\s*(?:extends|include|component|island|import|from)\s+(["'])([^"'\n]*)\1/g;
 	for (const match of text.matchAll(pattern)) {
 		const name = match[2] as string;
 		const end = (match.index as number) + match[0].length - 1;

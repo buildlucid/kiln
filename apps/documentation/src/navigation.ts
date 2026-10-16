@@ -103,6 +103,12 @@ export const navigation = [
 				description: "Build reusable pieces of markup with props and slots.",
 			},
 			{
+				title: "island",
+				url: "/docs/tags/island/",
+				description:
+					"Load part of a page after the rest, for live or slow data.",
+			},
+			{
 				title: "macro and import",
 				url: "/docs/tags/macro/",
 				description: "Define small reusable snippets you call like functions.",

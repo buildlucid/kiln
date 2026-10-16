@@ -10,6 +10,10 @@
   "component" @context
   template: (_) @name) @item
 
+(island_statement
+  "island" @context
+  template: (_) @name) @item
+
 (fill_statement
   "fill" @context
   name: (string) @name) @item

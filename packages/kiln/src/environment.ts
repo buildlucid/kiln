@@ -13,6 +13,7 @@ import { type Diagnostic, type KilnIssue, KilnRenderError } from "./errors.js";
 import { resolveTemplateName } from "./names.js";
 import type { EscapeStrategy } from "./parser/ast.js";
 import { ESCAPE_STRATEGIES } from "./parser/ast.js";
+import type { IslandMode } from "./runtime/islands.js";
 import { closeOutlets, takeOutput } from "./runtime/outlets.js";
 import { addSlotFlags, isPromise, renderTemplate } from "./runtime/render.js";
 import { childScope } from "./runtime/scope.js";
@@ -146,6 +147,11 @@ type BaseRenderOptions = {
 	timeZone?: string;
 	/** Stops the render when aborted. A real `AbortSignal` works. */
 	signal?: AbortSignalLike;
+	/**
+	 * Defers `island` tags with `deferIslands`, or streams them with `streamIslands` in `renderStream`. Without it,
+	 * islands render in place.
+	 */
+	islands?: IslandMode;
 };
 
 /** `state` is required when the environment was created with a `State` type. */
@@ -480,11 +486,23 @@ class Environment<State> implements EnvironmentCore {
 			};
 			const output = new RenderStream(state, out, send);
 			state.stream = output;
+			const close = () => {
+				if (!failed && !cancelled) controller.close();
+			};
+			// Streamed islands follow the page, each as soon as it is ready.
 			const finish = () => {
 				output.end();
 				if (failed) return;
 				open();
-				if (!cancelled) controller.close();
+				const islands = state.streamed;
+				if (islands === null) return close();
+				let left = islands.length;
+				for (const island of islands) {
+					island.then((html) => {
+						send(html);
+						if (--left === 0) close();
+					}, failWith);
+				}
 			};
 			try {
 				const result = this.#run(render);
@@ -562,6 +580,7 @@ class Environment<State> implements EnvironmentCore {
 		for (const key of passed) scope[key] = context[key] ?? null;
 		addSlotFlags(scope, template, null);
 
+		state.islands = options.islands ?? null;
 		const out = emptyOut();
 		state.root = out;
 		return { resolved, template, state, scope, passed, out };

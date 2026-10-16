@@ -1,0 +1,24 @@
+{% extends "layouts/base" %}
+{% set title = "Islands" %}
+{% set name = visitor() %}
+
+{% block content %}
+	<h1>Server islands playground</h1>
+	<p>The same product page, with three islands, rendered three ways:</p>
+	<ul>
+		<li><a href="/static/">Static build</a>: built once by <code>npm run build</code> with <code>deferIslands</code>. Each island fetches its HTML from <code>/_islands/:id</code>.</li>
+		<li><a href="/stream/">Streamed</a>: rendered for each request with <code>renderStream</code> and <code>streamIslands</code>. Islands follow the page in the same response, in the order they finish. <a href="/stream/?fail">Make the reviews island fail</a>.</li>
+		<li><a href="/in-place/">In place</a>: <code>render</code> with no option, so nothing arrives until the slowest island is done.</li>
+	</ul>
+
+	<h2>Visitor</h2>
+	{% if name %}
+		<p>Signed in as {{ name }}. <a href="/sign-out">Sign out</a></p>
+	{% else %}
+		<form action="/sign-in">
+			<label>Name <input name="name" required></label>
+			<button>Sign in</button>
+		</form>
+	{% endif %}
+	<p class="meta">The basket island reads this cookie in its own request, even on the static page.</p>
+{% endblock %}

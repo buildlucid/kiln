@@ -16,7 +16,7 @@ return new Response(stream, {
 	{% endapply %}
 
 	<ul>
-		<li><code>renderStream</code> takes the same arguments as <a href="/docs/api/rendering/"><code>render</code></a>, and the parts join up to the same HTML.</li>
+		<li><code>renderStream</code> takes the same arguments as <a href="/docs/api/rendering/"><code>render</code></a>, and the parts join up to the same HTML, unless <a href="#islands">islands stream</a>.</li>
 		<li>It returns a promise for a <code>ReadableStream</code> of UTF-8 bytes. Workers, Deno, Bun and Node's <code>Response</code> accept it as it is.</li>
 		<li>Kiln sends what's ready each time the render has to wait for one of your async functions, filters or tests, your loader or your cache store. A template that never waits is sent in one part.</li>
 		<li>Precompiled templates stream the same way.</li>
@@ -78,6 +78,10 @@ Readable.fromWeb(stream).pipe(response);
 	{% endapply %}
 
 	<p>Here the head is sent as soon as the render first waits, and the body follows as it renders, up to the <code>scripts</code> outlet. That last part is sent when the render ends.</p>
+
+	<h2>Islands</h2>
+
+	<p>A slow part of the page holds up everything after it. Make it an <a href="/docs/tags/island/"><code>island</code></a> and pass <code>islands: streamIslands()</code>, and the page is sent with the island's fallback in its place. The island's HTML follows in the same response when it's ready. See <a href="/docs/tags/island/#streaming-islands">Streaming islands</a>.</p>
 
 	<h2>Stopping a render</h2>
 

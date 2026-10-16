@@ -661,6 +661,7 @@ class Generator {
 			case "Macro":
 			case "Add":
 			case "Cache":
+			case "Island":
 			case "With":
 			case "Apply":
 				this.#list(statement.body, strategy, false);

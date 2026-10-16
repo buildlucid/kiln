@@ -30,6 +30,7 @@ const html = await kiln.render("pages/post", {
 			<tr><td><code>locale</code></td><td>Overrides the environment's locale</td></tr>
 			<tr><td><code>timeZone</code></td><td>Overrides the environment's time zone</td></tr>
 			<tr><td><code>signal</code></td><td>An <code>AbortSignal</code>. Kiln stops the render when it is aborted</td></tr>
+			<tr><td><code>islands</code></td><td>Defers <a href="/docs/tags/island/"><code>island</code></a> tags with <code>deferIslands()</code>, or streams them with <code>streamIslands()</code> and <code>renderStream</code>. Without it, islands render in place</td></tr>
 		</tbody>
 	</table>
 

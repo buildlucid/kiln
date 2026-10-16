@@ -20,6 +20,15 @@ import { parse } from "../parser/parser.js";
 import { getAttr, getMethod, readableNames } from "../runtime/access.js";
 import { packSaved, unpackSaved } from "../runtime/cache.js";
 import { escapeHtml, escapeWith } from "../runtime/escape.js";
+import {
+	ISLAND_CLOSING,
+	ISLAND_SCRIPT,
+	type IslandMode,
+	islandProps,
+	type JsonValue,
+	recordIsland,
+	streamIsland,
+} from "../runtime/islands.js";
 import { callMacro } from "../runtime/macros.js";
 import { Markup } from "../runtime/markup.js";
 import { operatorFunction, rangeOperator } from "../runtime/operators.js";
@@ -34,11 +43,13 @@ import {
 	indentedText,
 	indentText,
 	isPromise,
+	loadTemplate,
 	locate,
 	locating,
 	markCaller,
 	endPlace,
 	runFrom,
+	silence,
 	startPlace,
 	step,
 	withCaller,
@@ -574,6 +585,7 @@ class Compiler {
 					for (const fill of statement.fills)
 						this.#walkStatements(fill.body, visit);
 					break;
+				case "Island":
 				case "SetBlock":
 				case "Block":
 				case "Slot":
@@ -859,6 +871,7 @@ class Compiler {
 				visit(statement.body);
 				for (const fill of statement.fills) visit(fill.body);
 				break;
+			case "Island":
 			case "SetBlock":
 			case "Block":
 			case "Slot":
@@ -980,6 +993,8 @@ class Compiler {
 				return this.#include(node);
 			case "Component":
 				return this.#component(node);
+			case "Island":
+				return this.#island(node);
 			case "Slot":
 				return this.#slot(node);
 			case "Macro":
@@ -1404,6 +1419,108 @@ class Compiler {
 	}
 
 	/**
+	 * `island`: renders its template in place, like a component without content, unless the render defers or streams
+	 * islands. Then it writes a `<kiln-island>` element around the fallback, standing on lines of its own where the tags
+	 * do. A deferred island is recorded in the manifest, and a streamed one starts rendering on its own.
+	 */
+	#island(node: Extract<Statement, { type: "Island" }>): Stmt {
+		const { span, indent, closing } = node;
+		const fallback = this.#body(node.body);
+		const element = (
+			run: Run,
+			out: Out,
+			scope: Scope,
+			islands: IslandMode,
+			attribute: string,
+		): void | Promise<void> => {
+			const state = run.state;
+			let opening = `<kiln-island ${attribute}>`;
+			if (islands.script && !state.islandScript) {
+				opening = ISLAND_SCRIPT + opening;
+				// A capture may never be output, so an island in one brings its own script.
+				if (out === state.root) state.islandScript = true;
+			}
+			const lead = (at: string) => (out.inline ? "" : out.indent) + at;
+			write(
+				run,
+				out,
+				indent === undefined
+					? opening
+					: `${lead(indent)}${opening}${closing?.indent === null ? "" : "\n"}`,
+				span,
+			);
+			return after(fallback(run, childScope(scope), out), () => {
+				if (!closing) return write(run, out, ISLAND_CLOSING, span);
+				const start = closing.indent === null ? "" : lead(closing.indent);
+				const end = closing.newline ? "\n" : "";
+				return write(run, out, `${start}${ISLAND_CLOSING}${end}`, span);
+			});
+		};
+		const render = (
+			run: Run,
+			out: Out,
+			scope: Scope,
+			islands: IslandMode,
+			template: CompiledTemplate,
+			props: Record<string, JsonValue>,
+		): void | Promise<void> => {
+			if (islands.mode === "defer") {
+				const id = recordIsland(run, span, islands, template.name, props);
+				return element(
+					run,
+					out,
+					scope,
+					islands,
+					`src="${escapeHtml(islands.url + id)}"`,
+				);
+			}
+			const state = run.state;
+			const streamed = (state.streamed ??= []);
+			const n = streamed.length + 1;
+			const html = streamIsland(run, span, template, props, n);
+			silence(html);
+			streamed.push(html);
+			return element(run, out, scope, islands, `stream="${n}"`);
+		};
+		return this.#embedding(
+			node.template,
+			node.with,
+			span,
+			(run, out, name, variables, scope) => {
+				const props = islandProps(run, span, variables);
+				const state = run.state;
+				const islands = state.islands;
+				// Only `renderStream` streams, and only output that is sure to be sent once.
+				const away =
+					islands !== null &&
+					(islands.mode === "defer" ||
+						(state.stream !== null &&
+							out === state.root &&
+							state.caching === 0));
+				if (away) {
+					return after(loadTemplate(run, name, span), (template) =>
+						template
+							? render(run, out, scope, islands, template, props)
+							: undefined,
+					);
+				}
+				if (indent === "") {
+					return embed(run, out, span, name, props, null, false);
+				}
+				const saved = out.indent;
+				const inline = out.inline;
+				startPlace(out, indent);
+				return endPlace(
+					out,
+					saved,
+					inline,
+					embed(run, out, span, name, props, null, false),
+				);
+			},
+		);
+	}
+
+	/**
 	 * Evaluates an include's or component's template name and `with` value, then renders it with `render`. Both are
 	 * evaluated before either is waited for.
 	 */
@@ -1545,13 +1662,17 @@ class Compiler {
 				`"cache" keys are made of strings, numbers, booleans, dates and null, but got a ${typeName(value)}`,
 			);
 		};
-		// The template, locale and time zone are part of every key, since the output depends on them.
+		// The template, locale and time zone are part of every key, since the output depends on them. So is how islands
+		// render, when they are deferred. Streamed islands render in place inside the section.
 		const fullKey = (run: Run, value: unknown) => {
 			const parts = Array.isArray(value)
 				? value.map((item) => part(run, item))
 				: [part(run, value)];
-			const { locale, timeZone } = run.state;
-			return `${templateName}|${locale}|${timeZone}|${JSON.stringify(parts)}`;
+			const { locale, timeZone, islands } = run.state;
+			const key = `${templateName}|${locale}|${timeZone}|${JSON.stringify(parts)}`;
+			return islands?.mode === "defer"
+				? `${key}|islands|${JSON.stringify([islands.url, islands.script])}`
+				: key;
 		};
 		const lifetime = (run: Run, value: unknown) => {
 			if (value === null || value === undefined) return null;
@@ -1591,6 +1712,19 @@ class Compiler {
 			return after(found, (value) => {
 				const saved = typeof value === "string" ? unpackSaved(value) : null;
 				if (saved) {
+					const islands = state.islands;
+					if (islands?.mode === "defer" && saved.islands.length > 0) {
+						// The copy holds the island script only if it was the first in its render to need it.
+						if (saved.islandScript) {
+							if (out === state.root) state.islandScript = true;
+						} else if (islands.script && !state.islandScript) {
+							write(run, out, ISLAND_SCRIPT, span);
+							if (out === state.root) state.islandScript = true;
+						}
+						for (const island of saved.islands) {
+							recordIsland(run, span, islands, island.template, island.props);
+						}
+					}
 					write(run, out, saved.html, span);
 					for (const addition of saved.additions) {
 						recordAddition(run, span, addition);
@@ -1599,13 +1733,23 @@ class Compiler {
 				}
 				const start = out.s.length;
 				const from = state.additions?.length ?? 0;
+				const deferredFrom = state.deferred?.length ?? 0;
+				const hadScript = state.islandScript;
 				return after(fresh(), () => {
+					const manifest =
+						state.islands?.mode === "defer" ? state.islands.manifest : null;
 					const saving = store.set({
 						key: name,
-						value: packSaved(
-							out.s.slice(start),
-							state.additions?.slice(from) ?? [],
-						),
+						value: packSaved({
+							html: out.s.slice(start),
+							additions: state.additions?.slice(from) ?? [],
+							islands: manifest
+								? (state.deferred?.slice(deferredFrom) ?? []).flatMap(
+										(id) => manifest[id] ?? [],
+									)
+								: [],
+							islandScript: !hadScript && state.islandScript,
+						}),
 						seconds: time,
 					});
 					if (isPromise(saving)) state.stream?.wait();

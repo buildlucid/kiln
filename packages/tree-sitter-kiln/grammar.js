@@ -66,6 +66,7 @@ const END_TAGS = [
 	"endset",
 	"endblock",
 	"endcomponent",
+	"endisland",
 	"endfill",
 	"endslot",
 	"endmacro",
@@ -254,6 +255,7 @@ module.exports = grammar({
 				$.block_statement,
 				$.include_statement,
 				$.component_statement,
+				$.island_statement,
 				$.slot_statement,
 				$.macro_statement,
 				$.import_statement,
@@ -419,6 +421,16 @@ module.exports = grammar({
 				tagClose(),
 				repeat(choice($._content, $.fill_statement)),
 				endClause($, "endcomponent"),
+			),
+
+		island_statement: ($) =>
+			seq(
+				tagOpen("island"),
+				field("template", $._expression),
+				optional(seq("with", field("context", $._expression))),
+				tagClose(),
+				repeat($._content),
+				endClause($, "endisland"),
 			),
 
 		fill_statement: ($) =>

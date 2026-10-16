@@ -1,0 +1,7 @@
+{% props id, fail %}
+<ul>
+	{% for review in reviews(id, fail) %}
+		<li>“{{ review.text }}” – {{ review.author }}</li>
+	{% endfor %}
+</ul>
+<p class="meta">loaded at {{ clock() }}</p>

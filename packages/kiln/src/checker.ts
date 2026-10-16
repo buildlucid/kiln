@@ -97,7 +97,7 @@ export const checkReferences = async (
 	};
 
 	const call = async (
-		node: Extract<Statement, { type: "Include" | "Component" }>,
+		node: Extract<Statement, { type: "Include" | "Component" | "Island" }>,
 	) => {
 		const name = literalName(node.template, template.name);
 		if (!name) return;
@@ -189,7 +189,11 @@ export const checkReferences = async (
 
 	const visit = async (list: Statement[]): Promise<void> => {
 		for (const node of list) {
-			if (node.type === "Include" || node.type === "Component") {
+			if (
+				node.type === "Include" ||
+				node.type === "Component" ||
+				node.type === "Island"
+			) {
 				await call(node);
 			} else if (node.type === "Extends") await layouts(node);
 			for (const children of childStatements(node)) await visit(children);

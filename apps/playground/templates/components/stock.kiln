@@ -1,0 +1,2 @@
+{% props id %}
+<p>{{ stock(id) }} in stock <span class="meta">checked at {{ clock() }}</span></p>

@@ -45,6 +45,17 @@ describe("analyze", () => {
 		]);
 	});
 
+	test("reports islands, and what their props and fallbacks read", async () => {
+		const analysis = await kiln.analyze(
+			"page",
+			'{% island "components/stock" with { id: product.id } %}{{ loading }}{% endisland %}',
+		);
+		expect(analysis.variables).toEqual(["product", "loading"]);
+		expect(analysis.templates.map((t) => [t.kind, t.name])).toEqual([
+			["island", "components/stock.kiln"],
+		]);
+	});
+
 	test("reports prop types", async () => {
 		const analysis = await kiln.analyze(
 			"components/button",

@@ -5,7 +5,14 @@ import type { PlacedStatement, Statement, TemplateNode } from "./ast.js";
  * The statements inside one tag, with where the tag starts and where its whole span ends. `full` bodies are inserted
  * where another tag stands, so they lose all their shared indentation and take the indentation of where they land.
  */
-type Body = { open: number; end: number; lists: Statement[][]; full: boolean };
+type Body = {
+	open: number;
+	end: number;
+	lists: Statement[][];
+	full: boolean;
+	/** Keeps every line's indentation, for content written back inside a wrapper, such as an island's fallback. */
+	keep?: boolean;
+};
 
 /** The bodies a statement holds. Branches share their tag's body. A component's fills are bodies of their own, inside the component's. */
 const bodiesOf = (node: Statement): Body[] => {
@@ -35,6 +42,8 @@ const bodiesOf = (node: Statement): Body[] => {
 				})),
 				own([node.body, ...node.fills.map((fill) => fill.body)], true),
 			];
+		case "Island":
+			return [{ ...own([node.body]), keep: true }];
 		case "Block":
 		case "Slot":
 		case "Add":
@@ -122,20 +131,35 @@ export const arrangeIndentation = (
 	const textLines =
 		pre.length > 0 ? lines.filter((line) => !inPre(line.start)) : lines;
 
-	// Standalone tags that insert content count as content lines, so the tags around them remove their step.
-	const placed: { node: PlacedStatement; line: TextLine }[] = [];
-	for (const node of placedNodes) {
-		if (!standalone.has(node.span.start)) continue;
-		const start = text.lastIndexOf("\n", node.span.start - 1) + 1;
+	const lineOf = (offset: number): TextLine => {
+		const start = text.lastIndexOf("\n", offset - 1) + 1;
 		let indentEnd = start;
 		while (text[indentEnd] === " " || text[indentEnd] === "\t") indentEnd++;
-		placed.push({ node, line: { start, indentEnd } });
+		return { start, indentEnd };
+	};
+
+	// Standalone tags that insert content count as content lines, so the tags around them remove their step.
+	const placed: { node: PlacedStatement; line: TextLine }[] = [];
+	// A deferred island writes its end tag back as `</kiln-island>`, so a standalone `endisland` counts as one too.
+	const islandEnds: {
+		node: Extract<PlacedStatement, { type: "Island" }>;
+		line: TextLine;
+	}[] = [];
+	for (const node of placedNodes) {
+		if (node.type === "Island") {
+			const end = text.lastIndexOf("{%", node.span.end - 1);
+			if (standalone.has(end)) islandEnds.push({ node, line: lineOf(end) });
+		}
+		if (!standalone.has(node.span.start)) continue;
+		placed.push({ node, line: lineOf(node.span.start) });
 	}
 	const contentLines =
-		placed.length > 0
-			? [...textLines, ...placed.map((item) => item.line)].sort(
-					(a, b) => a.start - b.start,
-				)
+		placed.length > 0 || islandEnds.length > 0
+			? [
+					...textLines,
+					...placed.map((item) => item.line),
+					...islandEnds.map((item) => item.line),
+				].sort((a, b) => a.start - b.start)
 			: textLines;
 
 	// Source ranges to drop, as [start, end).
@@ -149,6 +173,7 @@ export const arrangeIndentation = (
 	};
 
 	const trim = (body: Body): void => {
+		if (body.keep) return;
 		const openEnd = standalone.get(body.open);
 		if (openEnd === undefined) return;
 		const newline = text.indexOf("\n", openEnd);
@@ -225,6 +250,13 @@ export const arrangeIndentation = (
 
 	for (const { node, line } of placed) {
 		node.indent = uncut(line.start, line.indentEnd);
+	}
+	for (const { node, line } of islandEnds) {
+		const sameLine = line.start === lineOf(node.span.start).start;
+		node.closing = {
+			indent: sameLine ? null : uncut(line.start, line.indentEnd),
+			newline: text.includes("\n", node.span.end),
+		};
 	}
 
 	const hasCut = (start: number, end: number): boolean => {
