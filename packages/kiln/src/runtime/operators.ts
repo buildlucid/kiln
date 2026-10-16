@@ -60,12 +60,23 @@ export const rangeOperator = (
 	return buildRange(left, right, undefined, limit);
 };
 
-/** `a in b`. */
-export const contains = (needle: unknown, haystack: unknown): boolean => {
+/**
+ * `a in b`. `charge` is called with the number of items before an array or set is searched, so templates can't
+ * search large lists over and over for free.
+ */
+export const contains = (
+	needle: unknown,
+	haystack: unknown,
+	charge: (count: number) => void = () => {},
+): boolean => {
 	const target = unwrap(haystack);
-	if (Array.isArray(target)) return target.some((item) => equals(item, needle));
+	if (Array.isArray(target)) {
+		charge(target.length);
+		return target.some((item) => equals(item, needle));
+	}
 	if (target instanceof Set) {
 		if (target.has(needle)) return true;
+		charge(target.size);
 		for (const item of target) if (equals(item, needle)) return true;
 		return false;
 	}
@@ -78,7 +89,12 @@ export const contains = (needle: unknown, haystack: unknown): boolean => {
 		const name = String(key);
 		return !BLOCKED_NAMES.has(name) && Object.hasOwn(target, name);
 	}
-	if (target instanceof Map) return target.has(unwrap(needle));
+	if (target instanceof Map) {
+		const key = unwrap(needle);
+		return (
+			!(typeof key === "string" && BLOCKED_NAMES.has(key)) && target.has(key)
+		);
+	}
 	return issue(
 		"type-error",
 		`"in" needs an array, set, string or hash on its right, but got a ${typeName(target)}`,

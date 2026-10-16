@@ -45,12 +45,16 @@ const define = (
 	options = false,
 ): BuiltinEntry => ({ kind: "builtin", call, params, options });
 
-/** Counts code points without allocating an array. */
+/** Counts code points without allocating an array. A surrogate without its partner counts as one, as `split` does. */
 const codePointLength = (text: string): number => {
 	let count = 0;
 	for (let i = 0; i < text.length; i++) {
 		const code = text.charCodeAt(i);
-		if (code < 0xdc00 || code > 0xdfff) count++;
+		if (code >= 0xd800 && code <= 0xdbff) {
+			const next = text.charCodeAt(i + 1);
+			if (next >= 0xdc00 && next <= 0xdfff) i++;
+		}
+		count++;
 	}
 	return count;
 };
@@ -151,7 +155,7 @@ const queryString = (run: Run, hash: object): string => {
 	const seen = new Set<object>();
 	let length = 0;
 	const add = (value: object, prefix: string | null) => {
-		const { values, keys } = entriesOf(value, "urlEncode");
+		const { values, keys } = entriesOf(run, value, "urlEncode");
 		consume(run, values.length);
 		seen.add(value);
 		for (let i = 0; i < values.length; i++) {
@@ -295,6 +299,7 @@ const cachedFormatter = <T extends Formatter>(
 
 /** Calls a template callback for each item, then gathers the results, waiting only if one was a promise. */
 const mapEntries = (
+	run: Run,
 	value: unknown,
 	callback: unknown,
 	what: string,
@@ -306,7 +311,7 @@ const mapEntries = (
 	) => unknown,
 ): unknown => {
 	const fn = functionArgument(callback, what);
-	const { values, keys, isHash } = entriesOf(value, what);
+	const { values, keys, isHash } = entriesOf(run, value, what);
 	const results: unknown[] = [];
 	try {
 		for (let i = 0; i < values.length; i++) {
@@ -454,7 +459,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		(run, value, search, replacement) => {
 			const text = toStringArgument(value, '"replace"');
 			if (isPlainObject(search) || search instanceof Map) {
-				const { values, keys } = entriesOf(search, "replace");
+				const { values, keys } = entriesOf(run, search, "replace");
 				consume(run, keys.length);
 				return checkLength(
 					run,
@@ -555,7 +560,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		},
 		["indent"],
 	),
-	length: define((_run, value) => {
+	length: define((run, value) => {
 		if (value === null || value === undefined) return 0;
 		if (typeof value === "string") return codePointLength(value);
 		if (value instanceof Markup) return codePointLength(value.value);
@@ -563,22 +568,22 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		if (value instanceof Map || value instanceof Set) return value.size;
 		if (isPlainObject(value)) return hashKeys(value).length;
 		if (typeof value === "object" && Symbol.iterator in value) {
-			return entriesOf(value, "length").values.length;
+			return entriesOf(run, value, "length").values.length;
 		}
 		return issue("type-error", `"length" cannot measure a ${typeName(value)}`);
 	}),
-	first: define((_run, value) => {
+	first: define((run, value) => {
 		const target = unwrap(value);
 		if (typeof target === "string") {
 			const code = target.codePointAt(0);
 			return code === undefined ? null : String.fromCodePoint(code);
 		}
-		return listOf(target, "first")[0] ?? null;
+		return listOf(run, target, "first")[0] ?? null;
 	}),
-	last: define((_run, value) => {
+	last: define((run, value) => {
 		const target = unwrap(value);
 		if (typeof target === "string") return codePoints(target).pop() ?? null;
-		const items = listOf(target, "last");
+		const items = listOf(run, target, "last");
 		return items[items.length - 1] ?? null;
 	}),
 	slice: define(
@@ -597,7 +602,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 					'"slice" needs an array or string, but got a hash',
 				);
 			}
-			const result = listOf(target, "slice").slice(from, to);
+			const result = listOf(run, target, "slice").slice(from, to);
 			consume(run, result.length);
 			return result;
 		},
@@ -620,7 +625,9 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 				consume(run, value.length);
 				return checkLength(run, text);
 			}
-			const items = entriesOf(value, "join").values.map((item) => toStr(item));
+			const items = entriesOf(run, value, "join").values.map((item) =>
+				toStr(item),
+			);
 			consume(run, items.length);
 			const separator = toStringArgument(glue, '"join"');
 			if (lastGlue === undefined || lastGlue === null || items.length < 2) {
@@ -635,7 +642,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		["glue", "lastGlue"],
 	),
 	keys: define((run, value) => {
-		const { keys } = entriesOf(value, "keys");
+		const { keys } = entriesOf(run, value, "keys");
 		consume(run, keys.length);
 		return keys;
 	}),
@@ -664,7 +671,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		if (all.every((item) => isPlainObject(item) || item instanceof Map)) {
 			const result: Record<string, unknown> = {};
 			for (const item of all) {
-				const { values, keys } = entriesOf(item, "merge");
+				const { values, keys } = entriesOf(run, item, "merge");
 				consume(run, keys.length);
 				keys.forEach((key, index) => {
 					setOwn(result, String(key), values[index]);
@@ -681,13 +688,13 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		const target = unwrap(value);
 		if (typeof target === "string")
 			return codePoints(target).reverse().join("");
-		const items = listOf(target, "reverse");
+		const items = listOf(run, target, "reverse");
 		consume(run, items.length);
 		return [...items].reverse();
 	}),
 	sort: define(
 		(run, value, by) => {
-			const items = [...listOf(value, "sort")];
+			const items = [...listOf(run, value, "sort")];
 			consume(run, items.length);
 			if (by === undefined || by === null) {
 				// Strings compare by UTF-16 code units, as the default sort does, which skips calling `compare`.
@@ -714,31 +721,42 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		["by"],
 	),
 	map: define(
-		(_run, value, callback) =>
-			mapEntries(value, callback, "map", (results, _values, keys, isHash) =>
-				buildCollection(isHash, keys, results),
+		(run, value, callback) =>
+			mapEntries(
+				run,
+				value,
+				callback,
+				"map",
+				(results, _values, keys, isHash) =>
+					buildCollection(isHash, keys, results),
 			),
 		["callback"],
 	),
 	filter: define(
-		(_run, value, callback) =>
-			mapEntries(value, callback, "filter", (results, values, keys, isHash) => {
-				const keptKeys: unknown[] = [];
-				const kept: unknown[] = [];
-				results.forEach((result, index) => {
-					if (truthy(result)) {
-						kept.push(values[index]);
-						keptKeys.push(keys[index]);
-					}
-				});
-				return buildCollection(isHash, keptKeys, kept);
-			}),
+		(run, value, callback) =>
+			mapEntries(
+				run,
+				value,
+				callback,
+				"filter",
+				(results, values, keys, isHash) => {
+					const keptKeys: unknown[] = [];
+					const kept: unknown[] = [];
+					results.forEach((result, index) => {
+						if (truthy(result)) {
+							kept.push(values[index]);
+							keptKeys.push(keys[index]);
+						}
+					});
+					return buildCollection(isHash, keptKeys, kept);
+				},
+			),
 		["callback"],
 	),
 	reduce: define(
-		(_run, value, callback, initial = null) => {
+		(run, value, callback, initial = null) => {
 			const fn = functionArgument(callback, "reduce");
-			const { values, keys } = entriesOf(value, "reduce");
+			const { values, keys } = entriesOf(run, value, "reduce");
 			const from = (index: number, carry: unknown): unknown => {
 				let current = carry;
 				for (let i = index; i < values.length; i++) {
@@ -757,9 +775,9 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		["callback", "initial"],
 	),
 	find: define(
-		(_run, value, callback) => {
+		(run, value, callback) => {
 			const fn = functionArgument(callback, "find");
-			const { values, keys } = entriesOf(value, "find");
+			const { values, keys } = entriesOf(run, value, "find");
 			const from = (index: number): unknown => {
 				for (let i = index; i < values.length; i++) {
 					const result = fn(values[i], keys[i]);
@@ -784,7 +802,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 			if (typeof key !== "string" && typeof key !== "number") {
 				return issue("type-error", '"column" needs a property name');
 			}
-			const items = listOf(value, "column");
+			const items = listOf(run, value, "column");
 			consume(run, items.length);
 			return items.map((item) => readProperty(item, key));
 		},
@@ -795,7 +813,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 			const count = integerArgument(size, '"batch" size');
 			if (count < 1)
 				return issue("invalid-argument", '"batch" size must be at least 1');
-			const items = listOf(value, "batch");
+			const items = listOf(run, value, "batch");
 			const groupCount = Math.ceil(items.length / count);
 			// Padding can create far more items than went in, so charge for the output size.
 			consume(run, fill === undefined ? items.length : groupCount * count);

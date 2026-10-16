@@ -1,44 +1,53 @@
 import { describe, expect, test } from "vite-plus/test";
 import { KilnIssue } from "../errors.js";
 import { expose } from "../runtime/exposure.js";
+import type { Run } from "../runtime/types.js";
 import { entriesOf, functionArgument, toDate, toPlainData } from "./helpers.js";
+
+/** A render with a step limit of 3. */
+const run = () => ({ state: { steps: 0, maxSteps: 3 } }) as Run;
 
 describe("entriesOf", () => {
 	test("gives values and keys of arrays, hashes, maps and iterables", () => {
-		expect(entriesOf(["a"], "x")).toEqual({
+		expect(entriesOf(run(), ["a"], "x")).toEqual({
 			values: ["a"],
 			keys: [0],
 			isHash: false,
 		});
-		expect(entriesOf({ a: 1 }, "x")).toEqual({
+		expect(entriesOf(run(), { a: 1 }, "x")).toEqual({
 			values: [1],
 			keys: ["a"],
 			isHash: true,
 		});
-		expect(entriesOf(new Map([["a", 1]]), "x")).toEqual({
+		expect(entriesOf(run(), new Map([["a", 1]]), "x")).toEqual({
 			values: [1],
 			keys: ["a"],
 			isHash: true,
 		});
-		expect(entriesOf(new Set(["s"]), "x")).toEqual({
+		expect(entriesOf(run(), new Set(["s"]), "x")).toEqual({
 			values: ["s"],
 			keys: [0],
 			isHash: false,
 		});
-		expect(entriesOf(null, "x")).toEqual({
+		expect(entriesOf(run(), null, "x")).toEqual({
 			values: [],
 			keys: [],
 			isHash: false,
 		});
 	});
 
-	test("stops reading an iterable at the limit", () => {
-		expect(() => entriesOf(new Set([1, 2, 3]), "x", 2)).toThrow(KilnIssue);
+	test("charges each item of an iterable, and stops at the step limit", () => {
+		const counted = run();
+		entriesOf(counted, new Set([1, 2]), "x");
+		expect(counted.state.steps).toBe(2);
+		expect(() => entriesOf(run(), new Set([1, 2, 3, 4]), "x")).toThrow(
+			KilnIssue,
+		);
 	});
 
 	test("refuses strings and numbers", () => {
-		expect(() => entriesOf("abc", "x")).toThrow(KilnIssue);
-		expect(() => entriesOf(1, "x")).toThrow(KilnIssue);
+		expect(() => entriesOf(run(), "abc", "x")).toThrow(KilnIssue);
+		expect(() => entriesOf(run(), 1, "x")).toThrow(KilnIssue);
 	});
 });
 

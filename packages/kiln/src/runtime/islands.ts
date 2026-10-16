@@ -1,4 +1,5 @@
 import type { Span } from "../source.js";
+import { BLOCKED_NAMES } from "./exposure.js";
 import { Markup } from "./markup.js";
 import { closeOutlets, takeOutput } from "./outlets.js";
 import {
@@ -150,6 +151,7 @@ export const islandProps = (
 			if (typeof key !== "string") {
 				throw invalid(path, "a hash with a key that isn't a string");
 			}
+			if (BLOCKED_NAMES.has(key)) continue;
 			result[key] = copy(item, path === "" ? key : `${path}.${key}`);
 		}
 		return result;

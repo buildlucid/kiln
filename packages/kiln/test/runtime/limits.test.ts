@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vite-plus/test";
 import { createKiln, memoryLoader } from "../../src/index.js";
-import { errorCode, render, renderError } from "../helpers.js";
+import { errorCode, readParts, render, renderError } from "../helpers.js";
 
 describe("maxSteps", () => {
 	test("stops runaway loops", async () => {
@@ -32,6 +32,20 @@ describe("maxSteps", () => {
 		expect(await errorCode(growing, { limits: { maxSteps: 5000 } })).toBe(
 			"limit-steps",
 		);
+	});
+
+	test.each([
+		"{{ max(items) }}",
+		"{{ min(items) }}",
+		"{{ -1 in items }}",
+		"{{ generated|length }}",
+		"{{ generated|first }}",
+	])("charges searches and iterables for their items: %s", async (template) => {
+		const items = Array.from({ length: 1000 }, (_, i) => i);
+		const context = { items, generated: items.values() };
+		expect(
+			await errorCode(template, { context, limits: { maxSteps: 100 } }),
+		).toBe("limit-steps");
 	});
 
 	test("stops endless iterables from the host", async () => {
@@ -85,9 +99,9 @@ describe("maxDepth", () => {
 describe("other limits", () => {
 	test("spreads into calls are capped, so pass the array instead", async () => {
 		expect(
-			await render("{{ [...(1..300000)]|length }}|{{ max(1..300000) }}"),
-		).toBe("300000|300000");
-		expect(await errorCode("{{ max(...(1..300000)) }}")).toBe(
+			await render("{{ [...(1..100000)]|length }}|{{ max(1..100000) }}"),
+		).toBe("100000|100000");
+		expect(await errorCode("{{ max(...(1..100000)) }}")).toBe(
 			"too-many-arguments",
 		);
 	});
@@ -130,6 +144,29 @@ describe("abort signal", () => {
 		expect(slow.mock.calls.length).toBeLessThan(5);
 	});
 
+	test("an abort during the last call stops the render", async () => {
+		const kiln = (controller: AbortController) =>
+			createKiln({
+				loader: memoryLoader({ index: "a{{ last() }}b" }),
+				functions: {
+					last: async () => {
+						controller.abort();
+						return "x";
+					},
+				},
+			});
+		const rendering = new AbortController();
+		await expect(
+			kiln(rendering).render("index", {}, { signal: rendering.signal }),
+		).rejects.toMatchObject({ code: "aborted" });
+		const streaming = new AbortController();
+		await expect(
+			kiln(streaming)
+				.renderStream("index", {}, { signal: streaming.signal })
+				.then(readParts),
+		).rejects.toMatchObject({ code: "aborted" });
+	});
+
 	test("errors from limits are render errors", async () => {
 		const error = await renderError("{% for i in 1..10 %}{% endfor %}", {
 			limits: { maxSteps: 3 },
@@ -151,6 +188,12 @@ describe("deep nesting", () => {
 		expect(await errorCode(`{{ a${" ?? a".repeat(20_000)} }}`)).toBe(
 			"too-deep",
 		);
+	});
+
+	test("deeply nested string interpolation is reported", async () => {
+		let text = "1";
+		for (let i = 0; i < 10_000; i++) text = `"#{${text}}"`;
+		expect(await errorCode(`{{ ${text} }}`)).toBe("too-deep");
 	});
 
 	test("many elseif branches are fine", async () => {

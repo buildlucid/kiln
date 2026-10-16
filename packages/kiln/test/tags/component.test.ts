@@ -151,6 +151,15 @@ describe("slot", () => {
 		).toBe("[fallback]");
 	});
 
+	test("variables first set in a fallback stay inside it", async () => {
+		const templates = {
+			box: '{% slot %}{% set x = "inside" %}{{ x }}{% endslot %}|{{ x ?? "outside" }}',
+		};
+		expect(
+			await render('{% component "box" %}{% endcomponent %}', { templates }),
+		).toBe("inside|outside");
+	});
+
 	test("a slot can be output more than once", async () => {
 		const templates = { box: "{% slot %}{% endslot %}{% slot %}{% endslot %}" };
 		expect(

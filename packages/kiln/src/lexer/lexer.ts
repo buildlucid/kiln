@@ -64,6 +64,9 @@ export type Part = TextPart | DelimitedPart;
 
 type ExpressionMode = "output" | "tag" | "interp";
 
+/** Deepest nesting of tags, expressions and string interpolations the lexer and parser accept. */
+export const MAX_NESTING = 200;
+
 // Longest first, so `...` wins over `..` and `.`.
 const PUNCTUATORS = [
 	"...",
@@ -145,6 +148,8 @@ export const scanParts = (
 class Lexer {
 	readonly #text: string;
 	#pos = 0;
+	/** How many string interpolations the lexer is inside. */
+	#interpolations = 0;
 	#tokens: Token[] = [];
 	readonly #problems: LexProblem[] = [];
 
@@ -543,7 +548,21 @@ class Lexer {
 				this.#push("interpOpen", "#{", this.#pos, this.#pos + 2);
 				this.#pos += 2;
 				const interpStart = this.#pos;
+				// Each level of interpolation recurses, so stop before deeply nested strings overflow the stack.
+				if (this.#interpolations === MAX_NESTING) {
+					this.#problem(
+						"too-deep",
+						`Template is nested more than ${MAX_NESTING} levels deep`,
+						interpStart - 2,
+						interpStart,
+					);
+					this.#skipInterpolation();
+					segmentStart = this.#pos;
+					continue;
+				}
+				this.#interpolations++;
 				const { closed } = this.#lexExpression("interp");
+				this.#interpolations--;
 				if (!closed) {
 					this.#problem(
 						"unclosed-interpolation",
@@ -574,6 +593,20 @@ class Lexer {
 			this.#push("stringEnd", "", this.#pos, this.#pos);
 		} else {
 			this.#push("string", value, start, this.#pos);
+		}
+	}
+
+	/** Skips the rest of an interpolation without lexing it, up to the `}` that balances its `#{`. */
+	#skipInterpolation(): void {
+		const text = this.#text;
+		let depth = 0;
+		while (this.#pos < text.length) {
+			const char = text[this.#pos++];
+			if (char === "{") depth++;
+			else if (char === "}" && depth-- === 0) {
+				this.#push("interpClose", "}", this.#pos - 1, this.#pos);
+				return;
+			}
 		}
 	}
 

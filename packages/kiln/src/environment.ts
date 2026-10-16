@@ -431,6 +431,8 @@ class Environment<State> implements EnvironmentCore {
 		const result = this.#run(render, block);
 		if (result !== undefined) await result;
 		const { state, out } = render;
+		// The signal may have been aborted while the last call was pending, after the render's last check.
+		if (state.signal?.aborted) throw aborted(render.resolved);
 		closeOutlets(state);
 		const output = takeOutput(state, out.s);
 		if (output.length > state.maxSize) throw tooLong(render);
@@ -504,6 +506,7 @@ class Environment<State> implements EnvironmentCore {
 			};
 			// Streamed islands follow the page, each as soon as it is ready.
 			const finish = () => {
+				if (state.signal?.aborted) return failWith(aborted(render.resolved));
 				output.end();
 				if (failed) return;
 				open();
@@ -584,9 +587,7 @@ class Environment<State> implements EnvironmentCore {
 			options.state,
 			options.signal,
 		);
-		if (options.signal?.aborted) {
-			throw new KilnRenderError("aborted", "Render was aborted", resolved);
-		}
+		if (options.signal?.aborted) throw aborted(resolved);
 
 		const scope = childScope(this.globals);
 		const passed = hashKeys(context);
@@ -626,6 +627,9 @@ type Prepared = {
 	passed: readonly string[];
 	out: Out;
 };
+
+const aborted = (resolved: string) =>
+	new KilnRenderError("aborted", "Render was aborted", resolved);
 
 const tooLong = ({ resolved, state }: Prepared) =>
 	new KilnRenderError(

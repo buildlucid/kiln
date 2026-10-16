@@ -37,6 +37,15 @@ export const hashKeys = (value: Hash): string[] => {
 	return keys;
 };
 
+/** String keys of a `Map`, without blocked names: the keys templates can read. */
+export const mapKeys = (map: Map<unknown, unknown>): string[] => {
+	const keys: string[] = [];
+	for (const key of map.keys()) {
+		if (typeof key === "string" && !BLOCKED_NAMES.has(key)) keys.push(key);
+	}
+	return keys;
+};
+
 /** Where a literal options hash keeps the formatters it resolved to, by kind. See `cachedFormatter`. */
 export const FORMATTERS: unique symbol = Symbol("kiln.formatters");
 

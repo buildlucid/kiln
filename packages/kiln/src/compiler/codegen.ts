@@ -154,6 +154,7 @@ const HELPERS = [
 	"call3",
 	"call4",
 	"binary",
+	"contains",
 	"concat",
 	"range",
 	"toNumber",
@@ -1524,7 +1525,17 @@ class Generator {
 		const span = this.#span(statement.span);
 		const fill = this.#temp();
 		const at = statement.indent;
-		let fallback = this.#body(statement.body, context);
+		// The fallback renders in a scope of its own, so variables it declares stay inside it.
+		const sets = [...setsIn(statement.body)];
+		const scope = sets.length > 0 ? this.#temp() : context.scope;
+		let fallback = this.#body(statement.body, { ...context, scope });
+		if (sets.length > 0) {
+			fallback = [
+				`${scope} = childScope(${context.scope});`,
+				...fallback,
+				...sets.flatMap((name) => this.#forget(name)),
+			];
+		}
 		if (at !== "" && !statement.body.every(isBlank)) {
 			// The fallback's text reads a new `ind`, inside a block of its own.
 			const [saved, inline] = [this.#temp(), this.#temp()];
@@ -1839,6 +1850,10 @@ class Generator {
 				return `equals(${left}, ${right})`;
 			case "!=":
 				return `!equals(${left}, ${right})`;
+			case "in":
+				return this.#counted(`contains(run, ${span}, ${left}, ${right})`);
+			case "not in":
+				return `!${this.#counted(`contains(run, ${span}, ${left}, ${right})`)}`;
 		}
 		const apply = this.#constant(
 			`operator:${operator}`,

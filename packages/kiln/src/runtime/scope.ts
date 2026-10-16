@@ -21,6 +21,43 @@ export const childScope = (parent: Scope | null): Scope => {
 	return scope;
 };
 
+/** Marks the scope of a cached section that is rendering. See `sectionCopy`. */
+export const SECTION: unique symbol = Symbol("kiln.section");
+
+/** A scope for a cached section's content, inside `parent`. */
+export const sectionScope = (parent: Scope): Scope => {
+	const scope = childScope(parent);
+	scope[SECTION] = true;
+	return scope;
+};
+
+/**
+ * Where `set` writes a variable that `owner` holds: the innermost cached section between `scope` and `owner`, so the
+ * section gets its own copy and a saved copy of it leaves the same variables behind as a fresh render. `owner` when
+ * there is none.
+ */
+export const sectionCopy = (scope: Scope, owner: Scope): Scope => {
+	for (let current = scope; current !== owner;) {
+		if (current[SECTION] === true) return current;
+		const parent = current[PARENT];
+		if (parent === null) break;
+		current = parent;
+	}
+	return owner;
+};
+
+/** Whether `inner` is `outer` or inside it. */
+export const isWithin = (inner: Scope, outer: Scope): boolean => {
+	for (
+		let current: Scope | null = inner;
+		current !== null;
+		current = current[PARENT]
+	) {
+		if (current === outer) return true;
+	}
+	return false;
+};
+
 /** Finds a variable in a scope or its parents. Returns `undefined` when none of them has it. */
 export const lookup = (scope: Scope, name: string): unknown => {
 	let current: Scope | null = scope;

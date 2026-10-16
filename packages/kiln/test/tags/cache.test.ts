@@ -167,6 +167,25 @@ describe("cache", () => {
 		expect(await render(template, { cache: memoryCache() })).toBe("inout");
 	});
 
+	test("variables set by blocks and fills inside stay inside", async () => {
+		const templates = {
+			base: '{% set n = 0 %}{% cache "a" %}{% block b %}{% endblock %}{% endcache %}|{{ n }}',
+			child:
+				'{% extends "base" %}{% block b %}{% set n = 1 %}{{ n }}{% endblock %}',
+			called:
+				'{% set n = 0 %}{% cache "b" %}{{ block("b") }}{% endcache %}|{{ n }}{% if false %}{% block b %}{% set n = 1 %}{{ n }}{% endblock %}{% endif %}',
+			box: '{% cache "c" %}{% slot %}{% endslot %}{% endcache %}',
+			filled:
+				'{% set n = 0 %}{% component "box" %}{% set n = 1 %}{{ n }}{% endcomponent %}|{{ n }}',
+		};
+		const cache = memoryCache();
+		for (const name of ["child", "called", "filled"]) {
+			const template = `{% include "${name}" %}`;
+			expect(await render(template, { cache, templates })).toBe("1|0");
+			expect(await render(template, { cache, templates })).toBe("1|0");
+		}
+	});
+
 	test("globals still can't be set inside", async () => {
 		expect(
 			await errorCode('{% cache "a" %}{% set site = 1 %}{% endcache %}', {

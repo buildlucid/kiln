@@ -2,7 +2,11 @@ import { KilnRenderError } from "../errors.js";
 import type { EscapeStrategy } from "../parser/ast.js";
 import { escapeHtml, escapeWith } from "../runtime/escape.js";
 import { Markup } from "../runtime/markup.js";
-import { operatorFunction, rangeOperator } from "../runtime/operators.js";
+import {
+	contains,
+	operatorFunction,
+	rangeOperator,
+} from "../runtime/operators.js";
 import {
 	checkLength,
 	consume,
@@ -426,6 +430,19 @@ const runtime = {
 	): unknown => {
 		try {
 			return apply(left, right);
+		} catch (error) {
+			throw locate(run, span, error);
+		}
+	},
+	/** `in`, which charges for the items it searches. */
+	contains: (
+		run: Run,
+		span: Span,
+		needle: unknown,
+		haystack: unknown,
+	): boolean => {
+		try {
+			return contains(needle, haystack, (count) => consume(run, count));
 		} catch (error) {
 			throw locate(run, span, error);
 		}

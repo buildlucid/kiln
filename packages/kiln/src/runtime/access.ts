@@ -5,7 +5,7 @@ import {
 	lookup,
 } from "./exposure.js";
 import { Markup } from "./markup.js";
-import { hashKeys, isPlainObject, MISSING } from "./values.js";
+import { hashKeys, isPlainObject, mapKeys, MISSING } from "./values.js";
 
 const isClassInstance = (value: object): boolean =>
 	!Array.isArray(value) &&
@@ -76,9 +76,7 @@ export const getMethod = (
 export const readableNames = (target: unknown): string[] => {
 	if (typeof target !== "object" || target === null) return [];
 	if (isPlainObject(target)) return hashKeys(target);
-	if (target instanceof Map) {
-		return [...target.keys()].filter((key) => typeof key === "string");
-	}
+	if (target instanceof Map) return mapKeys(target);
 	if (isClassInstance(target)) {
 		return [...exposedMembers(Object.getPrototypeOf(target))];
 	}

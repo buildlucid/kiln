@@ -10,7 +10,7 @@
 		<li><strong>Arrays:</strong> items by index, and <code>length</code>.</li>
 		<li><strong>Strings:</strong> no properties. Use filters such as <code>length</code> instead.</li>
 		<li><strong>Class instances:</strong> only the members their class <a href="/docs/api/safe-markup/#class-instances">exposes</a>.</li>
-		<li><strong>Never:</strong> <code>constructor</code>, <code>prototype</code> or <code>__proto__</code>, even when they are an object's own properties.</li>
+		<li><strong>Never:</strong> <code>constructor</code>, <code>prototype</code> or <code>__proto__</code>, even when they are an object's own properties or a <code>Map</code>'s keys. Loops and filters skip them too.</li>
 	</ul>
 
 	<p>Templates can only call functions you registered, the built-ins, macros, their own arrow functions and exposed methods. A function stored in your data can't be called. That includes a <code>then</code> method: Kiln never calls one on your data, even while it waits for a promise.</p>
@@ -37,7 +37,7 @@ const kiln = createKiln({
 		{% endverbatim %}
 	{% endapply %}
 
-	<p>Built-in filters count the items they process, so one call to <code>sort</code> or <code>merge</code> can't do unlimited work. Spreads count the items they copy, and <code>json</code> and <code>urlEncode</code> count every item they convert.</p>
+	<p>Built-in filters and functions count the items they process, so one call to <code>sort</code>, <code>merge</code> or <code>max</code> can't do unlimited work. <code>in</code> counts the items it searches, and reading a generator or other iterable counts each item it gives. Spreads count the items they copy, and <code>json</code> and <code>urlEncode</code> count every item they convert.</p>
 
 	<p>Pass an <code>AbortSignal</code> as the <code>signal</code> render option to stop a render from outside, for example when the visitor disconnects. On Cloudflare Workers, the platform's CPU limit is a final backstop.</p>
 

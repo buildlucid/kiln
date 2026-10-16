@@ -253,6 +253,19 @@ describe("dangerous names", () => {
 		).toBe("blocked");
 	});
 
+	test("loops and filters skip blocked names in a map", async () => {
+		const m = new Map([
+			["constructor", "secret"],
+			["a", "ok"],
+		]);
+		expect(
+			await render(
+				'{% for k, v in m %}{{ k }}={{ v }}{% endfor %}|{{ m|first }}|{{ m|keys|join }}|{{ m|json|raw }}|{{ "constructor" in m ? "found" : "none" }}',
+				{ context: { m } },
+			),
+		).toBe('a=ok|ok|a|{"a":"ok"}|none');
+	});
+
 	test("arrow functions cannot reach a constructor", async () => {
 		expect(await errorCode("{{ [1]|map(x => x.constructor)|first }}")).toBe(
 			"missing-property",

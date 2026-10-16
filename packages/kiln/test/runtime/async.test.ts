@@ -135,6 +135,19 @@ describe("guards and short-circuits", () => {
 		expect(await render(template, { functions })).toBe('Ba<a href="/x">');
 	});
 
+	test("promises in the context are values, and are not awaited", async () => {
+		const context = { value: Promise.resolve(false) };
+		expect(
+			await render(
+				'{% set x = value %}{{ x|json }}|{% if value %}yes{% endif %}|{{ false or value ? "t" : "f" }}',
+				{ context },
+			),
+		).toBe("{}|yes|t");
+		expect(
+			await errorCode("{% for x in value %}{% endfor %}", { context }),
+		).toBe("not-iterable");
+	});
+
 	test("properties of a promise in the context cannot be read", async () => {
 		expect(
 			await errorCode("{{ p.then }}", { context: { p: Promise.resolve(1) } }),

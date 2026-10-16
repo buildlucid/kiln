@@ -3,7 +3,7 @@ import { escapeHtml } from "../runtime/escape.js";
 import { Markup } from "../runtime/markup.js";
 import { buildRange } from "../runtime/operators.js";
 import { consume } from "../runtime/render.js";
-import type { CallableEntry } from "../runtime/types.js";
+import type { CallableEntry, Run } from "../runtime/types.js";
 import {
 	compare,
 	isEmpty,
@@ -30,15 +30,18 @@ const define = (
 /** Attribute names HTML allows: no spaces, quotes, `>`, `/`, `=` or control characters. */
 const ATTRIBUTE_NAME = /^[^\s"'>/=\p{Cc}]+$/u;
 
+/** `max` and `min`, of their arguments or of one list. Charges for the items compared. */
 const extremes = (
+	run: Run,
 	values: unknown[],
 	pick: (order: number) => boolean,
 ): unknown => {
 	const items =
 		values.length === 1 &&
 		(Array.isArray(values[0]) || values[0] instanceof Set)
-			? listOf(values[0], "max")
+			? listOf(run, values[0], "max")
 			: values;
+	consume(run, items.length);
 	let best: unknown = null;
 	for (const item of items) {
 		if (best === null || pick(compare(item, best))) best = item;
@@ -76,11 +79,11 @@ export const builtinFunctions: Record<string, BuiltinEntry> = {
 		},
 		["start", "end", "step"],
 	),
-	max: define((_run, ...values) => extremes(values, (order) => order > 0)),
-	min: define((_run, ...values) => extremes(values, (order) => order < 0)),
+	max: define((run, ...values) => extremes(run, values, (order) => order > 0)),
+	min: define((run, ...values) => extremes(run, values, (order) => order < 0)),
 	cycle: define(
-		(_run, values, position) => {
-			const items = listOf(values, "cycle");
+		(run, values, position) => {
+			const items = listOf(run, values, "cycle");
 			if (items.length === 0) return null;
 			const index = integerArgument(position, '"cycle" position');
 			return items[((index % items.length) + items.length) % items.length];
@@ -99,7 +102,7 @@ export const builtinFunctions: Record<string, BuiltinEntry> = {
 		["value"],
 	),
 	attrs: define(
-		(_run, attributes) => {
+		(run, attributes) => {
 			const target = unwrap(attributes);
 			if (target === null || target === undefined)
 				return new Markup("", "html");
@@ -109,7 +112,7 @@ export const builtinFunctions: Record<string, BuiltinEntry> = {
 					`"attrs" needs a hash, but got a ${typeName(target)}`,
 				);
 			}
-			const { values, keys } = entriesOf(target, "attrs");
+			const { values, keys } = entriesOf(run, target, "attrs");
 			let html = "";
 			keys.forEach((key, index) => {
 				const name = String(key);

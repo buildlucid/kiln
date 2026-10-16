@@ -21,7 +21,13 @@ import {
 	type SlotFill,
 	type TemplateRef,
 } from "./types.js";
-import { hashKeys, isPlainObject, setOwn, typeName } from "./values.js";
+import {
+	hashKeys,
+	isPlainObject,
+	mapKeys,
+	setOwn,
+	typeName,
+} from "./values.js";
 
 export const isPromise = (value: unknown): value is Promise<unknown> =>
 	value instanceof Promise;
@@ -673,11 +679,9 @@ export const isolatedScope = (
 		return { scope, passed: keys };
 	}
 	if (variables instanceof Map) {
-		for (const [key, value] of variables) {
-			if (typeof key === "string") {
-				scope[key] = value ?? null;
-				passed.push(key);
-			}
+		for (const key of mapKeys(variables)) {
+			scope[key] = variables.get(key) ?? null;
+			passed.push(key);
 		}
 	} else {
 		throw fail(

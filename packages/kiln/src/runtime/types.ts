@@ -3,7 +3,7 @@ import type { EscapeStrategy, TemplateNode } from "../parser/ast.js";
 import type { Source, Span } from "../source.js";
 import type { IslandMode } from "./islands.js";
 import type { Addition, OutletMark } from "./outlets.js";
-import { childScope, type Scope } from "./scope.js";
+import { childScope, isWithin, type Scope, sectionScope } from "./scope.js";
 import type { RenderStream } from "./stream.js";
 
 /** The part of `AbortSignal` Kiln reads. A real `AbortSignal` fits. */
@@ -130,9 +130,17 @@ export type SlotFill = {
 	sets: boolean;
 };
 
-/** The scope a slot's fill renders in: its own when it may set variables. */
-export const fillScope = (fill: SlotFill): Scope =>
-	fill.sets ? childScope(fill.scope) : fill.scope;
+/**
+ * The scope a slot's fill renders in: its own when it may set variables. A fill from outside the cached section
+ * rendering it gets a section of its own, so it can't change its caller's variables only when the section isn't saved.
+ */
+export const fillScope = (fill: SlotFill): Scope => {
+	const section = fill.run.state.section;
+	if (section !== null && !isWithin(fill.scope, section)) {
+		return sectionScope(fill.scope);
+	}
+	return fill.sets ? childScope(fill.scope) : fill.scope;
+};
 
 /** A built-in callable. Receives the current render first. */
 export type Builtin = (run: Run, ...args: unknown[]) => unknown;
@@ -226,6 +234,8 @@ export class RenderState {
 	once: Map<string, string> | null = null;
 	/** How many cached sections are rendering, where an outlet can't go. */
 	caching = 0;
+	/** The scope of the innermost cached section rendering, whose content can't change variables outside it. */
+	section: Scope | null = null;
 	/** Whether `island` tags are deferred or streamed, or null to render them in place. */
 	islands: IslandMode | null = null;
 	/** The HTML of each streamed island, filling `<kiln-island stream="n">` at index n - 1, for `renderStream` to send. */

@@ -1,9 +1,12 @@
 import { issue } from "../errors.js";
 import { getAttr, readableNames } from "../runtime/access.js";
 import { Markup } from "../runtime/markup.js";
+import { consume } from "../runtime/render.js";
+import type { Run } from "../runtime/types.js";
 import {
 	hashKeys,
 	isPlainObject,
+	mapKeys,
 	MISSING,
 	templateFunctions,
 	typeName,
@@ -12,11 +15,15 @@ import {
 /** Iterables from the host are read up to this many items, so an endless generator cannot hang a filter. */
 const MAX_ITERABLE_ITEMS = 1_000_000;
 
-/** Values and keys of anything a filter can treat as a list. Hashes keep their keys. */
+/**
+ * Values and keys of anything a filter can treat as a list. Hashes keep their keys.
+ *
+ * Each item read from an iterable other than an array, such as a generator, is charged against `maxSteps`.
+ */
 export const entriesOf = (
+	run: Run,
 	value: unknown,
 	what: string,
-	limit = MAX_ITERABLE_ITEMS,
 ): { values: unknown[]; keys: unknown[]; isHash: boolean } => {
 	if (value === null || value === undefined) {
 		return { values: [], keys: [], isHash: false };
@@ -33,7 +40,7 @@ export const entriesOf = (
 		return { values: keys.map((key) => value[key]), keys, isHash: true };
 	}
 	if (value instanceof Map) {
-		const keys = [...value.keys()].filter((key) => typeof key === "string");
+		const keys = mapKeys(value);
 		return { values: keys.map((key) => value.get(key)), keys, isHash: true };
 	}
 	if (
@@ -44,13 +51,14 @@ export const entriesOf = (
 	) {
 		const values: unknown[] = [];
 		for (const item of value as Iterable<unknown>) {
-			values.push(item);
-			if (values.length > limit) {
+			if (values.length === MAX_ITERABLE_ITEMS) {
 				return issue(
 					"limit-steps",
-					`"${what}" got an iterable with more than ${limit} items`,
+					`"${what}" got an iterable with more than ${MAX_ITERABLE_ITEMS} items`,
 				);
 			}
+			consume(run, 1);
+			values.push(item);
 		}
 		return { values, keys: values.map((_, index) => index), isHash: false };
 	}
@@ -60,10 +68,10 @@ export const entriesOf = (
 	);
 };
 
-/** Items of an array, set or other iterable, as an array. */
-export const listOf = (value: unknown, what: string): unknown[] => {
+/** Items of an array, set or other iterable, as an array. Arrays are returned as they are. */
+export const listOf = (run: Run, value: unknown, what: string): unknown[] => {
 	if (Array.isArray(value)) return value;
-	return entriesOf(value, what).values;
+	return entriesOf(run, value, what).values;
 };
 
 /** Requires an integer argument. */
@@ -255,12 +263,7 @@ export const toPlainData = (
 				return [...object].map((item) => convert(item) ?? null);
 			}
 			const result: Record<string, unknown> = {};
-			const names =
-				object instanceof Map
-					? [...object.keys()].filter(
-							(key): key is string => typeof key === "string",
-						)
-					: readableNames(object);
+			const names = readableNames(object);
 			charge(names.length);
 			for (const name of names) {
 				const item = convert(getAttr(object, name));

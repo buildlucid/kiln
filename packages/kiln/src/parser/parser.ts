@@ -1,4 +1,9 @@
-import { type LexProblem, lex, type Token } from "../lexer/lexer.js";
+import {
+	type LexProblem,
+	lex,
+	MAX_NESTING,
+	type Token,
+} from "../lexer/lexer.js";
 import type { Span } from "../source.js";
 import {
 	type Argument,
@@ -81,9 +86,6 @@ const NOT_TEST_WORDS = new Set([
 	"ignore",
 	"as",
 ]);
-
-/** Deepest nesting of tags and expressions the parser accepts. */
-const MAX_NESTING = 200;
 
 const COMPARISON_PUNCTUATORS = new Set(["==", "!=", "<", ">", "<=", ">="]);
 

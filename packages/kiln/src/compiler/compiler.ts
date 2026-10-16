@@ -31,7 +31,11 @@ import {
 } from "../runtime/islands.js";
 import { callMacro } from "../runtime/macros.js";
 import { Markup } from "../runtime/markup.js";
-import { operatorFunction, rangeOperator } from "../runtime/operators.js";
+import {
+	contains,
+	operatorFunction,
+	rangeOperator,
+} from "../runtime/operators.js";
 import { closeOutlets, recordAddition } from "../runtime/outlets.js";
 import {
 	after,
@@ -61,6 +65,8 @@ import {
 	childScope,
 	lookup,
 	ownerOf,
+	sectionCopy,
+	sectionScope,
 	variableNames,
 } from "../runtime/scope.js";
 import {
@@ -89,6 +95,7 @@ import {
 	hashKeys,
 	isEmpty,
 	isPlainObject,
+	mapKeys,
 	literalOptions,
 	MISSING,
 	matchesType,
@@ -1068,10 +1075,14 @@ class Compiler {
 	}
 
 	#if(node: Extract<Statement, { type: "If" }>): Stmt {
-		const branches = node.branches.map((branch) => ({
-			test: this.#expr(branch.test).ev,
-			body: this.#body(branch.body),
-		}));
+		const branches = node.branches.map((branch) => {
+			const test = this.#expr(branch.test);
+			return {
+				test: test.ev,
+				async: test.async,
+				body: this.#body(branch.body),
+			};
+		});
 		const alternate = node.alternate ? this.#body(node.alternate) : null;
 		const span = node.span;
 
@@ -1084,7 +1095,7 @@ class Compiler {
 			for (let i = index; i < branches.length; i++) {
 				const branch = branches[i] as (typeof branches)[number];
 				const value = branch.test(run, scope);
-				if (isPromise(value)) {
+				if (branch.async && isPromise(value)) {
 					return value.then((resolved) =>
 						truthy(unhold(resolved))
 							? branch.body(run, scope, out)
@@ -1156,6 +1167,12 @@ class Compiler {
 		};
 
 		const ev = iterable.ev;
+		if (!iterable.async) {
+			return (run, scope, out) => {
+				step(run, span);
+				return start(run, scope, out, ev(run, scope));
+			};
+		}
 		return (run, scope, out) => {
 			step(run, span);
 			const value = ev(run, scope);
@@ -1168,8 +1185,15 @@ class Compiler {
 		};
 	}
 
+	/** `set`. Only a value that may wait is waited for: a promise in your data is a value like any other. */
 	#set(name: string, value: Compiled, span: Span): Stmt {
 		const ev = value.ev;
+		if (!value.async) {
+			return (run, scope) => {
+				step(run, span);
+				assign(run, scope, name, ev(run, scope), span);
+			};
+		}
 		return (run, scope) => {
 			step(run, span);
 			const result = ev(run, scope);
@@ -1251,7 +1275,7 @@ class Compiler {
 				if (current !== undefined && current !== null) continue;
 				if (prop.default) {
 					const value = prop.default.ev(run, scope);
-					if (isPromise(value)) {
+					if (prop.default.async && isPromise(value)) {
 						return value.then((resolved) => {
 							scope[prop.name] = unhold(resolved) ?? null;
 							return fill(run, scope, i + 1);
@@ -1612,8 +1636,8 @@ class Compiler {
 				for (const key of hashKeys(variables))
 					inner[key] = variables[key] ?? null;
 			} else if (variables instanceof Map) {
-				for (const [key, item] of variables) {
-					if (typeof key === "string") inner[key] = item ?? null;
+				for (const key of mapKeys(variables)) {
+					inner[key] = variables.get(key) ?? null;
 				}
 			} else if (variables !== null && variables !== undefined) {
 				throw fail(
@@ -1625,9 +1649,16 @@ class Compiler {
 			}
 			return body(run, inner, out);
 		};
+		const ev = value.ev;
+		if (!value.async) {
+			return (run, scope, out) => {
+				step(run, span);
+				return enter(run, scope, out, ev(run, scope));
+			};
+		}
 		return (run, scope, out) => {
 			step(run, span);
-			return after(value.ev(run, scope), (variables) =>
+			return after(ev(run, scope), (variables) =>
 				enter(run, scope, out, variables),
 			);
 		};
@@ -1643,24 +1674,6 @@ class Compiler {
 		const body = this.#body(node.body);
 		const span = node.span;
 		const templateName = this.#template.name;
-		// Variables the body sets. Each gets a copy in the body's scope, so setting one never changes an outer variable,
-		// and a saved copy leaves the same variables behind as a fresh render. Globals stay outside, so setting one fails.
-		const sets = new Set<string>();
-		this.#walkStatements(node.body, (statement) => {
-			if (statement.type === "Set" || statement.type === "SetBlock") {
-				sets.add(statement.name);
-			}
-		});
-		const bodyScope = (run: Run, scope: Scope): Scope => {
-			const inner = childScope(scope);
-			for (const name of sets) {
-				const owner = ownerOf(scope, name);
-				if (owner !== null && owner !== run.state.globals) {
-					inner[name] = owner[name];
-				}
-			}
-			return inner;
-		};
 
 		const part = (run: Run, value: unknown) => {
 			if (value === null || value === undefined) return null;
@@ -1719,11 +1732,16 @@ class Compiler {
 			const state = run.state;
 			const store = state.env.cache;
 			// The body writes straight to `out`, so its indentation is the same as without the cache.
+			// The body sets variables in a section scope, so setting one never changes a variable outside. See `assign`.
 			const fresh = (): void | Promise<void> => {
+				const inner = sectionScope(scope);
+				const outer = state.section;
 				state.caching++;
-				const result = body(run, bodyScope(run, scope), out);
+				state.section = inner;
+				const result = body(run, inner, out);
 				return after(result, () => {
 					state.caching--;
+					state.section = outer;
 				});
 			};
 			if (!store) return fresh();
@@ -1792,7 +1810,10 @@ class Compiler {
 				silence(keyValue);
 				throw error;
 			}
-			if (isPromise(keyValue) || isPromise(secondsValue)) {
+			if (
+				(key.async && isPromise(keyValue)) ||
+				(seconds?.async && isPromise(secondsValue))
+			) {
 				return all([keyValue, secondsValue]).then(([k, t]) =>
 					render(run, scope, out, k, t),
 				);
@@ -1916,7 +1937,10 @@ class Compiler {
 			return after(body(run, scope, captured), () => {
 				const inner = childScope(scope);
 				inner[CAPTURED] = new Markup(captured.s, strategy);
-				return after(result(run, inner), (value) => emit(run, out, value));
+				const value = result(run, inner);
+				return chain.async
+					? after(value, (resolved) => emit(run, out, resolved))
+					: emit(run, out, value);
 			});
 		};
 	}
@@ -1975,7 +1999,7 @@ class Compiler {
 				);
 			}
 			case "Call":
-				return this.#call(node);
+				return this.#call(node, guard);
 			case "Filter":
 				return this.#filter(node);
 			case "Test":
@@ -2172,16 +2196,17 @@ class Compiler {
 		) {
 			const left = this.#expr(node.left, operator === "??");
 			const right = this.#expr(node.right);
+			const rightEv = right.ev;
+			const test = right.async
+				? (run: Run, scope: Scope) =>
+						after(rightEv(run, scope), (resolved) => truthy(resolved))
+				: (run: Run, scope: Scope) => truthy(rightEv(run, scope));
 			const decide = (value: unknown, run: Run, scope: Scope): unknown => {
 				switch (operator) {
 					case "and":
-						return truthy(value)
-							? after(right.ev(run, scope), (resolved) => truthy(resolved))
-							: false;
+						return truthy(value) ? test(run, scope) : false;
 					case "or":
-						return truthy(value)
-							? true
-							: after(right.ev(run, scope), (resolved) => truthy(resolved));
+						return truthy(value) ? true : test(run, scope);
 					case "??":
 						return value === MISSING || value === null || value === undefined
 							? right.ev(run, scope)
@@ -2203,6 +2228,17 @@ class Compiler {
 					consume(run, items.length);
 					return items;
 				}),
+			);
+		}
+
+		if (operator === "in" || operator === "not in") {
+			const negate = operator === "not in";
+			return map2(left, right, (a, b, run) =>
+				locating(
+					run,
+					span,
+					() => contains(a, b, (count) => consume(run, count)) !== negate,
+				),
 			);
 		}
 
@@ -2343,7 +2379,7 @@ class Compiler {
 		};
 	}
 
-	#call(node: Extract<Expression, { type: "Call" }>): Compiled {
+	#call(node: Extract<Expression, { type: "Call" }>, guard: boolean): Compiled {
 		const callee = node.callee;
 		if (callee.type === "Name") {
 			const name = callee.name;
@@ -2399,7 +2435,7 @@ class Compiler {
 					`Macro "${macroName}" from ${this.#template.imports[slot]?.name}`,
 				);
 			}
-			return this.#methodCall(node, callee);
+			return this.#methodCall(node, callee, guard);
 		}
 
 		this.#error("invalid-call", "This value cannot be called", node.span);
@@ -2452,11 +2488,13 @@ class Compiler {
 		};
 	}
 
+	/** A method call. With `guard`, as in a `?.` chain, a missing or null object makes the call missing too. */
 	#methodCall(
 		node: Extract<Expression, { type: "Call" }>,
 		callee: Extract<Expression, { type: "Member" }>,
+		guard: boolean,
 	): Compiled {
-		const object = this.#expr(callee.object);
+		const object = this.#expr(callee.object, guard);
 		const property = callee.property;
 		const key =
 			property.type === "Literal"
@@ -2502,19 +2540,33 @@ class Compiler {
 			);
 		};
 
+		const call = (run: Run, scope: Scope, target: unknown, name: unknown) => {
+			step(run, span);
+			return after(args.values(run, scope), (list) =>
+				invoke(run, target, name, list),
+			);
+		};
 		// The name and arguments wait for the object, as a chain that stops at a `?.` leaves them unevaluated.
+		const keyEv = key.ev;
+		const named = (run: Run, scope: Scope, target: unknown) => {
+			if (stops(target)) return SHORT;
+			if (
+				guard &&
+				(target === null || target === undefined || target === MISSING)
+			) {
+				return MISSING;
+			}
+			const name = keyEv(run, scope);
+			return key.async
+				? after(name, (resolved) => call(run, scope, target, resolved))
+				: call(run, scope, target, name);
+		};
+		const objectEv = object.ev;
 		return {
-			ev: (run, scope) =>
-				after(object.ev(run, scope), (target) =>
-					stops(target)
-						? SHORT
-						: after(key.ev(run, scope), (name) => {
-								step(run, span);
-								return after(args.values(run, scope), (list) =>
-									invoke(run, target, name, list),
-								);
-							}),
-				),
+			ev: object.async
+				? (run, scope) =>
+						after(objectEv(run, scope), (target) => named(run, scope, target))
+				: (run, scope) => named(run, scope, objectEv(run, scope)),
 			async: true,
 		};
 	}
@@ -2774,21 +2826,25 @@ class Compiler {
 	#blockCall(node: Extract<Expression, { type: "Call" }>): Compiled {
 		const name = node.args[0] ? this.#expr(node.args[0].value) : constant(null);
 		const span = node.span;
+		const place = (run: Run, scope: Scope, value: unknown) => {
+			const entry =
+				typeof value === "string" ? run.blocks.get(value)?.[0] : undefined;
+			if (!entry) {
+				throw fail(
+					run,
+					span,
+					"unknown-block",
+					`Block ${valueLabel(value)} does not exist`,
+				);
+			}
+			return renderBlockEntry(run, span, entry, scope);
+		};
+		const ev = name.ev;
 		return {
-			ev: (run, scope) =>
-				after(name.ev(run, scope), (value) => {
-					const entry =
-						typeof value === "string" ? run.blocks.get(value)?.[0] : undefined;
-					if (!entry) {
-						throw fail(
-							run,
-							span,
-							"unknown-block",
-							`Block ${valueLabel(value)} does not exist`,
-						);
-					}
-					return renderBlockEntry(run, span, entry, scope);
-				}),
+			ev: name.async
+				? (run, scope) =>
+						after(ev(run, scope), (value) => place(run, scope, value))
+				: (run, scope) => place(run, scope, ev(run, scope)),
 			async: true,
 		};
 	}
@@ -2908,9 +2964,12 @@ export const assign = (
 	value: unknown,
 	span: Span,
 ): void => {
-	const owner = ownerOf(scope, name);
+	let owner = ownerOf(scope, name);
 	if (owner === run.state.globals) {
 		throw fail(run, span, "assign-global", `Cannot assign to global "${name}"`);
+	}
+	if (owner !== null && run.state.section !== null) {
+		owner = sectionCopy(scope, owner);
 	}
 	(owner ?? scope)[name] = value ?? null;
 };
@@ -3032,10 +3091,9 @@ const copyHash = (
 		return;
 	}
 	if (value instanceof Map) {
-		locating(run, span, () => consume(run, value.size));
-		for (const [key, item] of value) {
-			if (typeof key === "string") setOwn(target, key, item);
-		}
+		const keys = mapKeys(value);
+		locating(run, span, () => consume(run, keys.length));
+		for (const key of keys) setOwn(target, key, value.get(key));
 		return;
 	}
 	throw fail(
@@ -3267,9 +3325,10 @@ export const loopItems = (
 		return { values: keys.map((key) => value[key]), keys };
 	}
 	if (value instanceof Map) {
+		const keys = mapKeys(value);
 		return {
-			values: [...value.values()],
-			keys: wantKeys ? [...value.keys()] : null,
+			values: keys.map((key) => value.get(key)),
+			keys: wantKeys ? keys : null,
 		};
 	}
 	if (typeof value === "string" || value instanceof Markup) {

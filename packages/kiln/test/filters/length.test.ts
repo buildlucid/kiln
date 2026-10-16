@@ -16,6 +16,14 @@ describe("length", () => {
 		).toBe("2|3|2|1");
 	});
 
+	test("counts a surrogate without its partner as one, as split does", async () => {
+		expect(
+			await render('{{ s|length }}|{{ s|split("")|length }}', {
+				context: { s: "a\uDC00b\uD800" },
+			}),
+		).toBe("4|4");
+	});
+
 	test("is 0 for null", async () => {
 		expect(await render("{{ null|length }}")).toBe("0");
 	});

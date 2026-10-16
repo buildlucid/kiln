@@ -19,6 +19,15 @@ All notable changes to `@lucidkiln/core` are listed here.
 - `truncate` checks its result against `maxOutputLength`, as its ending can make the text longer.
 - Precompiled templates keep variables set in a loop pass after an include that waits, and read a variable again after a component's fill changes it.
 - An error a getter in your data throws is a located `host-error` with the original as `cause`, however the property is read. So is an error from your cache store.
+- `max`, `min` and `in` count the items they search against `maxSteps`, and reading a generator or other iterable counts each item.
+- A variable first set in a slot's fallback stays inside it in precompiled templates too.
+- `?.` guards method calls, so `missing?.run()` is null instead of an error.
+- Blocks and component fills inside a `cache` section can't change variables outside it, so a saved copy leaves the same variables as a fresh render.
+- Promises in render data are never awaited. `set`, `if`, `for`, `with`, `and` and `or` used to wait for them when rendering from source.
+- Loops, filters and `in` skip `constructor`, `prototype` and `__proto__` keys in a `Map`, and island props skip them in any hash.
+- Deeply nested string interpolation reports `too-deep` instead of overflowing the stack.
+- An abort while the last async call is pending stops the render, instead of returning its output.
+- `length` counts a surrogate without its partner as one character, as `split` does.
 
 ## 1.0.0 - 2026-10-16
 

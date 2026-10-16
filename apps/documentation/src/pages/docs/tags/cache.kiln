@@ -41,7 +41,7 @@
 
 	<h2>Scope</h2>
 
-	<p>The section can read the variables around it. Variables you <code>set</code> inside it stay inside it, even ones that already exist outside, so a saved copy leaves the same variables behind as a fresh render.</p>
+	<p>The section can read the variables around it. Variables set inside it stay inside it, even ones that already exist outside, so a saved copy leaves the same variables behind as a fresh render. That includes variables set by blocks the section places and by fills of components it renders.</p>
 
 	<p>If the section fails, nothing is saved.</p>
 

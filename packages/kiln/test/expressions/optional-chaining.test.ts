@@ -41,6 +41,15 @@ describe("?.", () => {
 		).toBe("[][]");
 	});
 
+	test("guards missing objects before a method call", async () => {
+		expect(
+			await render(
+				'{{ missing?.run() ?? "a" }}|{{ page?.nope.run() ?? "b" }}',
+				{ context },
+			),
+		).toBe("a|b");
+	});
+
 	test("ends before a filter, which then receives null", async () => {
 		expect(
 			await render("{{ page?.author?.name|upper }}|[{{ none?.name|upper }}]", {
