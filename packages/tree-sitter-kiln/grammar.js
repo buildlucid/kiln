@@ -336,8 +336,13 @@ module.exports = grammar({
 				endClause($, "endset"),
 			),
 
+		// Kiln reports a rest prop that isn't last, so the grammar accepts one anywhere.
 		props_statement: ($) =>
-			seq(tagOpen("props"), commaSepTrailing($.prop), tagClose()),
+			seq(
+				tagOpen("props"),
+				commaSepTrailing(choice($.prop, $.rest_prop)),
+				tagClose(),
+			),
 
 		prop: ($) =>
 			seq(
@@ -345,6 +350,9 @@ module.exports = grammar({
 				optional(seq(":", field("type", $.prop_type))),
 				optional(seq("=", field("default", $._expression))),
 			),
+
+		// `...attributes`, which collects the variables a template doesn't declare. It comes last.
+		rest_prop: ($) => seq("...", field("name", $.identifier)),
 
 		// A union of one or more type terms, such as `string | null`.
 		prop_type: ($) => seq($._type_term, repeat(seq("|", $._type_term))),

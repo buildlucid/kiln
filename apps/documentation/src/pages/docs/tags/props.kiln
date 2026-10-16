@@ -93,6 +93,29 @@
 
 	<p>Using a type that isn't registered is an error.</p>
 
+	<h2>Other variables</h2>
+
+	<p>End <code>props</code> with <code>...</code> and a name to collect every variable the caller passes that isn't declared. They arrive as a hash, so a component can pass attributes such as <code>class</code> and <code>aria-label</code> on to its markup with <a href="/docs/functions/#attrs"><code>attrs</code></a>.</p>
+
+	{% set forwarding %}
+		{% verbatim %}
+{% props label: string, ...attributes %}
+<button{{ attrs({ ...attributes, class: ["button", attributes.class ?? null] }) }}>{{ label }}</button>
+		{% endverbatim %}
+	{% endset %}
+	{% apply example(templates: { "components/button.kiln": forwarding }) %}
+		{% verbatim %}
+{% include "components/button" with { label: "Close", class: "button--small", "aria-label": "Close dialog" } %}
+		{% endverbatim %}
+	{% endapply %}
+
+	<ul>
+		<li>The rest prop comes last, and has no type or default.</li>
+		<li>It is an empty hash when the caller passes nothing extra.</li>
+		<li>In strict mode, a template with a rest prop accepts any variable.</li>
+		<li>In a layout reached through <code>extends</code>, it is always empty, because the variables were meant for the page.</li>
+	</ul>
+
 	<h2>How values are checked</h2>
 
 	<p>Kiln checks types in strict mode, after defaults apply. It checks the outer value only, so it stays fast however much data a template gets:</p>

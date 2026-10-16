@@ -1,12 +1,7 @@
 import { analyzeTemplate, childStatements } from "./analyzer.js";
 import { createDiagnostic, type Diagnostic } from "./errors.js";
 import { resolveTemplateName } from "./names.js";
-import type {
-	Expression,
-	HashEntry,
-	PropParam,
-	Statement,
-} from "./parser/ast.js";
+import type { Expression, HashEntry, Statement } from "./parser/ast.js";
 import type {
 	CompiledTemplate,
 	EnvironmentCore,
@@ -17,11 +12,12 @@ import type { Span } from "./source.js";
 import { suggest } from "./suggest.js";
 
 type Property = Extract<HashEntry, { type: "Property" }>;
+type PropsNode = Extract<Statement, { type: "Props" }>;
 
-/** The `props` a template declares, or null when it has no `props` tag. */
-const propsOf = (template: CompiledTemplate): PropParam[] | null => {
+/** A template's `props` tag, or null when it has none. */
+const propsOf = (template: CompiledTemplate): PropsNode | null => {
 	for (const node of template.ast.body) {
-		if (node.type === "Props") return node.props;
+		if (node.type === "Props") return node;
 	}
 	return null;
 };
@@ -89,7 +85,7 @@ export const checkReferences = async (
 			createDiagnostic(template.source, code, message, span, severity),
 		);
 	};
-	const ownProps = propsOf(template);
+	const ownProps = propsOf(template)?.props ?? null;
 
 	/** Loads a named template, reporting it when it doesn't exist. */
 	const use = async (name: string, span: Span, optional = false) => {
@@ -111,13 +107,17 @@ export const checkReferences = async (
 			node.type === "Include" && node.ignoreMissing,
 		);
 		if (!used || used.hasErrors || !env.strict) return;
-		const props = propsOf(used);
+		const tag = propsOf(used);
 		const passed = passedKeys(node.with);
-		if (!props || !passed) return;
+		if (!tag || !passed) return;
 
+		const props = tag.props;
 		const declared = props.map((prop) => prop.name);
 		for (const [key, entry] of passed) {
-			if (key === "slots" || declared.includes(key)) continue;
+			// A rest prop accepts any key.
+			if (tag.rest !== null || key === "slots" || declared.includes(key)) {
+				continue;
+			}
 			report(
 				"unknown-prop",
 				withHint(
@@ -170,7 +170,7 @@ export const checkReferences = async (
 		const seen = new Set([template.name]);
 		while (layout && !layout.hasErrors && !seen.has(layout.name)) {
 			seen.add(layout.name);
-			for (const prop of propsOf(layout) ?? []) {
+			for (const prop of propsOf(layout)?.props ?? []) {
 				if (!prop.default && !provided.has(prop.name)) {
 					report(
 						"missing-prop",

@@ -128,6 +128,60 @@ describe("edge cases", () => {
 	});
 });
 
+describe("rest prop", () => {
+	const button = lines(
+		"{% props label: string, ...attributes %}",
+		'<button{{ attrs({ ...attributes, class: ["button", attributes.class ?? null] }) }}>{{ label }}</button>',
+	);
+
+	test("collects the variables a template doesn't declare", async () => {
+		expect(
+			await render(
+				'{% include "button" with { label: "Close", class: "small", "aria-label": "Close dialog" } %}',
+				{ templates: { button } },
+			),
+		).toBe(
+			'<button class="button small" aria-label="Close dialog">Close</button>',
+		);
+	});
+
+	test("is an empty hash when nothing extra is passed", async () => {
+		expect(
+			await render("{% props title, ...rest %}{{ rest|length }}", {
+				context: { title: "T" },
+			}),
+		).toBe("0");
+	});
+
+	test("is empty in a layout", async () => {
+		expect(
+			await render('{% extends "base" %}', {
+				templates: { base: "{% props ...rest %}{{ rest|length }}" },
+				context: { title: "T" },
+			}),
+		).toBe("0");
+	});
+
+	test("must come last, with no type or default", async () => {
+		expect(await errorCode("{% props ...rest, a %}")).toBe("unexpected-token");
+		expect(await errorCode("{% props ...rest: hash %}")).toBe(
+			"unexpected-token",
+		);
+		expect(await errorCode("{% props a, ...a %}")).toBe("duplicate-parameter");
+		expect(await errorCode("{% props ...loop %}")).toBe("reserved-name");
+	});
+
+	test("can end with a comma", async () => {
+		const template = lines(
+			"{% props",
+			"	title,",
+			"	...rest,",
+			"%}{{ title }}",
+		);
+		expect(await render(template, { context: { title: "T" } })).toBe("T");
+	});
+});
+
 describe("types", () => {
 	test("accepts values of the declared type", async () => {
 		const template =

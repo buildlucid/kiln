@@ -205,6 +205,7 @@ export const complete = async (
 			const analysis = name ? await analyse(project, name, text) : null;
 			const variables = new Set([
 				...(analysis?.props.map((prop) => prop.name) ?? []),
+				...(analysis?.rest ? [analysis.rest] : []),
 				...localNames(text, offset),
 				...(manifest?.globals ?? []),
 			]);
@@ -294,7 +295,9 @@ export const hover = async (
 			const prop = analysis?.props.find((item) => item.name === symbol.name);
 			if (prop)
 				value = `${codeBlock(describeProp(prop))}\nA prop of this template.`;
-			else if (project.manifest?.globals.includes(symbol.name)) {
+			else if (symbol.name === analysis?.rest) {
+				value = `${codeBlock(`...${symbol.name}`)}\nThe variables passed to this template that it doesn't declare.`;
+			} else if (project.manifest?.globals.includes(symbol.name)) {
 				value = "A global your project provides.";
 			}
 			break;
@@ -309,10 +312,10 @@ export const hover = async (
 				break;
 			}
 			const lines = [`**${target}**`];
-			if (analysis.props.length > 0) {
-				lines.push(
-					codeBlock(`props ${analysis.props.map(describeProp).join(", ")}`),
-				);
+			if (analysis.props.length > 0 || analysis.rest) {
+				const props = analysis.props.map(describeProp);
+				if (analysis.rest) props.push(`...${analysis.rest}`);
+				lines.push(codeBlock(`props ${props.join(", ")}`));
 			}
 			if (analysis.blocks.length > 0) {
 				lines.push(

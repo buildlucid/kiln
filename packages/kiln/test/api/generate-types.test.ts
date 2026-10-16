@@ -49,6 +49,18 @@ describe("generateTypes", () => {
 		);
 	});
 
+	test("a rest prop allows any other key", async () => {
+		const output = await generate({ link: "{% props href, ...attributes %}" });
+		expect(entry(output, "link")).toContain(
+			lines(
+				"\t\t\tcontext: {",
+				"\t\t\t\thref: unknown;",
+				"\t\t\t\t[key: string]: unknown;",
+				"\t\t\t};",
+			),
+		);
+	});
+
 	test("maps every built-in type", async () => {
 		const output = await generate({
 			all: "{% props a: null | boolean | number, b: array, c: hash, d: set, e: date, f: markup, g: object, h: number[] %}",

@@ -51,6 +51,7 @@ describe("check across templates", () => {
 			button:
 				'{% props label: string, variant: "primary" | "secondary" = "primary" %}',
 			card: "{% props title %}{% slot %}{% endslot %}",
+			link: "{% props href, ...attributes %}",
 			"layouts/base":
 				'{% props lang, title = "" %}{% block content %}{% endblock %}',
 			"layouts/docs": '{% extends "layouts/base" %}{% set lang = "en" %}',
@@ -67,6 +68,15 @@ describe("check across templates", () => {
 				'{% extends "nope" %}{% import "macros" as m %}{% block a %}{% include "gone" %}{% include "skip" ignore missing %}{% endblock %}',
 			),
 		).toEqual(["missing-template", "missing-template", "missing-template"]);
+	});
+
+	test("accepts any key for a template with a rest prop, but still needs its props", async () => {
+		expect(
+			await codes('{% include "link" with { href: "/", class: "x" } %}'),
+		).toEqual([]);
+		expect(await codes('{% include "link" with { class: "x" } %}')).toEqual([
+			"missing-prop",
+		]);
 	});
 
 	test("reports props passed that a template doesn't declare", async () => {

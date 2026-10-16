@@ -119,12 +119,11 @@ export const generateTypes = async (
 		const { layouts, complete } = await layoutsOf(analysis);
 
 		let context: string;
-		if (analysis.props.length > 0) {
-			// Strict mode rejects anything a template with `props` doesn't declare.
-			context = objectType(
-				analysis.props.map((prop) => field(prop, !prop.required)),
-				"\t\t\t",
-			);
+		if (analysis.props.length > 0 || analysis.rest !== null) {
+			// Strict mode rejects anything a template with `props` doesn't declare, unless it has a rest prop.
+			const fields = analysis.props.map((prop) => field(prop, !prop.required));
+			if (analysis.rest !== null) fields.push("[key: string]: unknown");
+			context = objectType(fields, "\t\t\t");
 		} else {
 			// Without `props`, a page takes any data, plus its layouts' props that it doesn't set itself.
 			const provided = new Set(analysis.sets);

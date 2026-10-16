@@ -166,7 +166,8 @@ export type Statement =
 	  }
 	| { type: "Set"; name: string; value: Expression; span: Span }
 	| { type: "SetBlock"; name: string; body: Statement[]; span: Span }
-	| { type: "Props"; props: PropParam[]; span: Span }
+	/** `rest` names the hash that collects undeclared variables, as in `...attributes`, or is null. */
+	| { type: "Props"; props: PropParam[]; rest: string | null; span: Span }
 	| { type: "Extends"; template: Expression; span: Span }
 	| ({ type: "Block"; name: string; body: Statement[]; span: Span } & Placement)
 	| ({

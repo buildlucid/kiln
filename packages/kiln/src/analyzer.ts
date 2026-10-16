@@ -29,6 +29,8 @@ export type Analysis = {
 	variables: string[];
 	/** `type` lists the members of the prop's type, or is `null` when the prop is untyped. */
 	props: AnalysedProp[];
+	/** The name of the rest prop, as in `...attributes`, or null. With one, the template accepts any variable. */
+	rest: string | null;
 	/** Variables set at the top level. A layout sees those its child template sets. */
 	sets: string[];
 	functions: string[];
@@ -84,6 +86,7 @@ export const analyzeTemplate = (
 	const templates: TemplateReference[] = [];
 	const blocks: string[] = [];
 	const props: AnalysedProp[] = [];
+	let rest: string | null = null;
 	const macroNames = new Set(template.macros.keys());
 	const importedNames = new Set<string>();
 	const importAliases = new Set<string>();
@@ -301,6 +304,10 @@ export const analyzeTemplate = (
 					});
 					declare(prop.name);
 				}
+				if (node.rest !== null) {
+					rest = node.rest;
+					declare(node.rest);
+				}
 				return;
 			case "Extends":
 				expression(node.template);
@@ -396,6 +403,7 @@ export const analyzeTemplate = (
 		diagnostics: template.diagnostics,
 		variables: [...variables],
 		props,
+		rest,
 		sets: template.ast.body.flatMap((node) =>
 			node.type === "Set" || node.type === "SetBlock" ? [node.name] : [],
 		),

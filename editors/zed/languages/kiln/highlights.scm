@@ -26,6 +26,9 @@
 (prop
   name: (identifier) @variable.parameter)
 
+(rest_prop
+  name: (identifier) @variable.parameter)
+
 (filter_identifier) @function
 
 (test_name) @function

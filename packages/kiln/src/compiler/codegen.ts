@@ -16,9 +16,9 @@ import { PRECOMPILED_VERSION } from "./precompiled.js";
 /**
  * Generates JavaScript for a template that compiled without problems, for `precompile`.
  *
- * Runs of statements become functions: text, outputs, `if`, `for`, `set`, `autoescape`, untyped `props`, includes,
- * components, slots and block placements, with expressions that use variables, literals, operators and built-in
- * functions, filters and tests. Your own functions and filters, which may return promises, are generated when a call
+ * Runs of statements become functions: text, outputs, `if`, `for`, `set`, `autoescape`, untyped `props` without a
+ * rest prop, includes, components, slots and block placements, with expressions that use variables, literals,
+ * operators and built-in functions, filters and tests. Your own functions and filters, which may return promises, are generated when a call
  * is a whole `set` value, loop or output. Code that may wait continues in another function, or pauses as a generator,
  * only when a promise comes back; see `#function`. Everything else, such as macros and arrow functions, is left to
  * the closure compiler, which compiles the template's source as usual and puts the generated functions in place of
@@ -1262,13 +1262,15 @@ class Generator {
 
 	/**
 	 * `props` without types: checks no undeclared names were passed in strict mode, then fills in defaults and nulls.
-	 * Typed props stay with the closures, which check the types.
+	 * Typed props and rest props stay with the closures.
 	 */
 	#props(
 		statement: Extract<Statement, { type: "Props" }>,
 		context: Context,
 	): string[] {
-		if (statement.props.some((prop) => prop.type)) return unsupported();
+		if (statement.rest || statement.props.some((prop) => prop.type)) {
+			return unsupported();
+		}
 		const span = this.#span(statement.span);
 		const names = statement.props.map((prop) => prop.name);
 		const declared = this.#constant(

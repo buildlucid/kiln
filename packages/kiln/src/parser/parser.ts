@@ -555,9 +555,10 @@ class Parser {
 	/** Reads parameters for `macro` and `props`. Only `props` may declare types, so macros' `type` is always null. */
 	#parseParams(closing: string | null, typed = false): PropParam[] {
 		const params: PropParam[] = [];
+		// A rest prop, `...name`, ends the list. `#parseProps` reads it.
 		const done = () =>
 			closing === null
-				? this.#peek().type === "tagClose"
+				? this.#peek().type === "tagClose" || this.#isPunct("...")
 				: this.#isPunct(closing);
 		while (!done()) {
 			const nameToken = this.#expectDeclarableName("a parameter name");
@@ -669,10 +670,28 @@ class Parser {
 
 	#parseProps(open: Token): Statement {
 		const props = this.#parseParams(null, true);
+		let rest: string | null = null;
+		if (this.#isPunct("...")) {
+			this.#next();
+			const nameToken = this.#expectDeclarableName("a rest prop name");
+			if (props.some((prop) => prop.name === nameToken.value)) {
+				this.#problem(
+					"duplicate-parameter",
+					`"${nameToken.value}" is declared more than once`,
+					nameToken,
+				);
+			}
+			rest = nameToken.value;
+			if (this.#isPunct(",")) this.#next();
+			if (this.#peek().type !== "tagClose") {
+				this.#fail("The rest prop must come last, with no type or default");
+			}
+		}
 		const close = this.#expectTagEnd();
 		return {
 			type: "Props",
 			props,
+			rest,
 			span: { start: open.start, end: close.end },
 		};
 	}

@@ -3889,6 +3889,10 @@
         {
           "type": "prop",
           "named": true
+        },
+        {
+          "type": "rest_prop",
+          "named": true
         }
       ]
     }
@@ -3918,6 +3922,22 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "rest_prop",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {

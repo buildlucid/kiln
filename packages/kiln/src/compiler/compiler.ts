@@ -1220,8 +1220,19 @@ class Compiler {
 			}
 		};
 
+		const rest = node.rest;
+		// The variables passed but not declared, in the order they were passed. A layout's run has no `passed`.
+		const collect = (run: Run, scope: Scope): Record<string, unknown> => {
+			const extra: Record<string, unknown> = {};
+			for (const key of run.passed ?? []) {
+				if (!declared.has(key) && key !== "slots") extra[key] = scope[key];
+			}
+			return extra;
+		};
+
 		const apply: Stmt = (run, scope) => {
-			if (strict && run.passed) {
+			if (rest !== null) scope[rest] = collect(run, scope);
+			else if (strict && run.passed) {
 				for (const key of run.passed) {
 					if (!declared.has(key) && key !== "slots") {
 						throw fail(
