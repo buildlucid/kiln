@@ -1,6 +1,22 @@
-<footer class="border-t border-line">
-	<div class="mx-auto flex max-w-[88rem] flex-col gap-3 px-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
-		<p>Kiln is open source under the <a href="{{ site.repository }}/blob/master/LICENSE" class="text-text underline decoration-line-strong underline-offset-4 hover:text-fg">MIT licence</a>.</p>
-		<p>This site is built with Kiln.</p>
+{% set links = [
+	{ title: "Docs", url: "/docs/" },
+	{ title: "Benchmarks", url: "/docs/benchmarks/" },
+	{ title: "llms.txt", url: "/llms.txt" },
+	{ title: "GitHub", url: site.repository },
+] %}
+
+<footer class="site-footer border-t border-line">
+	<div class="mx-auto flex max-w-[88rem] flex-col gap-4 px-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
+		<p class="flex items-center gap-2.5">
+			{% include "components/logo" with { size: 20 } %}
+			<span>Open source under the <a href="{{ site.repository }}/blob/master/LICENSE" class="text-text underline decoration-line-strong underline-offset-4 transition-colors hover:text-fg">MIT licence</a>. Built with Kiln.</span>
+		</p>
+		<nav aria-label="Footer">
+			<ul class="flex flex-wrap gap-x-5 gap-y-2">
+				{% for link in links %}
+					<li><a href="{{ link.url }}" class="transition-colors hover:text-fg">{{ link.title }}</a></li>
+				{% endfor %}
+			</ul>
+		</nav>
 	</div>
 </footer>

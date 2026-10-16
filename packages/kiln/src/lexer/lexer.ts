@@ -163,19 +163,26 @@ class Lexer {
 		const lines = textLines(this.#text, parts, standalone);
 
 		const tokens: Token[] = [];
+		// A line that starts with a tag or output still gets a text token, empty, to mark where the line starts.
+		let line = 0;
 		for (const part of parts) {
-			if (part.kind === "text") {
-				if (part.from < part.to) {
-					tokens.push({
-						type: "text",
-						value: this.#text.slice(part.from, part.to),
-						start: part.from,
-						end: part.to,
-					});
-				}
-			} else if (part.kind !== "comment") {
+			const text = part.kind === "text";
+			const at = text ? part.from : part.start;
+			if (text && part.from < part.to) {
+				tokens.push({
+					type: "text",
+					value: this.#text.slice(part.from, part.to),
+					start: part.from,
+					end: part.to,
+				});
+			} else if (lines[line]?.start === at) {
+				tokens.push({ type: "text", value: "", start: at, end: at });
+			}
+			if (!text && part.kind !== "comment") {
 				for (const token of part.tokens) tokens.push(token);
 			}
+			const end = text ? part.to : part.start;
+			while ((lines[line]?.start ?? Infinity) <= end) line++;
 		}
 		tokens.push({
 			type: "eof",
@@ -747,6 +754,16 @@ const textLines = (
 	removed: ReadonlyMap<number, number>,
 ): TextLine[] => {
 	const lines: TextLine[] = [];
+	const add = (start: number) => {
+		let indentEnd = start;
+		while (text[indentEnd] === " " || text[indentEnd] === "\t") indentEnd++;
+		const next = text[indentEnd];
+		if (next === undefined || next === "\n" || next === "\r") return;
+		if (removed.has(indentEnd)) return;
+		lines.push({ start, indentEnd });
+	};
+	const first = parts[0];
+	if (first && (first.kind !== "text" || first.from === 0)) add(0);
 	for (const part of parts) {
 		if (part.kind !== "text") continue;
 		for (
@@ -757,12 +774,7 @@ const textLines = (
 			const start = newline + 1;
 			// A `-` marker trimmed the line break or the whole line.
 			if (start < part.from || start > part.to) continue;
-			let indentEnd = start;
-			while (text[indentEnd] === " " || text[indentEnd] === "\t") indentEnd++;
-			const next = text[indentEnd];
-			if (next === undefined || next === "\n" || next === "\r") continue;
-			if (removed.has(indentEnd)) continue;
-			lines.push({ start, indentEnd });
+			add(start);
 		}
 	}
 	return lines;

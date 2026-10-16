@@ -1,41 +1,41 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p><code>props</code> declares the variables a template expects, with optional types and defaults. It is most useful in components and included templates, where it documents and checks their inputs.</p>
+	<p><code>props</code> declares the variables a template expects, with optional types and defaults. It is most useful in components and included templates, where it documents and checks their inputs.</p>
 
-{% set button %}
-{% verbatim %}
+	{% set button %}
+		{% verbatim %}
 {% props label: string, href: string | null = null, variant: "primary" | "secondary" = "primary" %}
 {% if href %}
-<a class="button button--{{ variant }}" href="{{ href }}">{{ label }}</a>
+	<a class="button button--{{ variant }}" href="{{ href }}">{{ label }}</a>
 {% else %}
-<button class="button button--{{ variant }}">{{ label }}</button>
+	<button class="button button--{{ variant }}">{{ label }}</button>
 {% endif %}
-{% endverbatim %}
-{% endset %}
-{% apply example(templates: { "components/button.kiln": button }) %}
-{% verbatim %}
+		{% endverbatim %}
+	{% endset %}
+	{% apply example(templates: { "components/button.kiln": button }) %}
+		{% verbatim %}
 {% include "components/button" with { label: "Sign up", href: "/join" } %}
 {% include "components/button" with { label: "Cancel", variant: "secondary" } %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Rules</h2>
+	<h2>Rules</h2>
 
-<ul>
-	<li><code>props</code> must come before any other output, and a template can have only one.</li>
-	<li>A prop without a default is required.</li>
-	<li>A default is used when the caller passes nothing or null.</li>
-	<li>In strict mode, passing a variable the template doesn't declare is an error. This catches typos in the caller.</li>
-	<li>Templates without <code>props</code> accept any variables.</li>
-</ul>
+	<ul>
+		<li><code>props</code> must come before any other output, and a template can have only one.</li>
+		<li>A prop without a default is required.</li>
+		<li>A default is used when the caller passes nothing or null.</li>
+		<li>In strict mode, passing a variable the template doesn't declare is an error. This catches typos in the caller.</li>
+		<li>Templates without <code>props</code> accept any variables.</li>
+	</ul>
 
-<h2>Types</h2>
+	<h2>Types</h2>
 
-<p>Add a type after a colon. Join several with <code>|</code>. Kiln checks the value after the default applies.</p>
+	<p>Add a type after a colon. Join several with <code>|</code>. Kiln checks the value after the default applies.</p>
 
-{% apply highlight("kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln") %}
+		{% verbatim %}
 {% props
 	title: string,
 	href: string | null = null,
@@ -43,90 +43,90 @@
 	variant: "primary" | "secondary" = "primary",
 	tags: array = []
 %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>The types are <code>null</code>, <code>boolean</code>, <code>number</code>, <code>string</code>, <code>array</code>, <code>hash</code>, <code>set</code>, <code>date</code>, <code>markup</code> and <code>object</code>. A string or number, such as <code>"primary"</code>, accepts only that exact value.</p>
+	<p>The types are <code>null</code>, <code>boolean</code>, <code>number</code>, <code>string</code>, <code>array</code>, <code>hash</code>, <code>set</code>, <code>date</code>, <code>markup</code> and <code>object</code>. A string or number, such as <code>"primary"</code>, accepts only that exact value.</p>
 
-<ul>
-	<li>A prop that may be null must include <code>null</code> in its type.</li>
-	<li><code>string</code> also accepts safe markup.</li>
-	<li>Untyped and typed props can be mixed.</li>
-</ul>
+	<ul>
+		<li>A prop that may be null must include <code>null</code> in its type.</li>
+		<li><code>string</code> also accepts safe markup.</li>
+		<li>Untyped and typed props can be mixed.</li>
+	</ul>
 
-{% apply example(error: true, templates: { "components/button.kiln": button }) %}
-{% verbatim %}
+	{% apply example(error: true, templates: { "components/button.kiln": button }) %}
+		{% verbatim %}
 {% include "components/button" with { label: "Go", variant: "danger" } %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Lists and shapes</h2>
+	<h2>Lists and shapes</h2>
 
-<p>Describe what a list holds with <code>[]</code>, and the keys a hash has with braces. Mark an optional key with <code>?</code>. Use brackets to group a union.</p>
+	<p>Describe what a list holds with <code>[]</code>, and the keys a hash has with braces. Mark an optional key with <code>?</code>. Use brackets to group a union.</p>
 
-{% apply highlight("kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln") %}
+		{% verbatim %}
 {% props
 	tags: string[],
 	levels: (2 | 3)[] = [],
 	author: { name: string, url?: string | null }
 %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<ul>
-	<li><code>string[]</code> accepts an array.</li>
-	<li>A shape accepts a hash or an object, such as a class instance.</li>
-	<li>Shapes and lists can be nested, such as <code>{ links: { href: string }[] }</code>.</li>
-</ul>
+	<ul>
+		<li><code>string[]</code> accepts an array.</li>
+		<li>A shape accepts a hash or an object, such as a class instance.</li>
+		<li>Shapes and lists can be nested, such as <code>{ links: { href: string }[] }</code>.</li>
+	</ul>
 
-<h2>Your own types</h2>
+	<h2>Your own types</h2>
 
-<p>A type name that starts with a capital letter, such as <code>Post</code>, is one your app defines. Register a check for it when you create the environment. See <a href="/docs/api/types/#your-own-types">TypeScript types</a>.</p>
+	<p>A type name that starts with a capital letter, such as <code>Post</code>, is one your app defines. Register a check for it when you create the environment. See <a href="/docs/api/types/#your-own-types">TypeScript types</a>.</p>
 
-{% apply example(context: { post: { title: "Hello, world", url: "/blog/hello-world/" } }) %}
-{% verbatim %}
+	{% apply example(context: { post: { title: "Hello, world", url: "/blog/hello-world/" } }) %}
+		{% verbatim %}
 {% props post: Post %}
 <a href="{{ post.url }}">{{ post.title }}</a>
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>Using a type that isn't registered is an error.</p>
+	<p>Using a type that isn't registered is an error.</p>
 
-<h2>How values are checked</h2>
+	<h2>How values are checked</h2>
 
-<p>Kiln checks types in strict mode, after defaults apply. It checks the outer value only, so it stays fast however much data a template gets:</p>
+	<p>Kiln checks types in strict mode, after defaults apply. It checks the outer value only, so it stays fast however much data a template gets:</p>
 
-<ul>
-	<li><code>tags: string[]</code> checks that <code>tags</code> is an array, not that every item is a string.</li>
-	<li>A shape checks that the value is a hash or an object, not each key.</li>
-	<li>Your own types run the check you registered.</li>
-</ul>
+	<ul>
+		<li><code>tags: string[]</code> checks that <code>tags</code> is an array, not that every item is a string.</li>
+		<li>A shape checks that the value is a hash or an object, not each key.</li>
+		<li>Your own types run the check you registered.</li>
+	</ul>
 
-<p>Strict mode still catches a missing key where the template reads it. For a full check of nested data before you deploy, generate <a href="/docs/api/types/">TypeScript types</a> from your templates.</p>
+	<p>Strict mode still catches a missing key where the template reads it. For a full check of nested data before you deploy, generate <a href="/docs/api/types/">TypeScript types</a> from your templates.</p>
 
-<h2>In layouts</h2>
+	<h2>In layouts</h2>
 
-<p>A layout reached through <code>extends</code> can use <code>props</code> too. It checks required props and applies defaults, but doesn't reject other variables, because the render data was meant for the page.</p>
+	<p>A layout reached through <code>extends</code> can use <code>props</code> too. It checks required props and applies defaults, but doesn't reject other variables, because the render data was meant for the page.</p>
 
-<p>A page can provide a layout's props with a top-level <code>set</code>, as well as through the data you render it with.</p>
+	<p>A page can provide a layout's props with a top-level <code>set</code>, as well as through the data you render it with.</p>
 
-{% set base %}
-{% verbatim %}
+	{% set base %}
+		{% verbatim %}
 {% props title %}
 <title>{{ title }}</title>
 {% block content %}{% endblock %}
-{% endverbatim %}
-{% endset %}
-{% apply example(templates: { "layouts/base.kiln": base }) %}
-{% verbatim %}
+		{% endverbatim %}
+	{% endset %}
+	{% apply example(templates: { "layouts/base.kiln": base }) %}
+		{% verbatim %}
 {% extends "layouts/base" %}
 {% set title = "About us" %}
 {% block content %}<h1>{{ title }}</h1>{% endblock %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Checking without rendering</h2>
+	<h2>Checking without rendering</h2>
 
-<p><code>check</code> compares each <code>include</code>, <code>component</code> and <code>extends</code> with the props of the template it uses, so a misspelt or missing prop shows up before the page renders. See <a href="/docs/api/errors/#checking-templates">Errors and checks</a>.</p>
+	<p><code>check</code> compares each <code>include</code>, <code>component</code> and <code>extends</code> with the props of the template it uses, so a misspelt or missing prop shows up before the page renders. See <a href="/docs/api/errors/#checking-templates">Errors and checks</a>.</p>
 {% endblock %}

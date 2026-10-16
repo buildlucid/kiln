@@ -1,32 +1,32 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p>This guide builds a small page with a shared layout. It takes a few minutes and assumes you have <a href="/docs/installation/">installed Kiln</a>.</p>
+	<p>This guide builds a small page with a shared layout. It takes a few minutes and assumes you have <a href="/docs/installation/">installed Kiln</a>.</p>
 
-<h2>Create a layout</h2>
+	<h2>Create a layout</h2>
 
-<p>A layout holds the markup every page shares. Each <code>block</code> marks a place a page can fill in. Save this as <code>templates/layouts/base.kiln</code>:</p>
+	<p>A layout holds the markup every page shares. Each <code>block</code> marks a place a page can fill in. Save this as <code>templates/layouts/base.kiln</code>:</p>
 
-{% apply highlight("kiln", title: "templates/layouts/base.kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln", title: "templates/layouts/base.kiln") %}
+		{% verbatim %}
 <!doctype html>
 <html lang="en">
-<head>
-	<title>{% block title %}My site{% endblock %}</title>
-</head>
-<body>
-	{% block content %}{% endblock %}
-</body>
+	<head>
+		<title>{% block title %}My site{% endblock %}</title>
+	</head>
+	<body>
+		{% block content %}{% endblock %}
+	</body>
 </html>
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Create a page</h2>
+	<h2>Create a page</h2>
 
-<p>The page extends the layout and fills its blocks. Save this as <code>templates/pages/home.kiln</code>:</p>
+	<p>The page extends the layout and fills its blocks. Save this as <code>templates/pages/home.kiln</code>:</p>
 
-{% apply highlight("kiln", title: "templates/pages/home.kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln", title: "templates/pages/home.kiln") %}
+		{% verbatim %}
 {% extends "layouts/base" %}
 
 {% block title %}{{ title }} | {{ parent() }}{% endblock %}
@@ -35,23 +35,23 @@
 	<h1>{{ title }}</h1>
 	<ul>
 		{% for feature in features %}
-		<li>{{ feature }}</li>
+			<li>{{ feature }}</li>
 		{% endfor %}
 	</ul>
 {% endblock %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p><code>parent()</code> outputs the layout's version of the block, so the title becomes "Home | My site". The <code>.kiln</code> extension is optional in template names.</p>
+	<p><code>parent()</code> outputs the layout's version of the block, so the title becomes "Home | My site". The <code>.kiln</code> extension is optional in template names.</p>
 
-<h2>Render it</h2>
+	<h2>Render it</h2>
 
-<p>Create an environment that reads from the <code>templates</code> folder, then render the page with some data:</p>
+	<p>Create an environment that reads from the <code>templates</code> folder, then render the page with some data:</p>
 
-{% apply highlight("ts", title: "render.ts") %}
-{% verbatim %}
-import { createKiln } from "@lucidcms/kiln";
-import { fileLoader } from "@lucidcms/kiln/node";
+	{% apply highlight("ts", title: "render.ts") %}
+		{% verbatim %}
+import { createKiln } from "@lucidkiln/core";
+import { fileLoader } from "@lucidkiln/core/node";
 
 const kiln = createKiln({
 	loader: fileLoader({ root: "templates" }),
@@ -63,26 +63,26 @@ const html = await kiln.render("pages/home", {
 });
 
 console.log(html);
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>Kiln prints the full page. Lines that only hold tags, such as the <code>for</code> lines, are removed, so the output stays tidy:</p>
+	<p>Kiln prints the full page. Lines that only hold tags, such as the <code>for</code> lines, are removed, so the output stays tidy:</p>
 
-{% set layout %}
-{% verbatim %}
+	{% set layout %}
+		{% verbatim %}
 <!doctype html>
 <html lang="en">
-<head>
-	<title>{% block title %}My site{% endblock %}</title>
-</head>
-<body>
-	{% block content %}{% endblock %}
-</body>
+	<head>
+		<title>{% block title %}My site{% endblock %}</title>
+	</head>
+	<body>
+		{% block content %}{% endblock %}
+	</body>
 </html>
-{% endverbatim %}
-{% endset %}
-{% apply example(source: false, name: "pages/home.kiln", templates: { "layouts/base.kiln": layout }, context: { title: "Home", features: ["Fast", "Safe", "Familiar"] }) %}
-{% verbatim %}
+		{% endverbatim %}
+	{% endset %}
+	{% apply example(source: false, name: "pages/home.kiln", templates: { "layouts/base.kiln": layout }, context: { title: "Home", features: ["Fast", "Safe", "Familiar"] }) %}
+		{% verbatim %}
 {% extends "layouts/base" %}
 
 {% block title %}{{ title }} | {{ parent() }}{% endblock %}
@@ -91,19 +91,19 @@ console.log(html);
 	<h1>{{ title }}</h1>
 	<ul>
 		{% for feature in features %}
-		<li>{{ feature }}</li>
+			<li>{{ feature }}</li>
 		{% endfor %}
 	</ul>
 {% endblock %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Next steps</h2>
+	<h2>Next steps</h2>
 
-<ul>
-	<li>Learn the <a href="/docs/language/syntax/">syntax</a> and <a href="/docs/language/expressions/">expressions</a>.</li>
-	<li>Build reusable pieces with <a href="/docs/tags/component/">components</a>.</li>
-	<li>Load data from templates with <a href="/docs/language/async-data/">async functions</a>.</li>
-	<li>Add your own <a href="/docs/api/extending/">functions and filters</a>.</li>
-</ul>
+	<ul>
+		<li>Learn the <a href="/docs/language/syntax/">syntax</a> and <a href="/docs/language/expressions/">expressions</a>.</li>
+		<li>Build reusable pieces with <a href="/docs/tags/component/">components</a>.</li>
+		<li>Load data from templates with <a href="/docs/language/async-data/">async functions</a>.</li>
+		<li>Add your own <a href="/docs/api/extending/">functions and filters</a>.</li>
+	</ul>
 {% endblock %}

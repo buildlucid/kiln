@@ -1,9 +1,9 @@
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import * as bundledKiln from "@lucidcms/kiln";
-import type { Diagnostic, Kiln, KilnManifest } from "@lucidcms/kiln";
-import * as bundledFormat from "@lucidcms/kiln/format";
+import * as bundledKiln from "@lucidkiln/core";
+import type { Diagnostic, Kiln, KilnManifest } from "@lucidkiln/core";
+import * as bundledFormat from "@lucidkiln/core/format";
 
 type KilnModule = Pick<typeof bundledKiln, "createKiln">;
 type FormatModule = Pick<
@@ -149,7 +149,7 @@ const importInstalled = async <T>(
 	entry: "." | "./format",
 ): Promise<T | null> => {
 	for (let current = from; ; current = dirname(current)) {
-		const folder = join(current, "node_modules", "@lucidcms", "kiln");
+		const folder = join(current, "node_modules", "@lucidkiln", "core");
 		try {
 			const pkg = JSON.parse(
 				await readFile(join(folder, "package.json"), "utf8"),

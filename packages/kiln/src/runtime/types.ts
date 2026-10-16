@@ -13,7 +13,16 @@ export type { Scope };
  *
  * Every buffer is capped at `maxOutputLength`, including captures such as block `set` and macro bodies, so captured text is only counted against the render's output when it is printed.
  */
-export type Out = { s: string };
+export type Out = {
+	s: string;
+	/** Indentation that each line of template text gets, from the tags that inserted it. See `startPlace`. */
+	indent: string;
+	/** Content was inserted mid-line and nothing has been written since, so its first line start gets no indentation. */
+	inline: boolean;
+};
+
+/** An empty output buffer. Captures start with one too, since what they capture is printed as a value. */
+export const emptyOut = (): Out => ({ s: "", indent: "", inline: false });
 
 /** A compiled statement. Returns a promise only when it had to wait for async data. */
 export type Stmt = (run: Run, scope: Scope, out: Out) => void | Promise<void>;

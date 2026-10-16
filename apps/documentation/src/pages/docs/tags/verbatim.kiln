@@ -1,9 +1,9 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p><code>verbatim</code> outputs its content as plain text, without running any Kiln syntax inside it.</p>
+	<p><code>verbatim</code> outputs its content as plain text, without running any Kiln syntax inside it.</p>
 
-{{ "{% verbatim %}\n<p>Write {{ name }} to output a variable.</p>\n{% endverbatim %}"|example }}
+	{{ "{% verbatim %}\n<p>Write {{ name }} to output a variable.</p>\n{% endverbatim %}"|example }}
 
-<p>Use it to show Kiln code on a page, or to output syntax meant for a client-side framework that also uses <code>&#123;{ }}</code>.</p>
+	<p>Use it to show Kiln code on a page, or to output syntax meant for a client-side framework that also uses <code>&#123;{ }}</code>.</p>
 {% endblock %}

@@ -573,7 +573,7 @@ const normaliseText = (value: string) =>
 		.replace(/\n{2,}/g, "\n")
 		.replace(/^\n|\n$/g, "");
 
-/** A copy of a syntax tree without positions, with text normalised and text left empty by that removed. */
+/** A copy of a syntax tree without positions or layout, with text normalised and text left empty by that removed. */
 const normaliseTree = (value: unknown): unknown => {
 	if (Array.isArray(value)) {
 		return value
@@ -591,7 +591,13 @@ const normaliseTree = (value: unknown): unknown => {
 	if (typeof value !== "object" || value === null) return value;
 	const copy: Record<string, unknown> = {};
 	for (const [key, item] of Object.entries(value)) {
-		if (key === "span" || key === "nameSpan") continue;
+		if (
+			key === "span" ||
+			key === "nameSpan" ||
+			key === "lines" ||
+			key === "indent"
+		)
+			continue;
 		copy[key] =
 			key === "value" && (value as { type?: unknown }).type === "Text"
 				? normaliseText(item as string)

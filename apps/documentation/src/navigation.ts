@@ -242,14 +242,20 @@ export const navigation = [
 	},
 ] satisfies NavSection[];
 
+/** `/docs/tags/for/` is published as Markdown at `/docs/tags/for.md`. */
+export const markdownPath = (url: string) => `${url.replace(/\/$/, "")}.md`;
+
+/** The landing page. Its description is the site's summary, used in `llms.txt` too. */
+export const home: NavItem = {
+	title: "Kiln",
+	url: "/",
+	description:
+		"A fast, safe template language for building websites. Familiar syntax, async data, and it runs on Node and Cloudflare Workers.",
+};
+
 /** Pages outside the docs sidebar. */
 const standalone: Record<string, NavItem> = {
-	"/": {
-		title: "Kiln",
-		url: "/",
-		description:
-			"A fast, safe template language for building websites. Familiar syntax, async data, and it runs on Node and Cloudflare Workers.",
-	},
+	"/": home,
 	"/404.html": {
 		title: "Page not found",
 		url: "/404.html",
@@ -261,13 +267,18 @@ const items = navigation.flatMap((section) =>
 	section.items.map((item) => ({ ...item, section: section.title })),
 );
 
-/** The variables each page renders with: its own details and the pages before and after it. */
-export const pageContext = (url: string) => {
+/**
+ * The variables each page renders with: its own details, the pages before and after it,
+ * and `source`, the page's template path inside `src`, for "Edit this page" links.
+ */
+export const pageContext = (url: string, template: string) => {
 	const index = items.findIndex((item) => item.url === url);
 	const page = items[index] ?? standalone[url];
 	if (!page) throw new Error(`${url} needs an entry in src/navigation.ts`);
 	return {
 		page,
+		source: template,
+		markdown: index >= 0 ? markdownPath(url) : null,
 		previous: index > 0 ? items[index - 1] : null,
 		next: index >= 0 ? (items[index + 1] ?? null) : null,
 	};

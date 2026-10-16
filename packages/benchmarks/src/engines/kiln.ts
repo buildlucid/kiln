@@ -7,7 +7,7 @@ import {
 	type KilnOptions,
 	memoryLoader,
 	type PrecompiledTemplate,
-} from "@lucidcms/kiln";
+} from "@lucidkiln/core";
 import { asyncFunctions } from "../data.ts";
 import type { Engine, Templates } from "../engine.ts";
 
@@ -50,7 +50,7 @@ const precompile = async (
 export const kiln: Engine = {
 	id: "kiln",
 	name: "Kiln",
-	package: "@lucidcms/kiln",
+	package: "@lucidkiln/core",
 	homepage: "https://github.com/buildlucid/kiln",
 	extension: ".kiln",
 	async: true,

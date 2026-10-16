@@ -1,11 +1,17 @@
 {% props headings %}
+
+{# client/toc.ts marks the section being read with aria-current. #}
 {% if headings %}
-<nav aria-labelledby="toc-title" class="text-[13px]">
-	<p id="toc-title" class="mb-3 font-medium text-fg">On this page</p>
-	<ul class="space-y-2 border-l border-line">
-		{% for heading in headings %}
-		<li><a href="#{{ heading.id }}" class="-ml-px block border-l border-transparent pl-3 text-muted transition-colors hover:border-muted hover:text-fg">{{ heading.text }}</a></li>
-		{% endfor %}
-	</ul>
-</nav>
+	<nav aria-labelledby="toc-title" class="text-[13px]" data-toc>
+		<p id="toc-title" class="mb-3 font-medium text-fg">On this page</p>
+		<ul class="space-y-2 border-l border-line">
+			{% for heading in headings %}
+				<li><a href="#{{ heading.id }}" class="toc-link -ml-px block border-l border-transparent pl-3 text-muted transition-colors hover:border-muted hover:text-fg">{{ heading.text }}</a></li>
+			{% endfor %}
+		</ul>
+		<a href="#content" class="mt-6 inline-flex items-center gap-1.5 text-muted transition-colors hover:text-fg">
+			<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+			Back to top
+		</a>
+	</nav>
 {% endif %}

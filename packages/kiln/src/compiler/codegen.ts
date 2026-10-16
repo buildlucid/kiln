@@ -121,6 +121,10 @@ const HELPERS = [
 	"aborted",
 	"write",
 	"drive",
+	"startPlace",
+	"endPlace",
+	"indentText",
+	"indentedText",
 	"truthy",
 	"isEmpty",
 	"equals",
@@ -585,6 +589,7 @@ class Generator {
 			"const maxSteps = state.maxSteps;",
 			"let steps = state.steps;",
 			"const signal = state.signal;",
+			"const ind = out.indent;",
 			'let s = "";',
 			`let ${["q", ...declared].join(", ")};`,
 		];
@@ -741,7 +746,7 @@ class Generator {
 	#statement(statement: Statement, context: Context): string[] {
 		switch (statement.type) {
 			case "Text":
-				return [`s += ${JSON.stringify(statement.value)};`];
+				return [this.#text(statement)];
 			case "Output":
 				return this.#output(statement.expression, statement.span, context);
 			case "If":
@@ -768,6 +773,34 @@ class Generator {
 			default:
 				return unsupported();
 		}
+	}
+
+	/** Text, with its lines indented to where it is inserted. See `indentText`. */
+	#text(statement: Extract<Statement, { type: "Text" }>): string {
+		const text = JSON.stringify(statement.value);
+		if (!statement.lines) return `s += ${text};`;
+		const lines = JSON.stringify(statement.lines);
+		const entry = this.#constant(
+			`text:${statement.span.start}:${statement.span.end}`,
+			"T",
+			`indentedText(${text}, ${lines})`,
+		);
+		// The text indented last time is read here, so the usual case makes no call.
+		return `s += ind === "" ? ${text} : ${entry}.indent === ind && !out.inline ? ${entry}.indented : indentText(${entry}, ind, s === "" && out.inline);`;
+	}
+
+	/**
+	 * Inserts content at the indentation of the tag that inserts it, with `startPlace` and `endPlace`. Tags at the start
+	 * of a line need nothing. Saved values go in temporaries rather than a closure, so the function's locals stay fast.
+	 */
+	#place(at: string | undefined, call: string): string {
+		if (at === "") return call;
+		const [saved, inline] = [this.#temp(), this.#temp()];
+		return `(${saved} = out.indent, ${inline} = out.inline, startPlace(out, ${this.#at(at)}), endPlace(out, ${saved}, ${inline}, ${call}))`;
+	}
+
+	#at(at: string | undefined): string {
+		return at === undefined ? "undefined" : JSON.stringify(at);
 	}
 
 	/** Statements inside another, such as a loop's body. */
@@ -1282,7 +1315,10 @@ class Generator {
 			...variables.lines,
 			...this.#wait(
 				span,
-				variables.embed(span, target.name, "null", statement.ignoreMissing),
+				this.#place(
+					statement.indent,
+					variables.embed(span, target.name, "null", statement.ignoreMissing),
+				),
 				context.top,
 			),
 		];
@@ -1401,7 +1437,10 @@ class Generator {
 			),
 			...this.#wait(
 				span,
-				variables.embed(span, target.name, slots, false),
+				this.#place(
+					statement.indent,
+					variables.embed(span, target.name, slots, false),
+				),
 				context.top,
 			),
 		];
@@ -1414,14 +1453,34 @@ class Generator {
 	): string[] {
 		const span = this.#span(statement.span);
 		const fill = this.#temp();
+		const at = statement.indent;
+		let fallback = this.#body(statement.body, context);
+		if (at !== "" && !statement.body.every(isBlank)) {
+			// The fallback's text reads a new `ind`, inside a block of its own.
+			const [saved, inline] = [this.#temp(), this.#temp()];
+			fallback = [
+				`${saved} = out.indent;`,
+				`${inline} = out.inline;`,
+				`startPlace(out, ${this.#at(at)});`,
+				"{",
+				...indent(["const ind = out.indent;", ...fallback]),
+				"}",
+				`out.indent = ${saved};`,
+				`if (out.inline) out.inline = ${inline};`,
+			];
+		}
 		return [
 			`${fill} = run.slots === null ? undefined : run.slots.get(${JSON.stringify(statement.name)});`,
 			`if (${fill} !== undefined) {`,
 			...indent(
-				this.#wait(span, `fillSlot(run, ${span}, ${fill}, out)`, context.top),
+				this.#wait(
+					span,
+					this.#place(at, `fillSlot(run, ${span}, ${fill}, out)`),
+					context.top,
+				),
 			),
 			"} else {",
-			...indent(this.#body(statement.body, context)),
+			...indent(fallback),
 			"}",
 		];
 	}
@@ -1439,7 +1498,10 @@ class Generator {
 		const span = this.#span(statement.span);
 		return this.#wait(
 			span,
-			`placeBlock(run, ${span}, ${JSON.stringify(statement.name)}, ${context.scope}, out)`,
+			this.#place(
+				statement.indent,
+				`placeBlock(run, ${span}, ${JSON.stringify(statement.name)}, ${context.scope}, out)`,
+			),
 			context.top,
 		);
 	}

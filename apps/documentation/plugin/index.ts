@@ -1,11 +1,12 @@
 import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { createKiln, type Kiln } from "@lucidcms/kiln";
-import { fileLoader } from "@lucidcms/kiln/node";
+import { extname, join, resolve } from "node:path";
+import { createKiln, type Kiln } from "@lucidkiln/core";
+import { fileLoader } from "@lucidkiln/core/node";
 import type { Plugin } from "vite-plus";
 import { createCodeFilters } from "./code.js";
 import { anchorHeadings, internalLinks, wrapTables } from "./html.js";
 import { findPages, matchPage, type Page } from "./pages.js";
+import { searchFiles, writeSearchIndex } from "./search.js";
 
 export type { Page } from "./pages.js";
 
@@ -18,6 +19,16 @@ export type KilnPagesOptions = {
 	globals?: Record<string, unknown>;
 	/** Variables for one page's render. */
 	context?: (page: Page) => Record<string, unknown>;
+	/**
+	 * Extra files to publish, such as `sitemap.xml`, by path. Runs once every page has rendered.
+	 * `renderBlock` renders one block of a page, such as its content without the layout.
+	 */
+	files?: (site: {
+		pages: Page[];
+		renderBlock: (page: Page, block: string) => Promise<string>;
+	}) => Promise<Record<string, string>>;
+	/** Index the site with Pagefind and publish the search bundle at `/pagefind/`. In dev the index is built on request. */
+	search?: boolean;
 };
 
 /** Pages put this comment where the "On this page" list goes. */
@@ -25,6 +36,15 @@ const TOC = "<!-- toc -->";
 
 /** What a render found, for checking links once every page has rendered. */
 type Rendered = { ids: Set<string>; links: string[] };
+
+const contentTypes: Record<string, string> = {
+	".js": "text/javascript",
+	".json": "application/json",
+	".css": "text/css",
+	".txt": "text/plain; charset=utf-8",
+	".md": "text/markdown; charset=utf-8",
+	".xml": "application/xml",
+};
 
 /**
  * Renders `.kiln` pages to static HTML.
@@ -38,6 +58,8 @@ export const kilnPages = (options: KilnPagesOptions = {}): Plugin => {
 	let root = process.cwd();
 	let templatesRoot = "";
 	let publicDir = "";
+	let outDir = "";
+	let isBuild = false;
 	let pages: Page[] = [];
 	let kiln: Kiln | undefined;
 	const rendered = new Map<Page, Rendered>();
@@ -73,6 +95,44 @@ export const kilnPages = (options: KilnPagesOptions = {}): Plugin => {
 
 	const pageFile = (page: Page) => resolve(root, page.file);
 
+	const extraFiles = async (): Promise<Record<string, string>> =>
+		options.files
+			? options.files({
+					pages,
+					renderBlock: async (page, block) =>
+						(await environment()).renderBlock(
+							page.template,
+							block,
+							options.context?.(page),
+						),
+				})
+			: {};
+
+	/** Build only: the extra files, made once every page has rendered. */
+	let built: Record<string, string> = {};
+
+	/** Dev only: files built from every page, cached until a template changes. */
+	let devFiles: Promise<Map<string, string | Uint8Array>> | undefined;
+	const buildDevFiles = async () => {
+		const files = new Map<string, string | Uint8Array>(
+			Object.entries(await extraFiles()).map(([path, content]) => [
+				`/${path}`,
+				content,
+			]),
+		);
+		if (options.search) {
+			const html = await Promise.all(
+				pages.map(async (page) => ({
+					url: page.url,
+					html: await renderPage(page),
+				})),
+			);
+			for (const [path, content] of await searchFiles(html))
+				files.set(`/pagefind/${path}`, content);
+		}
+		return files;
+	};
+
 	return {
 		name: "kiln-pages",
 
@@ -94,6 +154,8 @@ export const kilnPages = (options: KilnPagesOptions = {}): Plugin => {
 
 		configResolved(config) {
 			publicDir = config.publicDir;
+			outDir = resolve(config.root, config.build.outDir);
+			isBuild = config.command === "build";
 		},
 
 		resolveId(id) {
@@ -105,15 +167,20 @@ export const kilnPages = (options: KilnPagesOptions = {}): Plugin => {
 			return page ? renderPage(page) : null;
 		},
 
-		buildEnd(error) {
+		async buildEnd(error) {
 			if (error) return;
+			built = await extraFiles();
 			const problems: string[] = [];
 			for (const [page, { ids, links }] of rendered) {
 				for (const link of links) {
 					const [path = "", fragment] = link.split("#");
 					const target = path ? matchPage(pages, path) : page;
 					const targetIds = target && rendered.get(target)?.ids;
-					if (!target && !existsSync(join(publicDir, path)))
+					if (
+						!target &&
+						!(path.slice(1) in built) &&
+						!existsSync(join(publicDir, path))
+					)
 						problems.push(
 							`${page.template} links to ${link}, which doesn't exist`,
 						);
@@ -130,17 +197,51 @@ export const kilnPages = (options: KilnPagesOptions = {}): Plugin => {
 			if (problems.length) this.error(`Broken links:\n${problems.join("\n")}`);
 		},
 
+		generateBundle() {
+			for (const [fileName, source] of Object.entries(built))
+				this.emitFile({ type: "asset", fileName, source });
+		},
+
+		async closeBundle(error) {
+			if (!error && options.search && isBuild) await writeSearchIndex(outDir);
+		},
+
 		configureServer(server) {
 			server.watcher.on("all", async (event, file) => {
 				if (!file.endsWith(".kiln")) return;
 				if (event === "add" || event === "unlink")
 					pages = await findPages(templatesRoot, pagesDir);
 				kiln?.invalidate();
+				devFiles = undefined;
 				server.ws.send({ type: "full-reload" });
 			});
 
 			server.middlewares.use(async (req, res, next) => {
 				const url = new URL(req.url ?? "/", "http://localhost");
+				if (
+					(options.files || options.search) &&
+					(url.pathname.startsWith("/pagefind/") ||
+						url.pathname.endsWith(".txt") ||
+						url.pathname.endsWith(".md") ||
+						url.pathname.endsWith(".xml"))
+				) {
+					devFiles ??= buildDevFiles();
+					let content: string | Uint8Array | undefined;
+					try {
+						content = (await devFiles).get(url.pathname);
+					} catch (error) {
+						devFiles = undefined;
+						return next(error);
+					}
+					if (content === undefined) return next();
+					res.setHeader(
+						"Content-Type",
+						contentTypes[extname(url.pathname)] ?? "application/octet-stream",
+					);
+					res.end(content);
+					return;
+				}
+
 				const isPageRequest =
 					!url.pathname.startsWith("/@") &&
 					(url.pathname.endsWith("/") ||

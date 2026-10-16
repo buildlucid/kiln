@@ -1,0 +1,9 @@
+{
+	"root": "src",
+	"strict": true,
+	"functions": [],
+	"filters": ["example", "highlight"],
+	"tests": [],
+	"globals": ["benchmarks", "navigation", "site"],
+	"types": []
+}

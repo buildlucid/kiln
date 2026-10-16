@@ -1,69 +1,69 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p><code>for</code> renders its content once for each item in a collection. An <code>else</code> section renders when there are no items.</p>
+	<p><code>for</code> renders its content once for each item in a collection. An <code>else</code> section renders when there are no items.</p>
 
-{% apply example(context: { posts: [{ title: "Hello" }, { title: "Second post" }] }) %}
-{% verbatim %}
+	{% apply example(context: { posts: [{ title: "Hello" }, { title: "Second post" }] }) %}
+		{% verbatim %}
 {% for post in posts %}
 	<h2>{{ loop.index }}. {{ post.title }}</h2>
 {% else %}
 	<p>No posts yet.</p>
 {% endfor %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p><code>for</code> works with arrays, hashes, sets, maps and other iterables. Looping over null is the same as looping over an empty array.</p>
+	<p><code>for</code> works with arrays, hashes, sets, maps and other iterables. Looping over null is the same as looping over an empty array.</p>
 
-<h2>Keys and values</h2>
+	<h2>Keys and values</h2>
 
-<p>Give two names to get each key and value. For arrays, the key is the index, starting at 0.</p>
+	<p>Give two names to get each key and value. For arrays, the key is the index, starting at 0.</p>
 
-{% apply example(context: { settings: { theme: "dark", lang: "en" } }) %}
-{% verbatim %}
+	{% apply example(context: { settings: { theme: "dark", lang: "en" } }) %}
+		{% verbatim %}
 {% for key, value in settings %}
 	{{ key }}: {{ value }}
 {% endfor %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>The loop variable</h2>
+	<h2>The loop variable</h2>
 
-<p>Inside a loop, <code>loop</code> tells you where you are:</p>
+	<p>Inside a loop, <code>loop</code> tells you where you are:</p>
 
-<table>
-	<thead><tr><th>Property</th><th>Value</th></tr></thead>
-	<tbody>
-		<tr><td><code>loop.index</code></td><td>Position, starting at 1</td></tr>
-		<tr><td><code>loop.index0</code></td><td>Position, starting at 0</td></tr>
-		<tr><td><code>loop.revIndex</code></td><td>Items left, ending at 1</td></tr>
-		<tr><td><code>loop.revIndex0</code></td><td>Items left, ending at 0</td></tr>
-		<tr><td><code>loop.first</code></td><td><code>true</code> on the first item</td></tr>
-		<tr><td><code>loop.last</code></td><td><code>true</code> on the last item</td></tr>
-		<tr><td><code>loop.length</code></td><td>Total number of items</td></tr>
-	</tbody>
-</table>
+	<table>
+		<thead><tr><th>Property</th><th>Value</th></tr></thead>
+		<tbody>
+			<tr><td><code>loop.index</code></td><td>Position, starting at 1</td></tr>
+			<tr><td><code>loop.index0</code></td><td>Position, starting at 0</td></tr>
+			<tr><td><code>loop.revIndex</code></td><td>Items left, ending at 1</td></tr>
+			<tr><td><code>loop.revIndex0</code></td><td>Items left, ending at 0</td></tr>
+			<tr><td><code>loop.first</code></td><td><code>true</code> on the first item</td></tr>
+			<tr><td><code>loop.last</code></td><td><code>true</code> on the last item</td></tr>
+			<tr><td><code>loop.length</code></td><td>Total number of items</td></tr>
+		</tbody>
+	</table>
 
-{% apply example(context: { tags: ["fast", "safe", "async"] }) %}
-{% verbatim %}
+	{% apply example(context: { tags: ["fast", "safe", "async"] }) %}
+		{% verbatim %}
 {% for tag in tags %}{{ tag }}{{ loop.last ? "." : ", " }}{% endfor %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Nested loops</h2>
+	<h2>Nested loops</h2>
 
-<p>In a nested loop, <code>loop</code> refers to the inner loop. To use the outer one, save it first:</p>
+	<p>In a nested loop, <code>loop</code> refers to the inner loop. To use the outer one, save it first:</p>
 
-{% apply highlight("kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln") %}
+		{% verbatim %}
 {% for row in rows %}
 	{% set outer = loop %}
 	{% for cell in row %}
 		{{ outer.index }}.{{ loop.index }}
 	{% endfor %}
 {% endfor %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>Each pass through the loop has its own scope. To build up a value across passes, set the variable before the loop. See <a href="/docs/language/variables/#assigning-variables">Assigning variables</a>.</p>
+	<p>Each pass through the loop has its own scope. To build up a value across passes, set the variable before the loop. See <a href="/docs/language/variables/#assigning-variables">Assigning variables</a>.</p>
 {% endblock %}

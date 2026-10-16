@@ -1,15 +1,15 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p>Kiln escapes values from your code by default. When a function or filter returns HTML you trust, mark it as safe. When you pass class instances to templates, choose which members templates can use.</p>
+	<p>Kiln escapes values from your code by default. When a function or filter returns HTML you trust, mark it as safe. When you pass class instances to templates, choose which members templates can use.</p>
 
-<h2>Returning safe HTML</h2>
+	<h2>Returning safe HTML</h2>
 
-<p>Wrap a string in <code>safe()</code> to output it without escaping:</p>
+	<p>Wrap a string in <code>safe()</code> to output it without escaping:</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
-import { createKiln, safe } from "@lucidcms/kiln";
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { createKiln, safe } from "@lucidkiln/core";
 
 const kiln = createKiln({
 	loader,
@@ -17,26 +17,26 @@ const kiln = createKiln({
 		markdown: (text: string) => safe(renderMarkdown(text)),
 	},
 });
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-{% apply highlight("kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln") %}
+		{% verbatim %}
 <article>{{ post.body|markdown }}</article>
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>Only mark output safe when your code produced it or cleaned it. The second argument sets the strategy it is safe for, such as <code>safe(value, "js")</code>. It defaults to <code>"html"</code>.</p>
+	<p>Only mark output safe when your code produced it or cleaned it. The second argument sets the strategy it is safe for, such as <code>safe(value, "js")</code>. It defaults to <code>"html"</code>.</p>
 
-<p><code>isSafe(value)</code> checks whether a value is safe markup. Safe values are instances of the <code>Markup</code> class, and convert to strings as normal.</p>
+	<p><code>isSafe(value)</code> checks whether a value is safe markup. Safe values are instances of the <code>Markup</code> class, and convert to strings as normal.</p>
 
-<h2>Class instances</h2>
+	<h2>Class instances</h2>
 
-<p>Templates can read plain objects and arrays freely. A class instance exposes nothing until its class opts in, so templates can't reach methods or internals you didn't intend. List the members templates may use with the <code>expose</code> symbol:</p>
+	<p>Templates can read plain objects and arrays freely. A class instance exposes nothing until its class opts in, so templates can't reach methods or internals you didn't intend. List the members templates may use with the <code>expose</code> symbol:</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
-import { expose } from "@lucidcms/kiln";
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { expose } from "@lucidkiln/core";
 
 class Post {
 	static [expose] = ["title", "url", "excerpt"] as const;
@@ -55,30 +55,30 @@ class Post {
 		return this.data.body.slice(0, length);
 	}
 }
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-{% apply highlight("kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln") %}
+		{% verbatim %}
 <a href="{{ post.url }}">{{ post.title }}</a>
 <p>{{ post.excerpt(120) }}</p>
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<ul>
-	<li>Listed getters and fields can be read. Listed methods can be called.</li>
-	<li><code>expose</code> is read from the class and its parent classes. In a base class meant to be extended, type the list as <code>readonly string[]</code> rather than <code>as const</code>.</li>
-	<li>List <code>toString</code> to let templates print the object.</li>
-	<li>Dates, sets and maps work without opting in.</li>
-</ul>
+	<ul>
+		<li>Listed getters and fields can be read. Listed methods can be called.</li>
+		<li><code>expose</code> is read from the class and its parent classes. In a base class meant to be extended, type the list as <code>readonly string[]</code> rather than <code>as const</code>.</li>
+		<li>List <code>toString</code> to let templates print the object.</li>
+		<li>Dates, sets and maps work without opting in.</li>
+	</ul>
 
-<h2>Dynamic fields</h2>
+	<h2>Dynamic fields</h2>
 
-<p>For fields you don't know in advance, such as custom fields from a CMS, add a <code>lookup</code> method. It answers any name not in <code>expose</code>. Return <code>undefined</code> for a missing field.</p>
+	<p>For fields you don't know in advance, such as custom fields from a CMS, add a <code>lookup</code> method. It answers any name not in <code>expose</code>. Return <code>undefined</code> for a missing field.</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
-import { expose, lookup } from "@lucidcms/kiln";
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { expose, lookup } from "@lucidkiln/core";
 
 class Post {
 	static [expose] = ["title"] as const;
@@ -87,8 +87,8 @@ class Post {
 		return this.fields.get(name);
 	}
 }
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>Names such as <code>constructor</code>, <code>prototype</code> and <code>__proto__</code> stay blocked whatever <code>expose</code> and <code>lookup</code> say.</p>
+	<p>Names such as <code>constructor</code>, <code>prototype</code> and <code>__proto__</code> stay blocked whatever <code>expose</code> and <code>lookup</code> say.</p>
 {% endblock %}

@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
-import type { AnalysedProp, Analysis, PropType } from "@lucidcms/kiln";
+import type { AnalysedProp, Analysis, PropType } from "@lucidkiln/core";
 import {
 	type CompletionItem,
 	CompletionItemKind,

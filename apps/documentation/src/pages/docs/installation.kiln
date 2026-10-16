@@ -1,38 +1,38 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p>Install Kiln from npm:</p>
+	<p>Install Kiln from npm:</p>
 
-{% apply highlight("sh") %}
-{% verbatim %}
-npm install @lucidcms/kiln
-{% endverbatim %}
-{% endapply %}
+	{% apply highlight("sh") %}
+		{% verbatim %}
+npm install @lucidkiln/core
+		{% endverbatim %}
+	{% endapply %}
 
-<p>Kiln needs Node 24 or later, or Cloudflare Workers. It is an ES module and includes its own TypeScript types. Template files use the <code>.kiln</code> extension.</p>
+	<p>Kiln needs Node 24 or later, or Cloudflare Workers. It is an ES module and includes its own TypeScript types. Template files use the <code>.kiln</code> extension.</p>
 
-<h2>Node</h2>
+	<h2>Node</h2>
 
-<p>On Node, use <code>fileLoader</code> to read templates from a folder. It comes from a separate entry point, <code>@lucidcms/kiln/node</code>, so it never ends up in a Workers bundle.</p>
+	<p>On Node, use <code>fileLoader</code> to read templates from a folder. It comes from a separate entry point, <code>@lucidkiln/core/node</code>, so it never ends up in a Workers bundle.</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
-import { createKiln } from "@lucidcms/kiln";
-import { fileLoader } from "@lucidcms/kiln/node";
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { createKiln } from "@lucidkiln/core";
+import { fileLoader } from "@lucidkiln/core/node";
 
 const kiln = createKiln({
 	loader: fileLoader({ root: "templates" }),
 });
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Cloudflare Workers</h2>
+	<h2>Cloudflare Workers</h2>
 
-<p>Workers can't read files, so pass the templates in as strings with <code>memoryLoader</code>. How you collect them depends on your build. Most bundlers can import a file as text.</p>
+	<p>Workers can't read files, so pass the templates in as strings with <code>memoryLoader</code>. How you collect them depends on your build. Most bundlers can import a file as text.</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
-import { createKiln, memoryLoader } from "@lucidcms/kiln";
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { createKiln, memoryLoader } from "@lucidkiln/core";
 import layout from "./templates/layouts/base.kiln?raw";
 import home from "./templates/pages/home.kiln?raw";
 
@@ -42,8 +42,8 @@ const kiln = createKiln({
 		"pages/home.kiln": home,
 	}),
 });
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>You can also write your own loader to fetch templates from a database or key-value store. See <a href="/docs/api/loaders/">Loaders</a>.</p>
+	<p>You can also write your own loader to fetch templates from a database or key-value store. See <a href="/docs/api/loaders/">Loaders</a>.</p>
 {% endblock %}

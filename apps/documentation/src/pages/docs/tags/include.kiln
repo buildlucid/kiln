@@ -1,47 +1,47 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p><code>include</code> renders another template in place. Pass it variables with <code>with</code>.</p>
+	<p><code>include</code> renders another template in place. Pass it variables with <code>with</code>.</p>
 
-{% set header %}
-{% verbatim %}
+	{% set header %}
+		{% verbatim %}
 <header>
 	<a href="/">{{ site.name }}</a>
 	<span>{{ title }}</span>
 </header>
-{% endverbatim %}
-{% endset %}
-{% apply example(templates: { "partials/header.kiln": header }, context: { page: { title: "Pricing" } }) %}
-{% verbatim %}
+		{% endverbatim %}
+	{% endset %}
+	{% apply example(templates: { "partials/header.kiln": header }, context: { page: { title: "Pricing" } }) %}
+		{% verbatim %}
 {% include "partials/header" with { title: page.title } %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Isolated by default</h2>
+	<h2>Isolated by default</h2>
 
-<p>An included template only sees the variables you pass with <code>with</code>, plus globals. It can't see the caller's variables. This makes each template's inputs clear, and means it renders the same way wherever you use it.</p>
+	<p>An included template only sees the variables you pass with <code>with</code>, plus globals. It can't see the caller's variables. This makes each template's inputs clear, and means it renders the same way wherever you use it.</p>
 
-<p>Use the hash shorthand to pass variables that keep their names: <code>with { page, nav }</code>. Declare what the template expects with <a href="/docs/tags/props/"><code>props</code></a>.</p>
+	<p>Use the hash shorthand to pass variables that keep their names: <code>with { page, nav }</code>. Declare what the template expects with <a href="/docs/tags/props/"><code>props</code></a>.</p>
 
-<h2>Dynamic names</h2>
+	<h2>Dynamic names</h2>
 
-<p>The name can be any expression. This suits content made of sections, where each section type has its own template:</p>
+	<p>The name can be any expression. This suits content made of sections, where each section type has its own template:</p>
 
-{% apply highlight("kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln") %}
+		{% verbatim %}
 {% for section in page.sections %}
 	{% include "sections/" ~ section.type with { section } %}
 {% endfor %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Missing templates</h2>
+	<h2>Missing templates</h2>
 
-<p>Add <code>ignore missing</code> to render nothing when the template doesn't exist:</p>
+	<p>Add <code>ignore missing</code> to render nothing when the template doesn't exist:</p>
 
-{% apply highlight("kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln") %}
+		{% verbatim %}
 {% include "sections/" ~ section.type with { section } ignore missing %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 {% endblock %}

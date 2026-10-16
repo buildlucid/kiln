@@ -1,55 +1,55 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p>Kiln is a template language for building websites on the server. You write HTML with a small set of tags and expressions, and Kiln turns it into a page.</p>
+	<p>Kiln is a template language for building websites on the server. You write HTML with a small set of tags and expressions, and Kiln turns it into a page.</p>
 
-{% apply example(context: { site: { name: "Acme" }, posts: [{ title: "Hello, world", url: "/blog/hello/" }, { title: "Our first year", url: "/blog/year-one/" }] }) %}
-{% verbatim %}
+	{% apply example(context: { site: { name: "Acme" }, posts: [{ title: "Hello, world", url: "/blog/hello/" }, { title: "Our first year", url: "/blog/year-one/" }] }) %}
+		{% verbatim %}
 <h1>{{ site.name|upper }}</h1>
 <ul>
 	{% for post in posts %}
 		<li><a href="{{ post.url }}">{{ post.title }}</a></li>
 	{% endfor %}
 </ul>
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>If you have used Twig, Jinja or Liquid, this will look familiar. Kiln keeps the syntax people and AI models already know, and changes the parts that tend to cause bugs.</p>
+	<p>If you have used Twig, Jinja or Liquid, this will look familiar. Kiln keeps the syntax people and AI models already know, and changes the parts that tend to cause bugs.</p>
 
-<h2>What Kiln is good at</h2>
+	<h2>What Kiln is good at</h2>
 
-<ul>
-	<li><strong>Server-rendered sites.</strong> Layouts, components with typed props, includes and macros cover what a website needs.</li>
-	<li><strong>Loading data from templates.</strong> Templates can call async functions, such as <code>document("page")</code>. Kiln only waits when a call returns a promise.</li>
-	<li><strong>Running anywhere.</strong> The core has no dependencies and never uses <code>eval</code>, so it runs on Node and Cloudflare Workers.</li>
-	<li><strong>Templates you didn't write.</strong> Templates can only read data you pass them. Output is escaped by default, and limits stop templates that run too long.</li>
-	<li><strong>Clear errors.</strong> Strict mode catches typos, and every error shows the template, line and column.</li>
-</ul>
+	<ul>
+		<li><strong>Server-rendered sites.</strong> Layouts, components with typed props, includes and macros cover what a website needs.</li>
+		<li><strong>Loading data from templates.</strong> Templates can call async functions, such as <code>document("page")</code>. Kiln only waits when a call returns a promise.</li>
+		<li><strong>Running anywhere.</strong> The core has no dependencies and never uses <code>eval</code>, so it runs on Node and Cloudflare Workers.</li>
+		<li><strong>Templates you didn't write.</strong> Templates can only read data you pass them. Output is escaped by default, and limits stop templates that run too long.</li>
+		<li><strong>Clear errors.</strong> Strict mode catches typos, and every error shows the template, line and column.</li>
+	</ul>
 
-<h2>How it works</h2>
+	<h2>How it works</h2>
 
-<p>You create an environment once, with a loader that finds your templates and any functions or filters you want to add. Then you render templates by name.</p>
+	<p>You create an environment once, with a loader that finds your templates and any functions or filters you want to add. Then you render templates by name.</p>
 
-{% apply highlight("ts", title: "server.ts") %}
-{% verbatim %}
-import { createKiln } from "@lucidcms/kiln";
-import { fileLoader } from "@lucidcms/kiln/node";
+	{% apply highlight("ts", title: "server.ts") %}
+		{% verbatim %}
+import { createKiln } from "@lucidkiln/core";
+import { fileLoader } from "@lucidkiln/core/node";
 
 const kiln = createKiln({
 	loader: fileLoader({ root: "templates" }),
 });
 
 const html = await kiln.render("pages/home", { title: "Welcome" });
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>Kiln compiles each template once and keeps it in memory, so later renders are fast.</p>
+	<p>Kiln compiles each template once and keeps it in memory, so later renders are fast.</p>
 
-<h2>Where to go next</h2>
+	<h2>Where to go next</h2>
 
-<ul>
-	<li><a href="/docs/installation/">Install Kiln</a> in a Node or Workers project.</li>
-	<li>Follow the <a href="/docs/quick-start/">quick start</a> to render a page with a layout.</li>
-	<li>Read <a href="/docs/coming-from-twig/">Coming from Twig</a> if you know Twig already.</li>
-</ul>
+	<ul>
+		<li><a href="/docs/installation/">Install Kiln</a> in a Node or Workers project.</li>
+		<li>Follow the <a href="/docs/quick-start/">quick start</a> to render a page with a layout.</li>
+		<li>Read <a href="/docs/coming-from-twig/">Coming from Twig</a> if you know Twig already.</li>
+	</ul>
 {% endblock %}

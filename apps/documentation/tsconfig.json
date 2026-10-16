@@ -6,7 +6,7 @@
 		"moduleResolution": "NodeNext",
 		"resolveJsonModule": true,
 		"target": "ESNext",
-		"lib": ["ESNext"],
+		"lib": ["ESNext", "DOM", "DOM.Iterable"],
 		"types": ["node"],
 		"strict": true,
 		"noUncheckedIndexedAccess": true,

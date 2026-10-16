@@ -1,40 +1,41 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p>Kiln has a language server that gives any editor that supports the Language Server Protocol errors as you type, formatting, completions and more. There is a ready-made extension for Zed.</p>
+	<p>Kiln has a language server that gives any editor that supports the Language Server Protocol errors as you type, formatting, completions and more. There is a ready-made extension for Zed.</p>
 
-<h2>Zed</h2>
+	<h2>Zed</h2>
 
-<p>Install the <strong>Kiln</strong> extension from the extensions page (<code>zed: extensions</code>). It adds:</p>
+	<p>Install the <strong>Kiln</strong> extension from the extensions page (<code>zed: extensions</code>). It adds:</p>
 
-<ul>
-	<li>Syntax highlighting for Kiln and the HTML around it, with JavaScript in <code>&lt;script&gt;</code> and CSS in <code>&lt;style&gt;</code>.</li>
-	<li>Comment toggling with <code>&#123;# #}</code>, bracket matching, and auto-closing for <code>&#123;{</code> and <code>&#123;%</code>.</li>
-	<li>Indenting as you type, and an outline of blocks, macros, components and slots.</li>
-	<li>Snippets for each block tag, such as <code>for</code> and <code>component</code>.</li>
-	<li>The language server, which Zed installs and starts for you. It needs Node, which Zed provides.</li>
-</ul>
+	<ul>
+		<li>Syntax highlighting for Kiln and the HTML around it, with JavaScript in <code>&lt;script&gt;</code> and CSS in <code>&lt;style&gt;</code>.</li>
+		<li>Comment toggling with <code>&#123;# #}</code>, bracket matching, and auto-closing for <code>&#123;{</code> and <code>&#123;%</code>.</li>
+		<li>Indenting as you type, and an outline of blocks, macros, components and slots.</li>
+		<li>Snippets for each block tag, such as <code>for</code> and <code>component</code>.</li>
+		<li>The language server, which Zed installs and starts for you. It needs Node, which Zed provides.</li>
+	</ul>
 
-<p>Zed formats with the language server. To format when you save, add this to your settings:</p>
+	<p>Zed formats with the language server. To format when you save, add this to your settings. The <code>formatter</code> line matters if your settings pick a formatter for every language, such as Biome or Prettier, which can't format Kiln.</p>
 
-{% apply highlight("json") %}
-{% verbatim %}
+	{% apply highlight("json") %}
+		{% verbatim %}
 {
 	"languages": {
 		"Kiln": {
+			"formatter": "language_server",
 			"format_on_save": "on"
 		}
 	}
 }
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>Zed's tab settings decide whether the formatter indents with tabs or spaces. The extension defaults to tabs.</p>
+	<p>Zed's tab settings decide whether the formatter indents with tabs or spaces. The extension defaults to tabs.</p>
 
-<p>To use Tailwind CSS class completion in templates, add Kiln to the Tailwind language server's languages:</p>
+	<p>To use Tailwind CSS class completion in templates, add Kiln to the Tailwind language server's languages:</p>
 
-{% apply highlight("json") %}
-{% verbatim %}
+	{% apply highlight("json") %}
+		{% verbatim %}
 {
 	"languages": {
 		"Kiln": {
@@ -49,17 +50,17 @@
 		}
 	}
 }
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h3>Installing from source</h3>
+	<h3>Installing from source</h3>
 
-<p>To try a version that isn't published yet, clone the Kiln repository, then run <code>zed: install dev extension</code> and pick its <code>editors/zed</code> folder. Zed builds the extension itself. Building it needs Rust installed with <code>rustup</code>.</p>
+	<p>To try a version that isn't published yet, clone the Kiln repository, then run <code>zed: install dev extension</code> and pick its <code>editors/zed</code> folder. Zed builds the extension itself. Building it needs Rust installed with <code>rustup</code>.</p>
 
-<p>The extension uses the language server installed in your project's <code>node_modules</code> if there is one, and otherwise installs it from npm. To run a build of your own instead, point Zed at it:</p>
+	<p>The extension uses the language server from your project when your <code>package.json</code> lists <code>@lucidkiln/language-server</code>. Otherwise it uses one on your <code>PATH</code>, or installs it from npm. To run a build of your own instead, point Zed at it:</p>
 
-{% apply highlight("json") %}
-{% verbatim %}
+	{% apply highlight("json") %}
+		{% verbatim %}
 {
 	"lsp": {
 		"kiln": {
@@ -70,41 +71,41 @@
 		}
 	}
 }
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Other editors</h2>
+	<h2>Other editors</h2>
 
-<p>Install the language server from npm and point your editor at it. It talks over standard input and output.</p>
+	<p>Install the language server from npm and point your editor at it. It talks over standard input and output.</p>
 
-{% apply highlight("sh") %}
-{% verbatim %}
-npm install --save-dev @lucidcms/kiln-language-server
+	{% apply highlight("sh") %}
+		{% verbatim %}
+npm install --save-dev @lucidkiln/language-server
 npx kiln-language-server --stdio
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>Register it for files ending in <code>.kiln</code>. Kiln's syntax is close to Twig's, so a Twig highlighting grammar is a reasonable stand-in until your editor has a Kiln one.</p>
+	<p>Register it for files ending in <code>.kiln</code>. Kiln's syntax is close to Twig's, so a Twig highlighting grammar is a reasonable stand-in until your editor has a Kiln one.</p>
 
-<h2>What the language server does</h2>
+	<h2>What the language server does</h2>
 
-<ul>
-	<li><strong>Errors as you type.</strong> The same problems <a href="/docs/api/errors/#checking-templates"><code>check</code></a> reports, from syntax errors to props a component doesn't declare.</li>
-	<li><strong>Formatting.</strong> The whole file or a selection, using the <a href="/docs/tooling/formatting/">formatter</a>.</li>
-	<li><strong>Completions</strong> for tags, filters, functions, tests, variables in scope, <code>loop</code>'s properties, template names in <code>extends</code>, <code>include</code>, <code>component</code> and <code>import</code>, and the props of the component or template you're passing data to.</li>
-	<li><strong>Hover</strong> for filters, functions, tests and templates, including a template's props.</li>
-	<li><strong>Go to definition</strong> for template names, macros and blocks.</li>
-	<li><strong>Links</strong> on template names, and a list of the template's blocks, macros and slots for your editor's outline.</li>
-</ul>
+	<ul>
+		<li><strong>Errors as you type.</strong> The same problems <a href="/docs/api/errors/#checking-templates"><code>check</code></a> reports, from syntax errors to props a component doesn't declare.</li>
+		<li><strong>Formatting.</strong> The whole file or a selection, using the <a href="/docs/tooling/formatting/">formatter</a>.</li>
+		<li><strong>Completions</strong> for tags, filters, functions, tests, variables in scope, <code>loop</code>'s properties, template names in <code>extends</code>, <code>include</code>, <code>component</code> and <code>import</code>, and the props of the component or template you're passing data to.</li>
+		<li><strong>Hover</strong> for filters, functions, tests and templates, including a template's props.</li>
+		<li><strong>Go to definition</strong> for template names, macros and blocks.</li>
+		<li><strong>Links</strong> on template names, and a list of the template's blocks, macros and slots for your editor's outline.</li>
+	</ul>
 
-<p>The language server uses the version of Kiln installed in your project when there is one, so its errors match how your templates render.</p>
+	<p>The language server uses the version of Kiln installed in your project when there is one, so its errors match how your templates render.</p>
 
-<h2>Telling the editor about your project</h2>
+	<h2>Telling the editor about your project</h2>
 
-<p>The language server reads its settings from a <code>kiln.json</code> file. It uses the nearest one in the template's folder or any folder above it.</p>
+	<p>The language server reads its settings from a <code>kiln.json</code> file. It uses the nearest one in the template's folder or any folder above it.</p>
 
-{% apply highlight("json") %}
-{% verbatim %}
+	{% apply highlight("json") %}
+		{% verbatim %}
 {
 	"root": "src/templates",
 	"strict": true,
@@ -114,37 +115,37 @@ npx kiln-language-server --stdio
 	"globals": ["site"],
 	"types": ["Post"]
 }
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<table>
-	<thead><tr><th>Field</th><th>Description</th></tr></thead>
-	<tbody>
-		<tr><td><code>root</code></td><td>The folder template names are relative to, from the folder holding <code>kiln.json</code>. Default <code>"."</code>.</td></tr>
-		<tr><td><code>strict</code></td><td>Whether your environment uses <a href="/docs/language/strict-mode/">strict mode</a>. Default <code>true</code>.</td></tr>
-		<tr><td><code>functions</code>, <code>filters</code>, <code>tests</code></td><td>The names of the functions, filters and tests your project registers, on top of Kiln's own.</td></tr>
-		<tr><td><code>globals</code></td><td>The names of your globals.</td></tr>
-		<tr><td><code>types</code></td><td>The names of the prop types you register in the <code>types</code> option, such as <code>Post</code>.</td></tr>
-	</tbody>
-</table>
+	<table>
+		<thead><tr><th>Field</th><th>Description</th></tr></thead>
+		<tbody>
+			<tr><td><code>root</code></td><td>The folder template names are relative to, from the folder holding <code>kiln.json</code>. Default <code>"."</code>.</td></tr>
+			<tr><td><code>strict</code></td><td>Whether your environment uses <a href="/docs/language/strict-mode/">strict mode</a>. Default <code>true</code>.</td></tr>
+			<tr><td><code>functions</code>, <code>filters</code>, <code>tests</code></td><td>The names of the functions, filters and tests your project registers, on top of Kiln's own.</td></tr>
+			<tr><td><code>globals</code></td><td>The names of your globals.</td></tr>
+			<tr><td><code>types</code></td><td>The names of the prop types you register in the <code>types</code> option, such as <code>Post</code>.</td></tr>
+		</tbody>
+	</table>
 
-<p>The editor never runs your code. It only needs the names. Without a <code>kiln.json</code>, the language server can't tell which names your project adds or where template names start, so it reports syntax errors only.</p>
+	<p>The editor never runs your code. It only needs the names. Without a <code>kiln.json</code>, the language server can't tell which names your project adds or where template names start, so it reports syntax errors only.</p>
 
-<h3>Generating kiln.json</h3>
+	<h3>Generating kiln.json</h3>
 
-<p>Rather than keep the file up to date by hand, write it from your environment with <code>generateManifest</code>, next to <a href="/docs/api/types/"><code>generateTypes</code></a>. Pass the template folder relative to where you write the file.</p>
+	<p>Rather than keep the file up to date by hand, write it from your environment with <code>generateManifest</code>, next to <a href="/docs/api/types/"><code>generateTypes</code></a>. Pass the template folder relative to where you write the file.</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
+	{% apply highlight("ts") %}
+		{% verbatim %}
 import { writeFile } from "node:fs/promises";
-import { createKiln, generateManifest } from "@lucidcms/kiln";
-import { fileLoader } from "@lucidcms/kiln/node";
+import { createKiln, generateManifest } from "@lucidkiln/core";
+import { fileLoader } from "@lucidkiln/core/node";
 
 const kiln = createKiln({ loader: fileLoader({ root: "src/templates" }), functions, filters });
 
 await writeFile("kiln.json", generateManifest(kiln, { root: "src/templates" }));
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>Names are sorted, so the file only changes when you add or remove one.</p>
+	<p>Names are sorted, so the file only changes when you add or remove one.</p>
 {% endblock %}

@@ -20,6 +20,7 @@ import {
 	type CallableEntry,
 	type CompiledTemplate,
 	type EnvironmentCore,
+	emptyOut,
 	type RenderInfo,
 	RenderState,
 	type Scope,
@@ -50,7 +51,7 @@ export type Loader = {
  * TypeScript types for host prop types, such as `Post`. Empty until the host adds to it:
  *
  * ```ts
- * declare module "@lucidcms/kiln" {
+ * declare module "@lucidkiln/core" {
  * 	interface KilnTypes { Post: PostView }
  * }
  * ```
@@ -442,7 +443,7 @@ class Environment<State> implements EnvironmentCore {
 		for (const key of passed) scope[key] = context[key] ?? null;
 		addSlotFlags(scope, template, null);
 
-		const out = { s: "" };
+		const out = emptyOut();
 		const result = renderTemplate(
 			state,
 			template,

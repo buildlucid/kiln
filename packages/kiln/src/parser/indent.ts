@@ -1,15 +1,19 @@
-import type { LexResult } from "../lexer/lexer.js";
-import type { Statement, TemplateNode } from "./ast.js";
+import type { LexResult, TextLine } from "../lexer/lexer.js";
+import type { PlacedStatement, Statement, TemplateNode } from "./ast.js";
 
-/** The statements inside one tag, with where the tag starts and where its whole span ends. */
-type Body = { open: number; end: number; lists: Statement[][] };
+/**
+ * The statements inside one tag, with where the tag starts and where its whole span ends. `full` bodies are inserted
+ * where another tag stands, so they lose all their shared indentation and take the indentation of where they land.
+ */
+type Body = { open: number; end: number; lists: Statement[][]; full: boolean };
 
 /** The bodies a statement holds. Branches share their tag's body. A component's fills are bodies of their own, inside the component's. */
 const bodiesOf = (node: Statement): Body[] => {
-	const own = (lists: Statement[][]): Body => ({
+	const own = (lists: Statement[][], full = false): Body => ({
 		open: node.span.start,
 		end: node.span.end,
 		lists,
+		full,
 	});
 	switch (node.type) {
 		case "If":
@@ -27,21 +31,25 @@ const bodiesOf = (node: Statement): Body[] => {
 					open: fill.span.start,
 					end: fill.span.end,
 					lists: [fill.body],
+					full: true,
 				})),
-				own([node.body, ...node.fills.map((fill) => fill.body)]),
+				own([node.body, ...node.fills.map((fill) => fill.body)], true),
 			];
-		case "SetBlock":
 		case "Block":
 		case "Slot":
+			return [own([node.body], true)];
+		case "SetBlock":
 		case "Macro":
 		case "With":
 		case "Apply":
 		case "Autoescape":
 			return [own([node.body])];
 		default:
-			return [];
+			return NO_BODIES;
 	}
 };
+
+const NO_BODIES: Body[] = [];
 
 /** The statement lists inside a statement, each once. Only a component's fills appear in more than one body. */
 const childLists = (bodies: Body[]): Iterable<Statement[]> =>
@@ -65,16 +73,69 @@ const firstAtLeast = <T>(
 	return low;
 };
 
+/** Where `<pre>` and `<textarea>` elements start and end in the template's text, whose whitespace is content. */
+const preformatted = (
+	text: string,
+	textTokens: LexResult["tokens"],
+): [number, number][] => {
+	const ranges: [number, number][] = [];
+	let open: { name: string; start: number } | null = null;
+	// One search of the whole source, keeping matches in text rather than in tags or comments.
+	for (const match of text.matchAll(/<(\/?)(pre|textarea)(?=[\s/>])/gi)) {
+		const at = match.index;
+		const token = textTokens[firstAtLeast(textTokens, at + 1, (t) => t.end)];
+		if (token === undefined || token.start > at) continue;
+		const name = (match[2] as string).toLowerCase();
+		if (open === null && match[1] === "") open = { name, start: at };
+		else if (open?.name === name && match[1] === "/") {
+			ranges.push([open.start, at]);
+			open = null;
+		}
+	}
+	if (open) ranges.push([open.start, text.length]);
+	return ranges;
+};
+
 /**
- * Removes the extra indentation inside tags that stand on their own line: the spaces and tabs that every content line inside shares, beyond the tag's own indentation.
+ * Works out the indentation of a template's text, so content can be inserted elsewhere and still line up.
  *
- * Amounts come from the source alone, so nested tags each remove their own step whatever order they are visited in. Then the text nodes holding those offsets are rebuilt.
+ * - Removes the extra indentation inside tags that stand on their own line: the spaces and tabs that every content line inside shares, beyond the tag's own. Blocks, slots and a component's content can be inserted where another tag stands, so they lose all of it and take the indentation of where they land.
+ * - Sets `indent` on the tags in `placedNodes`, which insert content, when they stand on their own line: the line's indentation once that removal is done.
+ * - Sets `lines` on text nodes: where each line of text starts, to take the indentation of where the text is inserted.
+ *
+ * Lines inside `<pre>` and `<textarea>` keep their whitespace. Amounts come from the source alone, so nested tags each remove their own step whatever order they are visited in.
  */
-export const removeIndentation = (
+export const arrangeIndentation = (
 	ast: TemplateNode,
 	text: string,
 	{ tokens, standalone, lines }: LexResult,
+	placedNodes: readonly PlacedStatement[],
 ): void => {
+	const textTokens = tokens.filter((token) => token.type === "text");
+	const pre = preformatted(text, textTokens);
+	const inPre = (offset: number): boolean => {
+		const range = pre[firstAtLeast(pre, offset, (range) => range[1])];
+		return range !== undefined && range[0] < offset;
+	};
+	const textLines =
+		pre.length > 0 ? lines.filter((line) => !inPre(line.start)) : lines;
+
+	// Standalone tags that insert content count as content lines, so the tags around them remove their step.
+	const placed: { node: PlacedStatement; line: TextLine }[] = [];
+	for (const node of placedNodes) {
+		if (!standalone.has(node.span.start)) continue;
+		const start = text.lastIndexOf("\n", node.span.start - 1) + 1;
+		let indentEnd = start;
+		while (text[indentEnd] === " " || text[indentEnd] === "\t") indentEnd++;
+		placed.push({ node, line: { start, indentEnd } });
+	}
+	const contentLines =
+		placed.length > 0
+			? [...textLines, ...placed.map((item) => item.line)].sort(
+					(a, b) => a.start - b.start,
+				)
+			: textLines;
+
 	// Source ranges to drop, as [start, end).
 	const cuts: [number, number][] = [];
 
@@ -92,15 +153,14 @@ export const removeIndentation = (
 		if (newline === -1) return;
 		// Lines from the one after the tag up to the end tag, which starts at the span's last `{%`.
 		const to = text.lastIndexOf("{%", body.end - 1);
-		const first = firstAtLeast(lines, newline + 1, (line) => line.start);
-		const last = firstAtLeast(lines, to, (line) => line.start);
+		const first = firstAtLeast(contentLines, newline + 1, (line) => line.start);
+		const last = firstAtLeast(contentLines, to, (line) => line.start);
 		if (first >= last) return;
 
-		const own = indentOf(body.open);
 		let shared = Infinity;
-		const firstLine = lines[first] as (typeof lines)[number];
+		const firstLine = contentLines[first] as TextLine;
 		for (let i = first; i < last; i++) {
-			const line = lines[i] as (typeof lines)[number];
+			const line = contentLines[i] as TextLine;
 			let length = 0;
 			while (
 				length < line.indentEnd - line.start &&
@@ -110,12 +170,17 @@ export const removeIndentation = (
 			}
 			shared = Math.min(shared, length);
 		}
-		if (shared <= own.length) return;
-		if (text.slice(firstLine.start, firstLine.start + own.length) !== own)
-			return;
+		let keep = 0;
+		if (!body.full) {
+			const own = indentOf(body.open);
+			if (shared <= own.length) return;
+			if (text.slice(firstLine.start, firstLine.start + own.length) !== own)
+				return;
+			keep = own.length;
+		} else if (shared === 0) return;
 		for (let i = first; i < last; i++) {
-			const line = lines[i] as (typeof lines)[number];
-			cuts.push([line.start + own.length, line.start + shared]);
+			const line = contentLines[i] as TextLine;
+			cuts.push([line.start + keep, line.start + shared]);
 		}
 	};
 
@@ -128,7 +193,6 @@ export const removeIndentation = (
 		}
 	};
 	visit(ast.body);
-	if (cuts.length === 0) return;
 
 	// Tags indented unusually can cut overlapping ranges of one line. Merging them keeps both ends in order for the searches below.
 	cuts.sort((a, b) => a[0] - b[0]);
@@ -157,17 +221,26 @@ export const removeIndentation = (
 		return out + text.slice(Math.min(at, end), end);
 	};
 
+	for (const { node, line } of placed) {
+		node.indent = uncut(line.start, line.indentEnd);
+	}
+
 	const hasCut = (start: number, end: number): boolean => {
 		const range = merged[firstAtLeast(merged, start, (range) => range[1] - 1)];
 		return range !== undefined && range[0] < end;
 	};
 
 	// A text token's value is its source slice, and a text node joins one or more tokens, so nodes are rebuilt token by token.
-	const textTokens = tokens.filter((token) => token.type === "text");
 	const rewrite = (list: Statement[]): void => {
 		for (const node of list) {
-			if (node.type === "Text" && hasCut(node.span.start, node.span.end)) {
+			if (node.type === "Text") {
+				let line = firstAtLeast(textLines, node.span.start, (l) => l.start);
+				const hasLines = (textLines[line]?.start ?? Infinity) <= node.span.end;
+				const cut = hasCut(node.span.start, node.span.end);
+				if (!hasLines && !cut) continue;
 				let value = "";
+				let size = 0;
+				const starts: number[] = [];
 				for (
 					let i = firstAtLeast(textTokens, node.span.start, (t) => t.start);
 					i < textTokens.length;
@@ -175,9 +248,26 @@ export const removeIndentation = (
 				) {
 					const token = textTokens[i] as (typeof textTokens)[number];
 					if (token.end > node.span.end) break;
-					value += uncut(token.start, token.end);
+					for (
+						let next = textLines[line];
+						next !== undefined && next.start <= token.end;
+						next = textLines[++line]
+					) {
+						starts.push(
+							size +
+								(cut
+									? uncut(token.start, next.start).length
+									: next.start - token.start),
+						);
+					}
+					if (cut) {
+						const piece = uncut(token.start, token.end);
+						value += piece;
+						size += piece.length;
+					} else size += token.end - token.start;
 				}
-				node.value = value;
+				if (cut) node.value = value;
+				if (starts.length > 0) node.lines = starts;
 			}
 			const bodies = bodiesOf(node);
 			if (bodies.length > 0) {

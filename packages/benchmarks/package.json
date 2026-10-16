@@ -1,5 +1,5 @@
 {
-	"name": "@lucidcms/kiln-benchmarks",
+	"name": "@lucidkiln/benchmarks",
 	"version": "0.0.0",
 	"private": true,
 	"description": "Compares Kiln's render speed with other JavaScript template engines.",
@@ -8,7 +8,7 @@
 		"./results.json": "./results.json"
 	},
 	"devDependencies": {
-		"@lucidcms/kiln": "*",
+		"@lucidkiln/core": "*",
 		"@types/node": "^24.19.2",
 		"ejs": "6.0.1",
 		"eta": "4.6.0",

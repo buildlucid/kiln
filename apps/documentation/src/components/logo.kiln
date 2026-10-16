@@ -1,16 +1,19 @@
-{# The Kiln mascot: a little clay kiln with a fire in its mouth. Pass a size in pixels. #}
-{% props size = 24 %}
-<svg viewBox="0 0 32 32" width="{{ size }}" height="{{ size }}" aria-hidden="true" class="shrink-0">
-	<circle cx="24.6" cy="3.6" r="1.6" fill="#9d9da6" opacity=".55"/>
-	<circle cx="27.4" cy="2" r="1.1" fill="#9d9da6" opacity=".35"/>
+{% props size = 24, animated = false %}
+
+{# The Kiln mascot. `animated` puffs the smoke and flickers the fire. #}
+<svg viewBox="0 0 32 32" width="{{ size }}" height="{{ size }}" aria-hidden="true" class="shrink-0 overflow-visible{{ animated ? " mascot" : "" }}">
+	<circle cx="24.6" cy="3.6" r="1.6" fill="#9d9da6" opacity=".55" class="mascot-smoke"/>
+	<circle cx="27.4" cy="2" r="1.1" fill="#9d9da6" opacity=".35" class="mascot-smoke"/>
 	<rect x="20.2" y="5" width="4.6" height="7" rx="1.6" fill="#d9d3cd"/>
 	<path d="M8.2 29.5h15.6a3 3 0 0 0 3-3v-9.3C26.8 11.3 22 6.6 16 6.6S5.2 11.3 5.2 17.2v9.3a3 3 0 0 0 3 3Z" fill="#f2ede8"/>
 	<ellipse cx="9.6" cy="20.6" rx="1.9" ry="1.2" fill="#ff8a4c" opacity=".5"/>
 	<ellipse cx="22.4" cy="20.6" rx="1.9" ry="1.2" fill="#ff8a4c" opacity=".5"/>
-	<circle cx="12.2" cy="17.2" r="2" fill="#09090b"/>
-	<circle cx="19.8" cy="17.2" r="2" fill="#09090b"/>
-	<circle cx="12.9" cy="16.5" r=".7" fill="#fff"/>
-	<circle cx="20.5" cy="16.5" r=".7" fill="#fff"/>
+	<g class="mascot-eyes">
+		<circle cx="12.2" cy="17.2" r="2" fill="#09090b"/>
+		<circle cx="19.8" cy="17.2" r="2" fill="#09090b"/>
+		<circle cx="12.9" cy="16.5" r=".7" fill="#fff"/>
+		<circle cx="20.5" cy="16.5" r=".7" fill="#fff"/>
+	</g>
 	<path d="M12.5 29.5v-2.9a3.5 3.5 0 0 1 7 0v2.9Z" fill="#ff8a4c"/>
-	<path d="M16 29.5c-1.3 0-2-1-1.6-2.2.3-.8 1-1.2 1.2-2 .9.6 1.9 1.6 1.9 2.7 0 .9-.6 1.5-1.5 1.5Z" fill="#ffd18a"/>
+	<path d="M16 29.5c-1.3 0-2-1-1.6-2.2.3-.8 1-1.2 1.2-2 .9.6 1.9 1.6 1.9 2.7 0 .9-.6 1.5-1.5 1.5Z" fill="#ffd18a" class="mascot-flame"/>
 </svg>

@@ -138,14 +138,8 @@ describe("indentation inside tags", () => {
 	});
 
 	test("nothing is removed when a line is indented less", async () => {
-		const template = lines(
-			"{% if true %}",
-			"\t<pre>",
-			"x",
-			"\t</pre>",
-			"{% endif %}",
-		);
-		expect(await render(template)).toBe(lines("\t<pre>", "x", "\t</pre>", ""));
+		const template = lines("{% if true %}", "\ta", "b", "{% endif %}");
+		expect(await render(template)).toBe(lines("\ta", "b", ""));
 		const output = lines("{% if true %}", "\t\ta", "{{ 'b' }}", "{% endif %}");
 		expect(await render(output)).toBe(lines("\t\ta", "b", ""));
 	});
@@ -184,6 +178,159 @@ describe("indentation inside tags", () => {
 	test("works with Windows line endings", async () => {
 		expect(await render("{% if true %}\r\n\ta\r\n\tb\r\n{% endif %}\r\n")).toBe(
 			"a\r\nb\r\n",
+		);
+	});
+});
+
+describe("indentation of inserted content", () => {
+	test("nested insertions add up", async () => {
+		const templates = {
+			page: lines(
+				"<main>",
+				'\t{% component "card" %}',
+				"\t\t<p>Body</p>",
+				"\t{% endcomponent %}",
+				"</main>",
+				"",
+			),
+			card: lines("<article>", "\t{% slot %}{% endslot %}", "</article>", ""),
+		};
+		expect(
+			await render(lines("<body>", '\t{% include "page" %}', "</body>"), {
+				templates,
+			}),
+		).toBe(
+			lines(
+				"<body>",
+				"\t<main>",
+				"\t\t<article>",
+				"\t\t\t<p>Body</p>",
+				"\t\t</article>",
+				"\t</main>",
+				"</body>",
+			),
+		);
+	});
+
+	test("a tag that shares its line indents no further", async () => {
+		const templates = {
+			icon: lines("<svg>", "\t<path/>", "</svg>"),
+			button: lines('<button>{% include "icon" %}</button>', ""),
+		};
+		expect(
+			await render(lines("<nav>", '\t{% include "button" %}', "</nav>"), {
+				templates,
+			}),
+		).toBe(
+			lines(
+				"<nav>",
+				"\t<button><svg>",
+				"\t\t<path/>",
+				"\t</svg></button>",
+				"</nav>",
+			),
+		);
+	});
+
+	test("lines that start with an output or a tag are indented too", async () => {
+		const part = lines("{{ a }}", "{% if true %}{{ b }}{% endif %}", "");
+		expect(
+			await render(
+				lines(
+					"<div>",
+					'\t{% include "part" with { a: "x", b: "y" } %}',
+					"</div>",
+				),
+				{ templates: { part } },
+			),
+		).toBe(lines("<div>", "\tx", "\ty", "</div>"));
+	});
+
+	test("values keep their own whitespace", async () => {
+		const part = lines(
+			"{% macro pair() %}",
+			"<b>1</b>",
+			"<b>2</b>",
+			"{% endmacro %}",
+			"{% set captured %}",
+			"<i>1</i>",
+			"<i>2</i>",
+			"{% endset %}",
+			"{{ value }}",
+			"{{ pair() }}",
+			"{{ captured }}",
+			"",
+		);
+		expect(
+			await render(
+				lines(
+					"<div>",
+					'\t{% include "part" with { value: "a\\nb" } %}',
+					"</div>",
+				),
+				{ templates: { part } },
+			),
+		).toBe(
+			lines(
+				"<div>",
+				"\ta",
+				"b",
+				"\t<b>1</b>",
+				"<b>2</b>",
+				"",
+				"\t<i>1</i>",
+				"<i>2</i>",
+				"",
+				"</div>",
+			),
+		);
+	});
+
+	test("empty content leaves no indentation behind", async () => {
+		const card = lines("<article>", "\t{% slot %}{% endslot %}", "</article>");
+		expect(
+			await render('{% component "card" %}{% endcomponent %}', {
+				templates: { card },
+			}),
+		).toBe(lines("<article>", "</article>"));
+	});
+
+	test("lines inside pre and textarea keep their whitespace", async () => {
+		const part = lines(
+			"<pre>",
+			"\tcode",
+			"</pre>",
+			"<textarea>",
+			"text",
+			"</textarea>",
+			"<p>after</p>",
+			"",
+		);
+		const template = lines(
+			"<div>",
+			"\t{% if true %}",
+			"\t\t<pre>",
+			"\t\tkept",
+			"\t\t</pre>",
+			'\t\t{% include "part" %}',
+			"\t{% endif %}",
+			"</div>",
+		);
+		expect(await render(template, { templates: { part } })).toBe(
+			lines(
+				"<div>",
+				"\t<pre>",
+				"\t\tkept",
+				"\t\t</pre>",
+				"\t<pre>",
+				"\tcode",
+				"</pre>",
+				"\t<textarea>",
+				"text",
+				"</textarea>",
+				"\t<p>after</p>",
+				"</div>",
+			),
 		);
 	});
 });

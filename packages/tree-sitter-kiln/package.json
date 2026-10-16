@@ -1,5 +1,5 @@
 {
-	"name": "@lucidcms/tree-sitter-kiln",
+	"name": "@lucidkiln/tree-sitter",
 	"version": "0.1.0",
 	"private": true,
 	"description": "Tree-sitter grammar for Kiln templates.",

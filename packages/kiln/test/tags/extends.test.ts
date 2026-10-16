@@ -146,6 +146,35 @@ describe("block", () => {
 		expect(await render(page, { templates })).toBe("<new>");
 	});
 
+	test("a child's block lines up with where the layout places it", async () => {
+		const templates = {
+			base: lines(
+				"<body>",
+				"\t<main>",
+				"\t\t{% block content %}{% endblock %}",
+				"\t</main>",
+				"</body>",
+			),
+		};
+		const page = lines(
+			'{% extends "base" %}',
+			"{% block content %}",
+			"\t<h1>Title</h1>",
+			"\t<p>Text</p>",
+			"{% endblock %}",
+		);
+		expect(await render(page, { templates })).toBe(
+			lines(
+				"<body>",
+				"\t<main>",
+				"\t\t<h1>Title</h1>",
+				"\t\t<p>Text</p>",
+				"\t</main>",
+				"</body>",
+			),
+		);
+	});
+
 	test("sees the variables where it is placed in the layout", async () => {
 		const templates = {
 			base: '{% for item in ["a", "b"] %}{% block item %}{% endblock %}{% endfor %}',

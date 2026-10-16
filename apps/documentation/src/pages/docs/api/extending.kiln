@@ -1,10 +1,10 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p>Add your own functions, filters and tests when you create the environment. They are plain JavaScript functions, and they can be async.</p>
+	<p>Add your own functions, filters and tests when you create the environment. They are plain JavaScript functions, and they can be async.</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
+	{% apply highlight("ts") %}
+		{% verbatim %}
 const kiln = createKiln({
 	loader,
 	functions: {
@@ -18,48 +18,48 @@ const kiln = createKiln({
 		external: (url: string) => !url.startsWith("/"),
 	},
 });
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-{% apply highlight("kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln") %}
+		{% verbatim %}
 {% set post = document("post", slug: route.slug) %}
 <p>{{ post.body|readingTime }} min read</p>
 {% if post.link is external %}<a href="{{ post.link }}" rel="noopener">Visit</a>{% endif %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>How arguments arrive</h2>
+	<h2>How arguments arrive</h2>
 
-<ul>
-	<li>A filter gets the filtered value first, then its arguments.</li>
-	<li>Named arguments arrive as one plain object at the end. <code>document("post", slug: "hello")</code> calls <code>document("post", { slug: "hello" })</code>.</li>
-	<li>Arrays arrive as arrays and hashes as plain objects.</li>
-	<li>Arrow functions arrive as plain functions. They return a promise if their body calls something async.</li>
-	<li>A test should return a boolean, or a promise of one.</li>
-</ul>
+	<ul>
+		<li>A filter gets the filtered value first, then its arguments.</li>
+		<li>Named arguments arrive as one plain object at the end. <code>document("post", slug: "hello")</code> calls <code>document("post", { slug: "hello" })</code>.</li>
+		<li>Arrays arrive as arrays and hashes as plain objects.</li>
+		<li>Arrow functions arrive as plain functions. They return a promise if their body calls something async.</li>
+		<li>A test should return a boolean, or a promise of one.</li>
+	</ul>
 
-<h2>Names</h2>
+	<h2>Names</h2>
 
-<ul>
-	<li>Names start with a letter or underscore, followed by letters, digits or underscores. Test names can be two words, such as <code>divisible by</code>.</li>
-	<li>Functions, filters and tests have separate names, so a filter and a function can share one.</li>
-	<li>Your own function, filter or test replaces a built-in one with the same name. The exceptions are <code>parent</code>, <code>block</code>, <code>default</code>, <code>raw</code>, <code>escape</code> and <code>defined</code>, which Kiln reserves.</li>
-</ul>
+	<ul>
+		<li>Names start with a letter or underscore, followed by letters, digits or underscores. Test names can be two words, such as <code>divisible by</code>.</li>
+		<li>Functions, filters and tests have separate names, so a filter and a function can share one.</li>
+		<li>Your own function, filter or test replaces a built-in one with the same name. The exceptions are <code>parent</code>, <code>block</code>, <code>default</code>, <code>raw</code>, <code>escape</code> and <code>defined</code>, which Kiln reserves.</li>
+	</ul>
 
-<h2>Async functions</h2>
+	<h2>Async functions</h2>
 
-<p>Any function, filter or test can return a promise. Kiln waits for it where it is called and carries on. See <a href="/docs/language/async-data/">Async data</a>.</p>
+	<p>Any function, filter or test can return a promise. Kiln waits for it where it is called and carries on. See <a href="/docs/language/async-data/">Async data</a>.</p>
 
-<p>Throwing an error stops the render. The render error's <code>cause</code> is your error, so you can throw your own error types to signal a 404 or a redirect and catch them in your server.</p>
+	<p>Throwing an error stops the render. The render error's <code>cause</code> is your error, so you can throw your own error types to signal a 404 or a redirect and catch them in your server.</p>
 
-<h2>Request data</h2>
+	<h2>Request data</h2>
 
-<p>Some functions need data about the current request, such as the visitor's language or whether they are previewing drafts. Wrap them in <code>withRender</code>, and pass the data as <code>state</code> when you render.</p>
+	<p>Some functions need data about the current request, such as the visitor's language or whether they are previewing drafts. Wrap them in <code>withRender</code>, and pass the data as <code>state</code> when you render.</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
-import { createKiln, withRender } from "@lucidcms/kiln";
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { createKiln, withRender } from "@lucidkiln/core";
 
 type State = { locale: string; preview: boolean };
 
@@ -79,36 +79,36 @@ const kiln = createKiln<State>({
 await kiln.render("pages/page", context, {
 	state: { locale: "en", preview: false },
 });
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>The first argument describes the render:</p>
+	<p>The first argument describes the render:</p>
 
-<table>
-	<thead><tr><th>Property</th><th>Description</th></tr></thead>
-	<tbody>
-		<tr><td><code>state</code></td><td>The <code>state</code> passed to <code>render</code></td></tr>
-		<tr><td><code>locale</code></td><td>The render's locale</td></tr>
-		<tr><td><code>timeZone</code></td><td>The render's time zone</td></tr>
-		<tr><td><code>template</code></td><td>The name of the template making the call</td></tr>
-		<tr><td><code>signal</code></td><td>The render's abort signal, if there is one</td></tr>
-	</tbody>
-</table>
+	<table>
+		<thead><tr><th>Property</th><th>Description</th></tr></thead>
+		<tbody>
+			<tr><td><code>state</code></td><td>The <code>state</code> passed to <code>render</code></td></tr>
+			<tr><td><code>locale</code></td><td>The render's locale</td></tr>
+			<tr><td><code>timeZone</code></td><td>The render's time zone</td></tr>
+			<tr><td><code>template</code></td><td>The name of the template making the call</td></tr>
+			<tr><td><code>signal</code></td><td>The render's abort signal, if there is one</td></tr>
+		</tbody>
+	</table>
 
-<p>With a <code>State</code> type, TypeScript makes <code>state</code> a required render option, so you can't forget it.</p>
+	<p>With a <code>State</code> type, TypeScript makes <code>state</code> a required render option, so you can't forget it.</p>
 
-<h2>Globals</h2>
+	<h2>Globals</h2>
 
-<p>Globals are variables every template can read, including included templates, components and macros. Use them for data that is the same on every page, such as the site's name.</p>
+	<p>Globals are variables every template can read, including included templates, components and macros. Use them for data that is the same on every page, such as the site's name.</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
+	{% apply highlight("ts") %}
+		{% verbatim %}
 const kiln = createKiln({
 	loader,
 	globals: { site: { name: "Acme", url: "https://acme.example" } },
 });
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>Templates can't assign to globals. Values are not awaited, so pass data that is ready, or a function.</p>
+	<p>Templates can't assign to globals. Values are not awaited, so pass data that is ready, or a function.</p>
 {% endblock %}

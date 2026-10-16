@@ -28,11 +28,16 @@ import {
 	consume,
 	embed,
 	fail,
+	type IndentedText,
+	indentedText,
+	indentText,
 	isPromise,
 	locate,
 	locating,
 	markCaller,
+	endPlace,
 	runFrom,
+	startPlace,
 	step,
 	withCaller,
 	write,
@@ -52,6 +57,7 @@ import {
 	type CompiledMacro,
 	type CompiledTemplate,
 	type EnvironmentCore,
+	emptyOut,
 	type Ev,
 	fillScope,
 	type Out,
@@ -174,7 +180,7 @@ export const emitter = (
 
 /** Text, or an output whose expression never waits, in a run that `printParts` prints. */
 type Part =
-	| { text: string; span: Span }
+	| { text: string; lines: readonly number[] | undefined; span: Span }
 	| {
 			text: null;
 			compiled: Compiled;
@@ -200,8 +206,13 @@ const printParts = (list: Part[]): Stmt => {
 	for (const part of list) {
 		const last = parts.at(-1);
 		if (part.text !== null && last && last.text !== null) {
+			const offset = last.text.length;
+			const lines = part.lines
+				? [...(last.lines ?? []), ...part.lines.map((start) => start + offset)]
+				: last.lines;
 			parts[parts.length - 1] = {
 				text: last.text + part.text,
+				lines,
 				span: { start: last.span.start, end: part.span.end },
 			};
 		} else parts.push(part);
@@ -213,13 +224,27 @@ const printParts = (list: Part[]): Stmt => {
 	};
 	if (parts.length === 1 && first.text !== null) {
 		const text = first.text;
+		if (!first.lines) {
+			return (run, _scope, out) => {
+				write(run, out, text, span);
+			};
+		}
+		const entry = indentedText(text, first.lines);
 		return (run, _scope, out) => {
-			write(run, out, text, span);
+			const indent = out.indent;
+			write(
+				run,
+				out,
+				indent === "" ? text : indentText(entry, indent, out.inline),
+				span,
+			);
 		};
 	}
 
 	const count = parts.length;
 	const texts: (string | null)[] = [];
+	// Text with line starts, which take the indentation of where it is inserted.
+	const indented: (IndentedText | null)[] = [];
 	const reads: Read[] = [];
 	const evs: (Ev | null)[] = [];
 	const emits: (((value: unknown) => string) | null)[] = [];
@@ -236,6 +261,11 @@ const printParts = (list: Part[]): Stmt => {
 		const root = compiled?.variable ?? path?.root.variable ?? null;
 		const choice = compiled?.choice ? emitChoice(compiled.choice, emit) : null;
 		texts.push(part.text);
+		indented.push(
+			part.text !== null && part.lines
+				? indentedText(part.text, part.lines)
+				: null,
+		);
 		reads.push(root !== null ? "path" : choice ? "choice" : "other");
 		evs.push(compiled?.ev ?? null);
 		emits.push(emit);
@@ -253,11 +283,18 @@ const printParts = (list: Part[]): Stmt => {
 	const spans = parts.map((part) => part.span);
 
 	return (run, scope, out) => {
+		const indent = out.indent;
 		let text = "";
 		for (let i = 0; i < count; i++) {
 			const part = texts[i];
 			if (part !== null) {
-				text += part;
+				const entry = indented[i];
+				text +=
+					indent === "" || !entry
+						? part
+						: entry.indent === indent && !out.inline
+							? entry.indented
+							: indentText(entry, indent, text === "" && out.inline);
 				continue;
 			}
 			const at = spans[i] as Span;
@@ -863,7 +900,11 @@ class Compiler {
 				}
 			}
 			if (statement.type === "Text") {
-				parts.push({ text: statement.value, span: statement.span });
+				parts.push({
+					text: statement.value,
+					lines: statement.lines,
+					span: statement.span,
+				});
 				continue;
 			}
 			if (statement.type === "Output") {
@@ -1095,7 +1136,7 @@ class Compiler {
 		const { name, span } = node;
 		return (run, scope) => {
 			step(run, span);
-			const out = { s: "" };
+			const out = emptyOut();
 			const result = body(run, scope, out);
 			const finish = () =>
 				assign(run, scope, name, new Markup(out.s, strategy), span);
@@ -1235,30 +1276,53 @@ class Compiler {
 
 	#blockStatement(node: Extract<Statement, { type: "Block" }>): Stmt {
 		this.#defineBlock(node);
-		const { name, span } = node;
+		const { name, span, indent } = node;
 		return (run, scope, out) => {
 			const entry = run.blocks.get(name)?.[0];
 			if (!entry) return;
 			const render = () =>
 				entry.def.body(entry.run, blockScope(entry.def, scope), out);
 			// A block defined in another template records where it was placed.
-			return entry.run === run ? render() : withCaller(run, span, render);
+			if (indent === "") {
+				return entry.run === run ? render() : withCaller(run, span, render);
+			}
+			const saved = out.indent;
+			const inline = out.inline;
+			startPlace(out, indent);
+			return endPlace(
+				out,
+				saved,
+				inline,
+				entry.run === run ? render() : withCaller(run, span, render),
+			);
 		};
 	}
 
 	#include(node: Extract<Statement, { type: "Include" }>): Stmt {
-		const { ignoreMissing, span } = node;
+		const { ignoreMissing, span, indent } = node;
 		return this.#embedding(
 			node.template,
 			node.with,
 			span,
-			(run, out, name, variables) =>
-				embed(run, out, span, name, variables, null, ignoreMissing),
+			(run, out, name, variables) => {
+				if (indent === "") {
+					return embed(run, out, span, name, variables, null, ignoreMissing);
+				}
+				const saved = out.indent;
+				const inline = out.inline;
+				startPlace(out, indent);
+				return endPlace(
+					out,
+					saved,
+					inline,
+					embed(run, out, span, name, variables, null, ignoreMissing),
+				);
+			},
 		);
 	}
 
 	#component(node: Extract<Statement, { type: "Component" }>): Stmt {
-		const span = node.span;
+		const { span, indent } = node;
 		const setsIn = (body: Statement[]) =>
 			containsNode(
 				body,
@@ -1298,7 +1362,18 @@ class Compiler {
 						sets: fill.sets,
 					});
 				}
-				return embed(run, out, span, name, variables, slots, false);
+				if (indent === "") {
+					return embed(run, out, span, name, variables, slots, false);
+				}
+				const saved = out.indent;
+				const inline = out.inline;
+				startPlace(out, indent);
+				return endPlace(
+					out,
+					saved,
+					inline,
+					embed(run, out, span, name, variables, slots, false),
+				);
 			},
 		);
 	}
@@ -1340,8 +1415,8 @@ class Compiler {
 
 	#slot(node: Extract<Statement, { type: "Slot" }>): Stmt {
 		const fallback = this.#body(node.body);
-		const { name, span } = node;
-		return (run, scope, out) => {
+		const { name, span, indent } = node;
+		const render = (run: Run, scope: Scope, out: Out) => {
 			const fill = run.slots?.get(name);
 			if (!fill) return fallback(run, childScope(scope), out);
 			try {
@@ -1355,6 +1430,13 @@ class Compiler {
 			} catch (error) {
 				throw markCaller(run, span, error);
 			}
+		};
+		if (indent === "") return render;
+		return (run, scope, out) => {
+			const saved = out.indent;
+			const inline = out.inline;
+			startPlace(out, indent);
+			return endPlace(out, saved, inline, render(run, scope, out));
 		};
 	}
 
@@ -1414,7 +1496,7 @@ class Compiler {
 
 		return (run, scope, out) => {
 			step(run, span);
-			const captured = { s: "" };
+			const captured = emptyOut();
 			return after(body(run, scope, captured), () => {
 				const inner = childScope(scope);
 				inner[CAPTURED] = new Markup(captured.s, strategy);
@@ -2292,7 +2374,7 @@ const renderBlockEntry = (
 			`Render stopped after nesting ${state.maxDepth} blocks deep`,
 		);
 	}
-	const out = { s: "" };
+	const out = emptyOut();
 	const done = () => {
 		state.blockDepth--;
 		return new Markup(out.s, entry.def.strategy || "html");

@@ -1,6 +1,6 @@
 {% extends "layouts/base" %}
 
-{% block title %}{{ site.name }} · Fast, safe templates for server-rendered websites{% endblock %}
+{% block title %}{{ site.name }} · {{ site.tagline }}{% endblock %}
 
 {% set features = [
 	{
@@ -35,43 +35,95 @@
 	},
 ] %}
 
+{# The hero's template. It is shown, then rendered at build time for the output below it. #}
+{% set heroTemplate %}
+	{% verbatim %}
+<h1>{{ title }}</h1>
+{% for post in documents("post", limit: 2) %}
+	<a href="{{ post.url }}">
+		<h2>{{ post.title }}</h2>
+		<time>{{ post.publishedAt|formatDate(dateStyle: "medium") }}</time>
+	</a>
+{% endfor %}
+	{% endverbatim %}
+{% endset %}
+
+{# Benchmarks: every page a real site renders, without the cold start, which measures compiling. #}
+{% set pageScenarios = benchmarks.scenarios|filter(scenario => not scenario.cold) %}
+{% set rivals = ["nunjucks", "liquidjs", "twing"] %}
+
 {% block main %}
-<main id="content" class="overflow-hidden">
-	<section class="relative">
-		<div aria-hidden="true" class="pointer-events-none absolute inset-x-0 -top-40 h-[36rem] bg-[radial-gradient(50%_50%_at_50%_40%,color-mix(in_oklab,var(--color-ember)_16%,transparent),transparent)]"></div>
-		<div aria-hidden="true" class="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--color-line)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-line)_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-40 [mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]"></div>
+	<main id="content" class="overflow-hidden">
+		<section class="relative isolate">
+			<div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(40%_45%_at_75%_35%,color-mix(in_oklab,var(--color-ember)_14%,transparent),transparent),radial-gradient(35%_40%_at_15%_0%,color-mix(in_oklab,var(--color-ember)_8%,transparent),transparent)]"></div>
+			<div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(var(--color-line-strong)_1px,transparent_1px)] bg-[size:22px_22px] opacity-50 [mask-image:radial-gradient(ellipse_70%_60%_at_50%_30%,black,transparent)]"></div>
 
-		<div class="relative mx-auto max-w-[72rem] px-4 pt-24 pb-20 text-center sm:px-6 sm:pt-32">
-			<div class="mb-8 flex justify-center">{% include "components/logo" with { size: 72 } %}</div>
-			<h1 class="mx-auto max-w-[15ch] text-[2.75rem] leading-[1.05] font-semibold tracking-[-0.035em] text-fg sm:text-[4.25rem]">
-				Templates for the server, done right.
-			</h1>
-			<p class="mx-auto mt-6 max-w-[38rem] text-lg leading-relaxed text-muted sm:text-xl">
-				Kiln is a fast, safe template language for building websites. The syntax feels familiar, templates can load their own data, and it runs on Node and Cloudflare Workers.
-			</p>
-			<div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-				<a href="/docs/quick-start/" class="rounded-full bg-fg px-6 py-3 text-sm font-medium text-bg transition-opacity hover:opacity-90">Get started</a>
-				<code class="rounded-full border border-line bg-surface px-5 py-3 font-mono text-[13px] text-text select-all"><span class="text-muted select-none">$ </span>npm install {{ site.package }}</code>
+			<div class="mx-auto grid max-w-[76rem] grid-cols-[minmax(0,1fr)] items-center gap-16 px-4 pt-16 pb-24 sm:px-6 sm:pt-24 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-14 lg:pt-24 lg:pb-32">
+				<div class="text-center lg:text-left">
+					<h1 class="enter mx-auto max-w-[17ch] text-[2.75rem] leading-[1.04] font-semibold tracking-[-0.04em] text-balance text-fg sm:text-[3.75rem] lg:mx-0 xl:text-[4rem]" style="--enter: 1">
+						Fast, safe templates for <span class="bg-gradient-to-br from-ember-soft via-ember to-[#e2582b] bg-clip-text text-transparent">server-rendered</span> websites.
+					</h1>
+					<p class="enter mx-auto mt-6 max-w-[34rem] text-lg leading-relaxed text-pretty text-muted lg:mx-0" style="--enter: 2">
+						{{ site.name }} is a template language with syntax you already know. Templates load their own data, output is escaped by default, and it runs on Node and Cloudflare Workers.
+					</p>
+					<div class="enter mt-9 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start" style="--enter: 3">
+						<a href="/docs/quick-start/" class="group inline-flex items-center gap-2 rounded-full bg-fg px-6 py-3 text-sm font-medium text-bg transition-[opacity,transform] hover:opacity-90 active:scale-[0.98]">
+							Get started
+							<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" class="transition-transform duration-200 group-hover:translate-x-0.5"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+						</a>
+						<div class="flex items-center gap-1 rounded-full border border-line bg-surface/80 py-1.5 pr-1.5 pl-5 font-mono text-[13px] text-text">
+							<span><span class="text-muted select-none">$ </span>npm install {{ site.package }}</span>
+							{% include "components/copy" with { label: "Copy install command", text: "npm install " ~ site.package } %}
+						</div>
+					</div>
+					<ul class="enter mt-9 flex flex-wrap justify-center gap-x-6 gap-y-2 text-[13px] text-muted lg:justify-start" style="--enter: 4">
+						{% for point in ["Zero dependencies", "Strict by default", "MIT licensed"] %}
+							<li class="flex items-center gap-1.5">
+								<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" class="text-ember"><path d="m3.5 8.5 3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+								{{ point }}
+							</li>
+						{% endfor %}
+					</ul>
+				</div>
+
+				<div class="mx-auto w-full max-w-[36rem] lg:max-w-none">
+					<div class="hero-window enter" style="--enter: 2">
+						{{ heroTemplate|highlight("kiln", title: "pages/blog.kiln") }}
+					</div>
+					<div class="hero-flow enter" style="--enter: 3" aria-hidden="true">
+						<span class="hero-flow-label">
+							<svg viewBox="0 0 16 16" width="13" height="13" class="text-ember"><path d="M8 3v10M4 9l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+							Rendered by {{ site.name }}
+						</span>
+					</div>
+					<div class="hero-window enter" style="--enter: 4">
+						{{ heroTemplate|example(context: { title: "Blog" }, source: false) }}
+					</div>
+				</div>
 			</div>
-		</div>
-	</section>
+		</section>
 
-	<section aria-label="Example" class="relative mx-auto max-w-[72rem] px-4 sm:px-6">
-		<div class="landing-example rounded-2xl border border-line bg-surface/60 p-1.5 shadow-[0_0_80px_-20px_color-mix(in_oklab,var(--color-ember)_25%,transparent)]">
-{% set card %}
-{% verbatim %}
+		<section aria-labelledby="example-title" class="reveal mx-auto max-w-[72rem] px-4 pt-12 sm:px-6">
+			<div class="mx-auto max-w-[40rem] text-center">
+				<p class="text-sm font-medium text-ember">How it works</p>
+				<h2 id="example-title" class="mt-3 text-3xl font-semibold tracking-tight text-balance text-fg sm:text-4xl">Write a template. Get clean HTML.</h2>
+				<p class="mt-4 leading-relaxed text-muted">Components take props and slots, loops know where they are, and data loads where it is used. Every example on this site is rendered by Kiln when the site builds.</p>
+			</div>
+			<div class="landing-example mt-12 rounded-2xl border border-line bg-surface/60 p-1.5 shadow-[0_0_80px_-20px_color-mix(in_oklab,var(--color-ember)_25%,transparent)]">
+				{% set card %}
+					{% verbatim %}
 {% props title, href, date = null %}
 <article class="card">
 	<h2><a href="{{ href }}">{{ title }}</a></h2>
 	{% if date %}
-	<time>{{ date|formatDate(dateStyle: "long") }}</time>
+		<time>{{ date|formatDate(dateStyle: "long") }}</time>
 	{% endif %}
 	{% slot %}{% endslot %}
 </article>
-{% endverbatim %}
-{% endset %}
-{% apply example(templates: { "components/card.kiln": card }) %}
-{% verbatim %}
+					{% endverbatim %}
+				{% endset %}
+				{% apply example(templates: { "components/card.kiln": card }) %}
+					{% verbatim %}
 {% set posts = documents("post", limit: 2) %}
 
 {% for post in posts %}
@@ -83,37 +135,96 @@
 		<p>Post {{ loop.index }} of {{ loop.length }}</p>
 	{% endcomponent %}
 {% endfor %}
-{% endverbatim %}
-{% endapply %}
-		</div>
-	</section>
+					{% endverbatim %}
+				{% endapply %}
+			</div>
+		</section>
 
-	<section aria-labelledby="features-title" class="mx-auto max-w-[72rem] px-4 py-28 sm:px-6">
-		<div class="max-w-[36rem]">
-			<p class="text-sm font-medium text-ember">Why Kiln</p>
-			<h2 id="features-title" class="mt-3 text-3xl font-semibold tracking-tight text-fg sm:text-4xl">Everything a website needs. Nothing it doesn't.</h2>
-		</div>
-		<ul class="mt-12 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
-			{% for feature in features %}
-			<li class="bg-bg p-7">
-				<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" class="text-ember"><path d="{{ feature.icon }}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-				<h3 class="mt-5 font-medium text-fg">{{ feature.title }}</h3>
-				<p class="mt-2 text-[15px] leading-relaxed text-muted">{{ feature.text }}</p>
-			</li>
-			{% endfor %}
-		</ul>
-	</section>
+		<section aria-labelledby="features-title" class="mx-auto max-w-[72rem] px-4 py-28 sm:px-6">
+			<div class="reveal max-w-[36rem]">
+				<p class="text-sm font-medium text-ember">Why Kiln</p>
+				<h2 id="features-title" class="mt-3 text-3xl font-semibold tracking-tight text-fg sm:text-4xl">Everything a website needs. Nothing it doesn't.</h2>
+			</div>
+			<ul class="reveal mt-12 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
+				{% for feature in features %}
+					<li class="group bg-bg p-7 transition-colors duration-300 hover:bg-surface">
+						<span class="grid size-10 place-items-center rounded-lg border border-line bg-surface text-ember transition-[border-color,box-shadow] duration-300 group-hover:border-ember/40 group-hover:shadow-[0_0_24px_-6px_var(--color-ember)]">
+							<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="{{ feature.icon }}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+						</span>
+						<h3 class="mt-5 font-medium text-fg">{{ feature.title }}</h3>
+						<p class="mt-2 text-[15px] leading-relaxed text-muted">{{ feature.text }}</p>
+					</li>
+				{% endfor %}
+			</ul>
+		</section>
 
-	<section aria-labelledby="errors-title" class="border-y border-line bg-surface/50">
-		<div class="mx-auto grid max-w-[72rem] items-center gap-12 px-4 py-24 sm:px-6 lg:grid-cols-[1fr_1.3fr]">
-			<div>
+		<section aria-labelledby="speed-title" class="border-y border-line bg-surface/50">
+			<div class="mx-auto grid max-w-[72rem] grid-cols-[minmax(0,1fr)] gap-12 px-4 py-24 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] lg:gap-16">
+				<div class="reveal">
+					<p class="text-sm font-medium text-ember">Performance</p>
+					<h2 id="speed-title" class="mt-3 text-3xl font-semibold tracking-tight text-balance text-fg sm:text-4xl">Fast where it counts.</h2>
+					<p class="mt-4 leading-relaxed text-muted">We render the same {{ pageScenarios|length }} real pages with {{ benchmarks.engines|length }} JavaScript template engines, and check every engine's HTML matches before timing. {{ site.name }} precompiles templates at build time, so it stays fast on Cloudflare Workers too.</p>
+					<dl class="mt-8 grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-line bg-line">
+						{% for id in rivals %}
+							{% set engine = benchmarks.engines|find(item => item.id == id) %}
+							{% set ratios = pageScenarios|map(scenario => (scenario.results|find(result => result.engine == id)).meanMs / (scenario.results|find(result => result.engine == "kiln")).meanMs) %}
+							{% set speedup = (ratios|reduce((product, ratio) => product * ratio, 1)) ** (1 / ratios|length) %}
+							<div class="flex flex-col-reverse justify-end bg-bg px-4 py-4">
+								<dt class="mt-1 text-[13px] leading-snug text-muted">faster than {{ engine.name }}</dt>
+								<dd class="text-2xl font-semibold tracking-tight text-fg tabular-nums">{{ speedup|formatNumber(maximumFractionDigits: speedup < 10 ? 1 : 0) }}×</dd>
+							</div>
+						{% endfor %}
+					</dl>
+					<p class="mt-3 text-[13px] leading-relaxed text-muted">Geometric mean across the pages. {{ benchmarks.environment.cpu }}, Node {{ benchmarks.environment.node }}.</p>
+					<a href="/docs/benchmarks/" class="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-fg underline decoration-line-strong underline-offset-4 transition-colors hover:decoration-fg">See every result and how we measure</a>
+				</div>
+
+				<div class="reveal min-w-0" data-tabs>
+					<div role="tablist" aria-label="Benchmark pages" class="tab-scroll js-only flex gap-1 overflow-x-auto">
+						{% for scenario in pageScenarios %}
+							<button type="button" role="tab" id="tab-{{ scenario.id }}" aria-controls="panel-{{ scenario.id }}" aria-selected="{{ loop.first ? "true" : "false" }}" tabindex="{{ loop.first ? 0 : -1 }}" class="shrink-0 rounded-full border border-transparent px-3 py-1.5 text-[13px] whitespace-nowrap text-muted transition-colors hover:text-fg aria-selected:border-line aria-selected:bg-raised aria-selected:text-fg">{{ scenario.name }}</button>
+						{% endfor %}
+					</div>
+					{% for scenario in pageScenarios %}
+						{% set fastest = max(scenario.results|filter(result => result.supported)|map(result => result.opsPerSecond)) %}
+						<div role="tabpanel" id="panel-{{ scenario.id }}" aria-labelledby="tab-{{ scenario.id }}" class="mt-5 rounded-2xl border border-line bg-bg p-5 sm:p-6"{{ attrs({ hidden: not loop.first }) }}>
+							<p class="mb-3 flex justify-between text-[12px] text-muted"><span>Engine</span><span>Renders per second, higher is better</span></p>
+							<ul class="space-y-2.5">
+								{% for result in scenario.results %}
+									{% set engine = benchmarks.engines|find(item => item.id == result.engine) %}
+									{% set isKiln = engine.id == "kiln" %}
+									<li class="grid grid-cols-[5.5rem_1fr] items-center gap-3 text-[13px] sm:grid-cols-[6.5rem_1fr]">
+										<span class="{{ isKiln ? "font-medium text-fg" : "text-muted" }}">{{ engine.name }}</span>
+										{% if result.supported %}
+											<span class="flex items-center gap-3">
+												<span class="h-2 flex-1 rounded-full bg-raised" aria-hidden="true">
+													<span class="bar block h-2 min-w-1 rounded-full {{ isKiln ? "bg-gradient-to-r from-ember to-ember-soft" : "bg-muted/45" }}" style="width: {{ (result.opsPerSecond / fastest * 100)|round(1) }}%; --bar: {{ loop.index0 }}"></span>
+												</span>
+												<span class="w-16 text-right tabular-nums {{ isKiln ? "text-fg" : "text-muted" }}">{{ result.opsPerSecond|formatNumber(notation: "compact", maximumFractionDigits: 1) }}</span>
+											</span>
+										{% else %}
+											<span class="text-muted">Can't wait for async data</span>
+										{% endif %}
+									</li>
+								{% endfor %}
+							</ul>
+							<p class="mt-5 border-t border-line pt-4 text-sm leading-relaxed text-muted">{{ scenario.description }}</p>
+						</div>
+					{% endfor %}
+				</div>
+			</div>
+		</section>
+
+		<section aria-labelledby="errors-title" class="mx-auto grid max-w-[72rem] grid-cols-[minmax(0,1fr)] items-center gap-12 px-4 py-28 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+			<div class="reveal">
 				<p class="text-sm font-medium text-ember">Errors</p>
 				<h2 id="errors-title" class="mt-3 text-3xl font-semibold tracking-tight text-fg">Mistakes point straight at the problem.</h2>
 				<p class="mt-4 leading-relaxed text-muted">Strict mode is on by default, so a typo is an error instead of a blank space on the page. Errors show where they happened and suggest what you meant.</p>
 				<a href="/docs/language/strict-mode/" class="mt-6 inline-block text-sm font-medium text-fg underline decoration-line-strong underline-offset-4 hover:decoration-fg">Read about strict mode</a>
 			</div>
-{% apply highlight("text") %}
-{% verbatim %}
+			<div class="reveal">
+				{% apply highlight("text") %}
+					{% verbatim %}
 KilnRenderError: Unknown variable "titel" in pages/page.kiln
 at line 4, column 9. Did you mean "title"?
 
@@ -121,18 +232,27 @@ at line 4, column 9. Did you mean "title"?
 > 4 |   <h1>{{ titel }}</h1>
     |          ^^^^^
   5 | {% endblock %}
-{% endverbatim %}
-{% endapply %}
-		</div>
-	</section>
+					{% endverbatim %}
+				{% endapply %}
+			</div>
+		</section>
 
-	<section class="mx-auto max-w-[72rem] px-4 py-28 text-center sm:px-6">
-		<h2 class="text-3xl font-semibold tracking-tight text-fg sm:text-4xl">Start building.</h2>
-		<p class="mx-auto mt-4 max-w-[30rem] leading-relaxed text-muted">Install Kiln and render your first page in a few minutes.</p>
-		<div class="mt-8 flex justify-center gap-3">
-			<a href="/docs/quick-start/" class="rounded-full bg-fg px-6 py-3 text-sm font-medium text-bg transition-opacity hover:opacity-90">Quick start</a>
-			<a href="/docs/" class="rounded-full border border-line px-6 py-3 text-sm font-medium text-fg transition-colors hover:border-line-strong hover:bg-surface">Read the docs</a>
-		</div>
-	</section>
-</main>
+		<section aria-labelledby="start-title" class="relative isolate overflow-hidden border-t border-line">
+			<div aria-hidden="true" class="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[28rem] bg-[radial-gradient(45%_70%_at_50%_100%,color-mix(in_oklab,var(--color-ember)_20%,transparent),transparent)]"></div>
+			<div class="reveal mx-auto flex max-w-[72rem] flex-col items-center px-4 pt-24 pb-28 text-center sm:px-6">
+				<div class="relative">
+					<div aria-hidden="true" class="absolute inset-x-[-40%] bottom-[-10%] h-1/2 rounded-full bg-ember/25 blur-2xl"></div>
+					<div class="relative transition-transform duration-500 hover:-translate-y-1 hover:-rotate-3">
+						{% include "components/logo" with { size: 104, animated: true } %}
+					</div>
+				</div>
+				<h2 id="start-title" class="mt-10 text-3xl font-semibold tracking-tight text-fg sm:text-5xl">Fire up your first page.</h2>
+				<p class="mx-auto mt-4 max-w-[30rem] leading-relaxed text-muted">Install {{ site.name }} and render a page with a layout in a few minutes.</p>
+				<div class="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
+					<a href="/docs/quick-start/" class="rounded-full bg-fg px-6 py-3 text-sm font-medium text-bg transition-[opacity,transform] hover:opacity-90 active:scale-[0.98]">Quick start</a>
+					<a href="/docs/" class="rounded-full border border-line-strong bg-bg/60 px-6 py-3 text-sm font-medium text-fg transition-colors hover:border-muted hover:bg-surface">Read the docs</a>
+				</div>
+			</div>
+		</section>
+	</main>
 {% endblock %}

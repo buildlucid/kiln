@@ -1,18 +1,18 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p>Layouts hold the markup that pages share. A layout defines named <code>block</code> sections, and a page <code>extends</code> the layout and fills them in.</p>
+	<p>Layouts hold the markup that pages share. A layout defines named <code>block</code> sections, and a page <code>extends</code> the layout and fills them in.</p>
 
-{% set layout %}
-{% verbatim %}
+	{% set layout %}
+		{% verbatim %}
 <title>{% block title %}{{ site.name }}{% endblock %}</title>
 <main>
 	{% block content %}{% endblock %}
 </main>
-{% endverbatim %}
-{% endset %}
-{% apply example(templates: { "layouts/base.kiln": layout }, context: { page: { title: "About us" } }) %}
-{% verbatim %}
+		{% endverbatim %}
+	{% endset %}
+	{% apply example(templates: { "layouts/base.kiln": layout }, context: { page: { title: "About us" } }) %}
+		{% verbatim %}
 {% extends "layouts/base" %}
 
 {% block title %}{{ page.title }} | {{ parent() }}{% endblock %}
@@ -20,40 +20,40 @@
 {% block content %}
 	<h1>{{ page.title }}</h1>
 {% endblock %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Pages</h2>
+	<h2>Pages</h2>
 
-<ul>
-	<li><code>extends</code> must be the first tag in the template.</li>
-	<li>The name can be any expression, such as <code>layout ?? "layouts/base"</code>.</li>
-	<li>Outside blocks, a page can only contain <code>set</code>, <code>props</code>, <code>import</code>, <code>from</code>, <code>macro</code> and comments. Anything else is an error, because it would never be shown.</li>
-	<li>Top-level <code>set</code> tags run before the layout renders. The layout and every block can use their variables.</li>
-</ul>
+	<ul>
+		<li><code>extends</code> must be the first tag in the template.</li>
+		<li>The name can be any expression, such as <code>layout ?? "layouts/base"</code>.</li>
+		<li>Outside blocks, a page can only contain <code>set</code>, <code>props</code>, <code>import</code>, <code>from</code>, <code>macro</code> and comments. Anything else is an error, because it would never be shown.</li>
+		<li>Top-level <code>set</code> tags run before the layout renders. The layout and every block can use their variables.</li>
+	</ul>
 
-<h2>Blocks</h2>
+	<h2>Blocks</h2>
 
-<ul>
-	<li>Block names must be unique within a template.</li>
-	<li><code>&#123;% endblock title %}</code> may repeat the name. If it does, it must match.</li>
-	<li><code>&#123;% block title page.title %}</code> is a short form for a block that holds one expression.</li>
-	<li>Layouts can extend other layouts, as deep as you need.</li>
-</ul>
+	<ul>
+		<li>Block names must be unique within a template.</li>
+		<li><code>&#123;% endblock title %}</code> may repeat the name. If it does, it must match.</li>
+		<li><code>&#123;% block title page.title %}</code> is a short form for a block that holds one expression.</li>
+		<li>Layouts can extend other layouts, as deep as you need.</li>
+	</ul>
 
-<h2>Reusing blocks</h2>
+	<h2>Reusing blocks</h2>
 
-<p><code>parent()</code> outputs the layout's version of the current block. <code>block("name")</code> outputs another block of the current template again, and <code>block("name") is defined</code> checks that it exists.</p>
+	<p><code>parent()</code> outputs the layout's version of the current block. <code>block("name")</code> outputs another block of the current template again, and <code>block("name") is defined</code> checks that it exists.</p>
 
-{% apply highlight("kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln") %}
+		{% verbatim %}
 <meta property="og:title" content="{{ block("title") }}">
 
 {% if block("sidebar") is defined %}
 	<aside>{{ block("sidebar") }}</aside>
 {% endif %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>To render one block on its own, such as a fragment for a partial page update, see <a href="/docs/api/rendering/#rendering-one-block"><code>renderBlock</code></a>.</p>
+	<p>To render one block on its own, such as a fragment for a partial page update, see <a href="/docs/api/rendering/#rendering-one-block"><code>renderBlock</code></a>.</p>
 {% endblock %}

@@ -1,14 +1,14 @@
-{# A Kiln example and the output it rendered at build time. Used by the example filter. #}
 {% props files, output, failed %}
+
 <figure class="code">
 	{% for file in files %}
-	<div class="{{ loop.first ? "" : "border-t border-line" }}">
-		<div class="code-label">{{ file.name }}</div>
-		{{ file.code }}
-	</div>
+		<div class="code-pane" data-code>
+			<div class="code-head"><span class="code-label">{{ file.name }}</span>{% include "components/copy" %}</div>
+			{{ file.code }}
+		</div>
 	{% endfor %}
-	<div class="code-output {{ failed ? "code-error" : "" }}">
-		<div class="code-label">{{ failed ? "Error" : "Output" }}</div>
+	<div class="code-pane code-output {{ failed ? "code-error" : "" }}" data-code data-pagefind-ignore>
+		<div class="code-head"><span class="code-label">{{ failed ? "Error" : "Output" }}</span>{% include "components/copy" with { label: failed ? "Copy error" : "Copy output" } %}</div>
 		{{ output }}
 	</div>
 </figure>

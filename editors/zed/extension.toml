@@ -12,10 +12,10 @@ snippets = ["./snippets/kiln.json"]
 name = "Kiln Language Server"
 languages = ["Kiln"]
 
-# The grammar lives in this repository, under packages/tree-sitter-kiln.
-# For local development, `repository` can point at a checkout, such as "file:///path/to/kiln",
-# but `rev` must still be a committed sha, since Zed checks out that revision.
+# The grammar lives in this repository, under packages/tree-sitter-kiln. `rev` must be a committed sha, since Zed
+# checks out that revision. While developing, `repository` points at a local checkout; switch it back to
+# "https://github.com/buildlucid/kiln" with a pushed sha before publishing.
 [grammars.kiln]
-repository = "https://github.com/buildlucid/kiln"
-rev = "TODO-commit-sha"
+repository = "file:///Users/williamyallop/Documents/projects/protodigital/internal/kiln"
+rev = "4e7b97e0c54b25d4a4944c91a13ed0f9acc6978c"
 path = "packages/tree-sitter-kiln"

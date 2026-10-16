@@ -9,6 +9,7 @@ import {
 	type FilterCall,
 	type HashEntry,
 	type Param,
+	type PlacedStatement,
 	type PropParam,
 	type PropType,
 	type ShapeKey,
@@ -18,7 +19,7 @@ import {
 	TYPE_NAMES,
 	type TypeName,
 } from "./ast.js";
-import { removeIndentation } from "./indent.js";
+import { arrangeIndentation } from "./indent.js";
 
 const isTypeName = (name: string): name is TypeName =>
 	(TYPE_NAMES as readonly string[]).includes(name);
@@ -49,7 +50,7 @@ export const parse = (text: string, options: ParseOptions): ParseResult => {
 	const lexed = lex(text);
 	const parser = new Parser(lexed.tokens, options);
 	const ast = parser.parseTemplate(text.length);
-	removeIndentation(ast, text, lexed);
+	arrangeIndentation(ast, text, lexed, parser.placed);
 	return { ast, problems: [...lexed.problems, ...parser.problems] };
 };
 
@@ -108,6 +109,8 @@ const describeToken = (token: Token): string => {
 
 class Parser {
 	readonly problems: LexProblem[] = [];
+	/** Every tag that inserts content, for `arrangeIndentation`. */
+	readonly placed: PlacedStatement[] = [];
 	readonly #tokens: Token[];
 	readonly #options: ParseOptions;
 	#index = 0;
@@ -680,7 +683,7 @@ class Parser {
 			// Short form: {% block title page.title %}
 			const expression = this.#parseExpression();
 			const close = this.#expectTagEnd();
-			return {
+			return this.#placed({
 				type: "Block",
 				name,
 				body: [
@@ -691,18 +694,18 @@ class Parser {
 					},
 				],
 				span: { start: open.start, end: close.end },
-			};
+			});
 		}
 		this.#expectTagEnd();
 		const { body, end } = this.#parseBody(["endblock"]);
 		if (end) this.#finishEndTag(name);
 		else this.#unclosed("block", open, "endblock");
-		return {
+		return this.#placed({
 			type: "Block",
 			name,
 			body,
 			span: { start: open.start, end: this.#lastEnd },
-		};
+		});
 	}
 
 	#parseInclude(open: Token): Statement {
@@ -719,13 +722,13 @@ class Parser {
 			ignoreMissing = true;
 		}
 		const close = this.#expectTagEnd();
-		return {
+		return this.#placed({
 			type: "Include",
 			template,
 			with: withValue,
 			ignoreMissing,
 			span: { start: open.start, end: close.end },
-		};
+		});
 	}
 
 	#parseComponent(open: Token): Statement {
@@ -778,13 +781,18 @@ class Parser {
 			});
 		}
 
-		return {
+		return this.#placed({
 			type: "Component",
 			...header,
 			fills,
 			body,
 			span: { start: open.start, end: this.#lastEnd },
-		};
+		});
+	}
+
+	#placed<T extends PlacedStatement>(node: T): T {
+		this.placed.push(node);
+		return node;
 	}
 
 	#parseStringLiteral(what: string): string {
@@ -807,12 +815,12 @@ class Parser {
 		const { body, end } = this.#parseBody(["endslot"]);
 		if (end) this.#finishEndTag();
 		else this.#unclosed("slot", open, "endslot");
-		return {
+		return this.#placed({
 			type: "Slot",
 			name,
 			body,
 			span: { start: open.start, end: this.#lastEnd },
-		};
+		});
 	}
 
 	#parseMacro(open: Token): Statement {

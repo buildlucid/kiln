@@ -1,31 +1,31 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p><code>autoescape</code> changes how output is <a href="/docs/language/escaping/">escaped</a> inside a section.</p>
+	<p><code>autoescape</code> changes how output is <a href="/docs/language/escaping/">escaped</a> inside a section.</p>
 
-{% apply example(context: { page: { title: "Tom's \"best\" page" } }) %}
-{% verbatim %}
+	{% apply example(context: { page: { title: "Tom's \"best\" page" } }) %}
+		{% verbatim %}
 <script>
 {% autoescape "js" %}
 	const title = "{{ page.title }}";
 {% endautoescape %}
 </script>
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>The strategy is a string: <code>"html"</code>, <code>"attr"</code>, <code>"js"</code>, <code>"css"</code> or <code>"url"</code>.</p>
+	<p>The strategy is a string: <code>"html"</code>, <code>"attr"</code>, <code>"js"</code>, <code>"css"</code> or <code>"url"</code>.</p>
 
-<h2>Turning escaping off</h2>
+	<h2>Turning escaping off</h2>
 
-<p><code>autoescape false</code> outputs values as they are. Only use it for content you fully trust.</p>
+	<p><code>autoescape false</code> outputs values as they are. Only use it for content you fully trust.</p>
 
-{% apply highlight("kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln") %}
+		{% verbatim %}
 {% autoescape false %}
 	{{ trustedHtml }}
 {% endautoescape %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>For a single value, the <code>raw</code> filter is usually clearer.</p>
+	<p>For a single value, the <code>raw</code> filter is usually clearer.</p>
 {% endblock %}

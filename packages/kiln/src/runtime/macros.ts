@@ -10,7 +10,7 @@ import {
 	withCaller,
 } from "./render.js";
 import { childScope } from "./scope.js";
-import { type CompiledMacro, Run } from "./types.js";
+import { type CompiledMacro, emptyOut, Run } from "./types.js";
 
 /**
  * Calls a macro: binds arguments to parameters in a scope that holds only globals, renders the body and returns it as markup.
@@ -96,7 +96,7 @@ export const callMacro = (
 	return after(importsFor(macroRun, macro.template), (imports) => {
 		macroRun.imports = imports;
 		return after(bind(0), () => {
-			const out = { s: "" };
+			const out = emptyOut();
 			const render = () =>
 				after(
 					macro.body(macroRun, scope, out),

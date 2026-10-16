@@ -1,15 +1,15 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p>A loader tells Kiln where to find templates. Kiln asks it for a template by name the first time the template is used.</p>
+	<p>A loader tells Kiln where to find templates. Kiln asks it for a template by name the first time the template is used.</p>
 
-<h2><code>memoryLoader</code></h2>
+	<h2><code>memoryLoader</code></h2>
 
-<p>Holds templates in memory, as an object or a <code>Map</code>. It works everywhere, including Cloudflare Workers. A template can be its source or a <a href="/docs/api/precompiling/">precompiled module</a>.</p>
+	<p>Holds templates in memory, as an object or a <code>Map</code>. It works everywhere, including Cloudflare Workers. A template can be its source or a <a href="/docs/api/precompiling/">precompiled module</a>.</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
-import { createKiln, memoryLoader } from "@lucidcms/kiln";
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { createKiln, memoryLoader } from "@lucidkiln/core";
 
 const kiln = createKiln({
 	loader: memoryLoader({
@@ -17,49 +17,49 @@ const kiln = createKiln({
 		"pages/home.kiln": homeSource,
 	}),
 });
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2><code>fileLoader</code></h2>
+	<h2><code>fileLoader</code></h2>
 
-<p>Reads templates from a folder. It is for Node only, so it lives in a separate entry point that never ends up in a Workers bundle.</p>
+	<p>Reads templates from a folder. It is for Node only, so it lives in a separate entry point that never ends up in a Workers bundle.</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
-import { fileLoader } from "@lucidcms/kiln/node";
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { fileLoader } from "@lucidkiln/core/node";
 
 const kiln = createKiln({
 	loader: fileLoader({ root: "src/templates" }),
 });
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Your own loader</h2>
+	<h2>Your own loader</h2>
 
-<p>A loader is an object with a <code>load</code> method. It gets a resolved name, such as <code>pages/home.kiln</code>, and returns the source or a <a href="/docs/api/precompiling/">precompiled module</a>, or null if the template doesn't exist. It can be async.</p>
+	<p>A loader is an object with a <code>load</code> method. It gets a resolved name, such as <code>pages/home.kiln</code>, and returns the source or a <a href="/docs/api/precompiling/">precompiled module</a>, or null if the template doesn't exist. It can be async.</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
-import type { Loader } from "@lucidcms/kiln";
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import type { Loader } from "@lucidkiln/core";
 
 const kvLoader = (kv: KVNamespace): Loader => ({
 	load: (name) => kv.get(`templates/${name}`),
 });
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Listing templates</h2>
+	<h2>Listing templates</h2>
 
-<p>A loader can also have a <code>list</code> method that returns the name of every template it holds, such as <code>pages/home.kiln</code>. Kiln never calls it while rendering. Tools use it, such as <a href="/docs/api/types/"><code>generateTypes</code></a>.</p>
+	<p>A loader can also have a <code>list</code> method that returns the name of every template it holds, such as <code>pages/home.kiln</code>. Kiln never calls it while rendering. Tools use it, such as <a href="/docs/api/types/"><code>generateTypes</code></a>.</p>
 
-<ul>
-	<li><code>memoryLoader</code> lists every template you gave it.</li>
-	<li><code>fileLoader</code> lists every file under its root, skipping files and folders whose names start with a dot.</li>
-	<li>In your own loader, <code>list</code> is optional and can be async.</li>
-</ul>
+	<ul>
+		<li><code>memoryLoader</code> lists every template you gave it.</li>
+		<li><code>fileLoader</code> lists every file under its root, skipping files and folders whose names start with a dot.</li>
+		<li>In your own loader, <code>list</code> is optional and can be async.</li>
+	</ul>
 
-{% apply highlight("ts") %}
-{% verbatim %}
+	{% apply highlight("ts") %}
+		{% verbatim %}
 const kvLoader = (kv: KVNamespace): Loader => ({
 	load: (name) => kv.get(`templates/${name}`),
 	list: async () =>
@@ -67,10 +67,10 @@ const kvLoader = (kv: KVNamespace): Loader => ({
 			key.name.slice("templates/".length),
 		),
 });
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Names</h2>
+	<h2>Names</h2>
 
-<p>Kiln resolves names before it calls the loader. The loader gets a clean path relative to its root, with the <code>.kiln</code> extension added when the name has none. Kiln rejects names that would point above the root. See <a href="/docs/language/syntax/#template-names">Template names</a>.</p>
+	<p>Kiln resolves names before it calls the loader. The loader gets a clean path relative to its root, with the <code>.kiln</code> extension added when the name has none. Kiln rejects names that would point above the root. See <a href="/docs/language/syntax/#template-names">Template names</a>.</p>
 {% endblock %}

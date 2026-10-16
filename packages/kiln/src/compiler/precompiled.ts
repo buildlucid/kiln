@@ -10,8 +10,12 @@ import {
 	embedKeyed,
 	embedScope,
 	fail,
+	indentedText,
+	indentText,
 	locate,
+	endPlace,
 	markCaller,
+	startPlace,
 	step,
 	write,
 } from "../runtime/render.js";
@@ -51,7 +55,7 @@ import {
 } from "./compiler.js";
 
 /** Changes whenever generated code or the runtime it calls changes shape, so old modules fail loudly. */
-export const PRECOMPILED_VERSION = 1;
+export const PRECOMPILED_VERSION = 2;
 
 /**
  * A template compiled to JavaScript at build time, the default export of a module `precompile` wrote. Loaders return
@@ -247,6 +251,10 @@ const runtime = {
 	},
 	write,
 	drive,
+	startPlace,
+	endPlace,
+	indentText,
+	indentedText,
 	embed,
 	embedScope,
 	embedKeyed,

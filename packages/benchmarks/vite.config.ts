@@ -5,7 +5,7 @@ export default defineConfig({
 		tasks: {
 			bench: {
 				command: "node src/run.ts",
-				dependsOn: ["@lucidcms/kiln#build"],
+				dependsOn: ["@lucidkiln/core#build"],
 				cache: false,
 			},
 		},

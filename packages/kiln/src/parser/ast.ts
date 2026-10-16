@@ -134,8 +134,20 @@ export type FilterCall = {
 	span: Span;
 };
 
+/**
+ * On a tag that inserts content, when it stands on a line of its own: the line's indentation in the output, which
+ * every inserted line gets on top of the indentation around it. See `indent.ts`.
+ */
+type Placement = { indent?: string };
+
 export type Statement =
-	| { type: "Text"; value: string; span: Span }
+	| {
+			type: "Text";
+			value: string;
+			/** Where lines start in `value`, which get the indentation of the content they are inserted into. */
+			lines?: number[];
+			span: Span;
+	  }
 	| { type: "Output"; expression: Expression; span: Span }
 	| {
 			type: "If";
@@ -156,15 +168,15 @@ export type Statement =
 	| { type: "SetBlock"; name: string; body: Statement[]; span: Span }
 	| { type: "Props"; props: PropParam[]; span: Span }
 	| { type: "Extends"; template: Expression; span: Span }
-	| { type: "Block"; name: string; body: Statement[]; span: Span }
-	| {
+	| ({ type: "Block"; name: string; body: Statement[]; span: Span } & Placement)
+	| ({
 			type: "Include";
 			template: Expression;
 			with: Expression | null;
 			ignoreMissing: boolean;
 			span: Span;
-	  }
-	| {
+	  } & Placement)
+	| ({
 			type: "Component";
 			template: Expression;
 			with: Expression | null;
@@ -172,8 +184,8 @@ export type Statement =
 			/** Content outside any `fill`, which fills the default slot. */
 			body: Statement[];
 			span: Span;
-	  }
-	| { type: "Slot"; name: string; body: Statement[]; span: Span }
+	  } & Placement)
+	| ({ type: "Slot"; name: string; body: Statement[]; span: Span } & Placement)
 	| {
 			type: "Macro";
 			name: string;
@@ -198,6 +210,12 @@ export type Statement =
 	  };
 
 export type TemplateNode = { type: "Template"; body: Statement[]; span: Span };
+
+/** Tags that insert content, which lines up with them when they stand on a line of their own. See `Placement`. */
+export type PlacedStatement = Extract<
+	Statement,
+	{ type: "Include" | "Component" | "Slot" | "Block" }
+>;
 
 /** The name of the default slot, filled by content outside any `fill`. */
 export const DEFAULT_SLOT = "default";

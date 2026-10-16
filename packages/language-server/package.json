@@ -1,5 +1,5 @@
 {
-	"name": "@lucidcms/kiln-language-server",
+	"name": "@lucidkiln/language-server",
 	"version": "0.0.0",
 	"private": true,
 	"description": "Language server for Kiln templates: errors as you type, formatting, completions, hover and go to definition.",
@@ -26,7 +26,7 @@
 		"template"
 	],
 	"dependencies": {
-		"@lucidcms/kiln": "*",
+		"@lucidkiln/core": "*",
 		"vscode-languageserver": "10.1.2",
 		"vscode-languageserver-textdocument": "1.0.15"
 	},

@@ -1,8 +1,8 @@
 use std::{env, fs};
 use zed_extension_api::{self as zed, settings::LspSettings, LanguageServerId, Result};
 
-const SERVER_PACKAGE: &str = "@lucidcms/kiln-language-server";
-const SERVER_PATH: &str = "node_modules/@lucidcms/kiln-language-server/dist/main.js";
+const SERVER_PACKAGE: &str = "@lucidkiln/language-server";
+const SERVER_PATH: &str = "node_modules/@lucidkiln/language-server/dist/main.js";
 
 /// Starts Kiln's language server, installing it from npm into the extension's folder when the project doesn't have its own.
 struct KilnExtension {
@@ -38,7 +38,11 @@ impl KilnExtension {
                     }
                 }
             }
-            Err(error) if !self.server_exists() => return Err(error),
+            Err(error) if !self.server_exists() => {
+                return Err(format!(
+                    "{error}\n\nCouldn't install {SERVER_PACKAGE} from npm. Add it to your project, or set lsp.kiln.binary in your settings."
+                ))
+            }
             _ => {}
         }
         if !self.server_exists() {
@@ -73,19 +77,41 @@ impl zed::Extension for KilnExtension {
             });
         }
 
-        // Then the project's own copy, so it matches the project's version of Kiln.
-        let script = if worktree
-            .read_text_file("node_modules/@lucidcms/kiln-language-server/package.json")
-            .is_ok()
+        // Then a copy in the project, so it matches the project's version of Kiln. Extensions can't read ignored
+        // folders such as node_modules, so this goes by package.json instead.
+        let root = worktree.root_path();
+        let local = if worktree
+            .read_text_file("packages/language-server/package.json")
+            .is_ok_and(|json| json.contains(&format!("\"name\": \"{SERVER_PACKAGE}\"")))
         {
-            format!("{}/{SERVER_PATH}", worktree.root_path())
+            // Kiln's own repository runs the server it builds.
+            Some(format!("{root}/packages/language-server/dist/main.js"))
+        } else if worktree
+            .read_text_file("package.json")
+            .is_ok_and(|json| json.contains(&format!("\"{SERVER_PACKAGE}\"")))
+        {
+            Some(format!("{root}/{SERVER_PATH}"))
         } else {
-            let path = self.install_server(id)?;
-            env::current_dir()
-                .map_err(|error| error.to_string())?
-                .join(path)
-                .to_string_lossy()
-                .to_string()
+            None
+        };
+
+        let script = match local {
+            Some(script) => script,
+            None => {
+                if let Some(path) = worktree.which("kiln-language-server") {
+                    return Ok(zed::Command {
+                        command: path,
+                        args: vec!["--stdio".to_string()],
+                        env: Default::default(),
+                    });
+                }
+                let path = self.install_server(id)?;
+                env::current_dir()
+                    .map_err(|error| error.to_string())?
+                    .join(path)
+                    .to_string_lossy()
+                    .to_string()
+            }
         };
         Ok(zed::Command {
             command: zed::node_binary_path()?,

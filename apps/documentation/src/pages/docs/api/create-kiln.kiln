@@ -1,11 +1,11 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p><code>createKiln</code> creates an environment: the object that loads, compiles and renders your templates. Create one when your app starts and reuse it for every render.</p>
+	<p><code>createKiln</code> creates an environment: the object that loads, compiles and renders your templates. Create one when your app starts and reuse it for every render.</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
-import { createKiln, memoryLoader } from "@lucidcms/kiln";
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { createKiln, memoryLoader } from "@lucidkiln/core";
 
 const kiln = createKiln({
 	loader: memoryLoader({
@@ -20,44 +20,44 @@ const kiln = createKiln({
 });
 
 const html = await kiln.render("pages/home", { route: { path: "/" } });
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Options</h2>
+	<h2>Options</h2>
 
-<table>
-	<thead><tr><th>Option</th><th>Default</th><th>Description</th></tr></thead>
-	<tbody>
-		<tr><td><code>loader</code></td><td>Required</td><td>Where templates come from. See <a href="/docs/api/loaders/">Loaders</a></td></tr>
-		<tr><td><code>functions</code></td><td><code>{}</code></td><td>Functions templates can call</td></tr>
-		<tr><td><code>filters</code></td><td><code>{}</code></td><td>Filters templates can use</td></tr>
-		<tr><td><code>tests</code></td><td><code>{}</code></td><td>Tests templates can use with <code>is</code></td></tr>
-		<tr><td><code>types</code></td><td><code>{}</code></td><td>Checks for your own prop types, such as <code>Post</code>. See <a href="/docs/api/types/#your-own-types">TypeScript types</a></td></tr>
-		<tr><td><code>globals</code></td><td><code>{}</code></td><td>Variables every template can read</td></tr>
-		<tr><td><code>strict</code></td><td><code>true</code></td><td>Whether missing variables and properties are errors. See <a href="/docs/language/strict-mode/">Strict mode</a></td></tr>
-		<tr><td><code>autoescape</code></td><td><code>"html"</code></td><td>The escaping strategy for output, or <code>false</code> to turn it off</td></tr>
-		<tr><td><code>locale</code></td><td><code>"en"</code></td><td>The locale for <code>formatNumber</code> and <code>formatDate</code></td></tr>
-		<tr><td><code>timeZone</code></td><td><code>"UTC"</code></td><td>The time zone for <code>formatDate</code></td></tr>
-		<tr><td><code>debug</code></td><td><code>false</code></td><td>Turns on the <code>dump</code> function</td></tr>
-		<tr><td><code>limits</code></td><td>See <a href="/docs/api/safety/#limits">Limits</a></td><td>Caps on output size, steps and nesting</td></tr>
-	</tbody>
-</table>
+	<table>
+		<thead><tr><th>Option</th><th>Default</th><th>Description</th></tr></thead>
+		<tbody>
+			<tr><td><code>loader</code></td><td>Required</td><td>Where templates come from. See <a href="/docs/api/loaders/">Loaders</a></td></tr>
+			<tr><td><code>functions</code></td><td><code>{}</code></td><td>Functions templates can call</td></tr>
+			<tr><td><code>filters</code></td><td><code>{}</code></td><td>Filters templates can use</td></tr>
+			<tr><td><code>tests</code></td><td><code>{}</code></td><td>Tests templates can use with <code>is</code></td></tr>
+			<tr><td><code>types</code></td><td><code>{}</code></td><td>Checks for your own prop types, such as <code>Post</code>. See <a href="/docs/api/types/#your-own-types">TypeScript types</a></td></tr>
+			<tr><td><code>globals</code></td><td><code>{}</code></td><td>Variables every template can read</td></tr>
+			<tr><td><code>strict</code></td><td><code>true</code></td><td>Whether missing variables and properties are errors. See <a href="/docs/language/strict-mode/">Strict mode</a></td></tr>
+			<tr><td><code>autoescape</code></td><td><code>"html"</code></td><td>The escaping strategy for output, or <code>false</code> to turn it off</td></tr>
+			<tr><td><code>locale</code></td><td><code>"en"</code></td><td>The locale for <code>formatNumber</code> and <code>formatDate</code></td></tr>
+			<tr><td><code>timeZone</code></td><td><code>"UTC"</code></td><td>The time zone for <code>formatDate</code></td></tr>
+			<tr><td><code>debug</code></td><td><code>false</code></td><td>Turns on the <code>dump</code> function</td></tr>
+			<tr><td><code>limits</code></td><td>See <a href="/docs/api/safety/#limits">Limits</a></td><td>Caps on output size, steps and nesting</td></tr>
+		</tbody>
+	</table>
 
-<p><code>locale</code> and <code>timeZone</code> have fixed defaults rather than the server's settings, so a page renders the same on your laptop, on Node and on Workers.</p>
+	<p><code>locale</code> and <code>timeZone</code> have fixed defaults rather than the server's settings, so a page renders the same on your laptop, on Node and on Workers.</p>
 
-<h2>The environment</h2>
+	<h2>The environment</h2>
 
-<p>The environment has these methods:</p>
+	<p>The environment has these methods:</p>
 
-<table>
-	<thead><tr><th>Method</th><th>Description</th></tr></thead>
-	<tbody>
-		<tr><td><code>render(name, context?, options?)</code></td><td>Renders a template to a string. See <a href="/docs/api/rendering/">Rendering</a></td></tr>
-		<tr><td><code>renderBlock(name, block, context?, options?)</code></td><td>Renders one block of a template</td></tr>
-		<tr><td><code>check(name, source?)</code></td><td>Finds problems in a template without rendering it. See <a href="/docs/api/errors/#checking-templates">Errors and checks</a></td></tr>
-		<tr><td><code>analyze(name, source?)</code></td><td>Reports what a template uses</td></tr>
-		<tr><td><code>precompile(name, source?)</code></td><td>Compiles a template to a JavaScript module at build time. See <a href="/docs/api/precompiling/">Precompiling</a></td></tr>
-		<tr><td><code>invalidate(name?)</code></td><td>Clears one compiled template, or all of them, from the cache</td></tr>
-	</tbody>
-</table>
+	<table>
+		<thead><tr><th>Method</th><th>Description</th></tr></thead>
+		<tbody>
+			<tr><td><code>render(name, context?, options?)</code></td><td>Renders a template to a string. See <a href="/docs/api/rendering/">Rendering</a></td></tr>
+			<tr><td><code>renderBlock(name, block, context?, options?)</code></td><td>Renders one block of a template</td></tr>
+			<tr><td><code>check(name, source?)</code></td><td>Finds problems in a template without rendering it. See <a href="/docs/api/errors/#checking-templates">Errors and checks</a></td></tr>
+			<tr><td><code>analyze(name, source?)</code></td><td>Reports what a template uses</td></tr>
+			<tr><td><code>precompile(name, source?)</code></td><td>Compiles a template to a JavaScript module at build time. See <a href="/docs/api/precompiling/">Precompiling</a></td></tr>
+			<tr><td><code>invalidate(name?)</code></td><td>Clears one compiled template, or all of them, from the cache</td></tr>
+		</tbody>
+	</table>
 {% endblock %}

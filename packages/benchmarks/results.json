@@ -16,7 +16,7 @@
 		{
 			"id": "kiln",
 			"name": "Kiln",
-			"package": "@lucidcms/kiln",
+			"package": "@lucidkiln/core",
 			"version": "0.0.0",
 			"homepage": "https://github.com/buildlucid/kiln"
 		},

@@ -15,7 +15,7 @@ Kiln is a template language for building websites on the server. The syntax will
 ## Install
 
 ```bash
-npm install @lucidcms/kiln
+npm install @lucidkiln/core
 ```
 
 ## Usage
@@ -38,8 +38,8 @@ npm install @lucidcms/kiln
 `render.ts`:
 
 ```ts
-import { createKiln } from "@lucidcms/kiln";
-import { fileLoader } from "@lucidcms/kiln/node";
+import { createKiln } from "@lucidkiln/core";
+import { fileLoader } from "@lucidkiln/core/node";
 
 const kiln = createKiln({
 	loader: fileLoader({ root: "templates" }),
@@ -52,7 +52,7 @@ const kiln = createKiln({
 const html = await kiln.render("pages/home", { title: "Home" });
 ```
 
-On Cloudflare Workers, use `memoryLoader` from `@lucidcms/kiln` to pass templates in as strings.
+On Cloudflare Workers, use `memoryLoader` from `@lucidkiln/core` to pass templates in as strings.
 
 ## Documentation
 

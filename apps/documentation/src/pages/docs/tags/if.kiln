@@ -1,10 +1,10 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p><code>if</code> renders its content only when a condition is true. Add <code>elseif</code> and <code>else</code> for other cases.</p>
+	<p><code>if</code> renders its content only when a condition is true. Add <code>elseif</code> and <code>else</code> for other cases.</p>
 
-{% apply example(context: { page: { hero: null, image: "/img/cover.jpg" } }) %}
-{% verbatim %}
+	{% apply example(context: { page: { hero: null, image: "/img/cover.jpg" } }) %}
+		{% verbatim %}
 {% if page.hero %}
 	<div class="hero">{{ page.hero }}</div>
 {% elseif page.image %}
@@ -12,32 +12,32 @@
 {% else %}
 	<hr>
 {% endif %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Conditions</h2>
+	<h2>Conditions</h2>
 
-<p>Conditions follow Kiln's <a href="/docs/language/values/#true-and-false">rules for true and false</a>. Empty arrays and hashes are false, and <code>"0"</code> is true.</p>
+	<p>Conditions follow Kiln's <a href="/docs/language/values/#true-and-false">rules for true and false</a>. Empty arrays and hashes are false, and <code>"0"</code> is true.</p>
 
-<p>Combine conditions with <code>and</code>, <code>or</code> and <code>not</code>, and use tests with <code>is</code>:</p>
+	<p>Combine conditions with <code>and</code>, <code>or</code> and <code>not</code>, and use tests with <code>is</code>:</p>
 
-{% apply highlight("kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln") %}
+		{% verbatim %}
 {% if user and not user.banned %}
 {% if posts is not empty %}
 {% if page.subtitle is defined %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Inline conditions</h2>
+	<h2>Inline conditions</h2>
 
-<p>For a value rather than a block of markup, use <code>? :</code> inside an expression:</p>
+	<p>For a value rather than a block of markup, use <code>? :</code> inside an expression:</p>
 
-{% apply example(context: { active: true }) %}
-{% verbatim %}
+	{% apply example(context: { active: true }) %}
+		{% verbatim %}
 <a class="{{ active ? "link link--active" : "link" }}">Home</a>
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p><code>if</code> doesn't create a scope, so variables set inside it are still there afterwards.</p>
+	<p><code>if</code> doesn't create a scope, so variables set inside it are still there afterwards.</p>
 {% endblock %}

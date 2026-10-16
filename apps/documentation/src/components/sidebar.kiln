@@ -1,17 +1,34 @@
-{# The docs navigation, shared by the desktop sidebar and the mobile menu. #}
 {% props current %}
+
+{#
+	Each section collapses. client/nav.ts remembers which ones the reader closed,
+	and the script below closes them again before the sidebar paints, so it doesn't flicker between pages.
+	The section holding the current page always stays open.
+#}
 <nav aria-label="Docs" class="text-[14px]">
 	{% for section in navigation %}
-	<div class="{{ loop.first ? "" : "mt-7" }}">
-		<p class="mb-2 px-2.5 text-[13px] font-medium text-fg">{{ section.title }}</p>
-		<ul class="space-y-px">
-			{% for item in section.items %}
-			{% set active = item.url == current %}
-			<li>
-				<a href="{{ item.url }}" class="block rounded-md px-2.5 py-1.5 transition-colors {{ active ? "bg-raised text-fg" : "text-muted hover:text-fg" }}"{{ attrs({ "aria-current": active ? "page" }) }}>{{ item.title }}</a>
-			</li>
-			{% endfor %}
-		</ul>
-	</div>
+		{% set hasCurrent = section.items|filter(item => item.url == current)|length > 0 %}
+		<details class="nav-section {{ loop.first ? "" : "mt-5" }}" data-section="{{ section.title }}"{{ attrs({ "data-current": hasCurrent }) }} open>
+			<summary class="group/summary flex items-center justify-between rounded-md px-2.5 py-1 text-[13px] font-medium text-fg transition-colors hover:bg-surface">
+				{{ section.title }}
+				<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" class="nav-chevron text-muted transition-transform duration-200 group-hover/summary:text-fg"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+			</summary>
+			<ul class="mt-1.5 ml-2.5 border-l border-line">
+				{% for item in section.items %}
+					{% set active = item.url == current %}
+					<li>
+						<a href="{{ item.url }}" class="nav-item -ml-px block border-l py-1.5 pr-2 pl-3.5 transition-colors {{ active ? "border-ember font-medium text-fg" : "border-transparent text-muted hover:border-line-strong hover:text-fg" }}"{{ attrs({ "aria-current": active ? "page" }) }}>{{ item.title }}</a>
+					</li>
+				{% endfor %}
+			</ul>
+		</details>
 	{% endfor %}
 </nav>
+<script>
+	(() => {
+		let closed = [];
+		try { closed = JSON.parse(localStorage.getItem("kiln:closed-sections")) ?? []; } catch {}
+		for (const section of document.currentScript.previousElementSibling.querySelectorAll("[data-section]:not([data-current])"))
+			if (closed.includes(section.dataset.section)) section.open = false;
+	})();
+</script>

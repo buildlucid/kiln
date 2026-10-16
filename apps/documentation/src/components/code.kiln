@@ -1,6 +1,10 @@
-{# Wraps a highlighted code block. Used by the highlight filter. #}
 {% props code, title = null %}
-<figure class="code">
-	{% if title %}<figcaption class="code-label">{{ title }}</figcaption>{% endif %}
+
+<figure class="code" data-code>
+	{% if title %}
+		<figcaption class="code-head"><span class="code-label">{{ title }}</span>{% include "components/copy" %}</figcaption>
+	{% else %}
+		{% include "components/copy" with { float: true } %}
+	{% endif %}
 	{{ code }}
 </figure>

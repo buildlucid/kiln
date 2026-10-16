@@ -1,33 +1,33 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p><code>set</code> assigns a value to a variable.</p>
+	<p><code>set</code> assigns a value to a variable.</p>
 
-{% apply example(context: { page: { title: null } }) %}
-{% verbatim %}
+	{% apply example(context: { page: { title: null } }) %}
+		{% verbatim %}
 {% set title = page.title ?? "Untitled" %}
 <h1>{{ title }}</h1>
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Capturing markup</h2>
+	<h2>Capturing markup</h2>
 
-<p>The block form renders its content and stores the result. Use it to build a piece of markup once and output it in several places.</p>
+	<p>The block form renders its content and stores the result. Use it to build a piece of markup once and output it in several places.</p>
 
-{% apply example(context: { site: { name: "Acme" } }) %}
-{% verbatim %}
+	{% apply example(context: { site: { name: "Acme" } }) %}
+		{% verbatim %}
 {% set logo %}<a href="/" class="logo">{{ site.name }}</a>{% endset %}
 
 <header>{{ logo }}</header>
 <footer>{{ logo }}</footer>
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>The captured markup is already escaped, so it isn't escaped again when you output it.</p>
+	<p>The captured markup is already escaped, so it isn't escaped again when you output it.</p>
 
-<h2>Where variables live</h2>
+	<h2>Where variables live</h2>
 
-<p><code>set</code> updates a variable in the scope where it already exists, or creates it in the current scope. See <a href="/docs/language/variables/">Variables and scope</a>.</p>
+	<p><code>set</code> updates a variable in the scope where it already exists, or creates it in the current scope. See <a href="/docs/language/variables/">Variables and scope</a>.</p>
 
-<p>In a page that extends a layout, top-level <code>set</code> tags run before the layout renders, so the layout and every block can use them.</p>
+	<p>In a page that extends a layout, top-level <code>set</code> tags run before the layout renders, so the layout and every block can use them.</p>
 {% endblock %}

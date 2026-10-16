@@ -24,6 +24,8 @@ describe("lexer", () => {
 	test("interpolated strings split into parts", () => {
 		const { tokens } = lex('{{ "a#{ b }c" }}');
 		expect(tokens.map((t) => t.type)).toEqual([
+			// Empty, to mark where the line starts.
+			"text",
 			"outputOpen",
 			"stringStart",
 			"string",

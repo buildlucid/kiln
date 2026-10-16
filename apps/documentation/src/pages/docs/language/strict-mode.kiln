@@ -1,57 +1,57 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p>Strict mode is on by default. It turns a misspelt variable or a missing property into an error, instead of a blank space on the page that nobody notices.</p>
+	<p>Strict mode is on by default. It turns a misspelt variable or a missing property into an error, instead of a blank space on the page that nobody notices.</p>
 
-{% apply example(error: true, context: { title: "Welcome" }) %}
-{% verbatim %}
+	{% apply example(error: true, context: { title: "Welcome" }) %}
+		{% verbatim %}
 <h1>{{ titel }}</h1>
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Optional data</h2>
+	<h2>Optional data</h2>
 
-<p>When data may be missing, say so in the template. These never raise missing-variable or missing-property errors:</p>
+	<p>When data may be missing, say so in the template. These never raise missing-variable or missing-property errors:</p>
 
-<ul>
-	<li><code>?.</code> returns null if the left side is null: <code>page?.author?.name</code></li>
-	<li><code>??</code> uses a fallback: <code>page.subtitle ?? ""</code></li>
-	<li><code>default</code> uses a fallback when the value is empty: <code>page.subtitle|default("")</code></li>
-	<li><code>is defined</code> checks whether a value exists: <code>{% verbatim %}{% if page.subtitle is defined %}{% endverbatim %}</code></li>
-</ul>
+	<ul>
+		<li><code>?.</code> returns null if the left side is null: <code>page?.author?.name</code></li>
+		<li><code>??</code> uses a fallback: <code>page.subtitle ?? ""</code></li>
+		<li><code>default</code> uses a fallback when the value is empty: <code>page.subtitle|default("")</code></li>
+		<li><code>is defined</code> checks whether a value exists: <code>{% verbatim %}{% if page.subtitle is defined %}{% endverbatim %}</code></li>
+	</ul>
 
-{% apply example(context: { page: { title: "About" } }) %}
-{% verbatim %}
+	{% apply example(context: { page: { title: "About" } }) %}
+		{% verbatim %}
 <h1>{{ page.title }}</h1>
 <p>{{ page.subtitle ?? "No subtitle" }}</p>
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Strict and lenient</h2>
+	<h2>Strict and lenient</h2>
 
-<table>
-	<thead><tr><th>Situation</th><th>Strict</th><th>Lenient</th></tr></thead>
-	<tbody>
-		<tr><td>Unknown variable</td><td>Error</td><td>null</td></tr>
-		<tr><td>Missing property</td><td>Error</td><td>null</td></tr>
-		<tr><td>Property of null</td><td>Error</td><td>null</td></tr>
-		<tr><td>Required prop missing</td><td>Error</td><td>null</td></tr>
-		<tr><td>Prop not declared</td><td>Error</td><td>Ignored</td></tr>
-		<tr><td>Prop of the wrong type</td><td>Error</td><td>Not checked</td></tr>
-		<tr><td>Unknown filter, function, test or tag</td><td>Error</td><td>Error</td></tr>
-		<tr><td>Type errors, such as <code>"a" + 1</code></td><td>Error</td><td>Error</td></tr>
-	</tbody>
-</table>
+	<table>
+		<thead><tr><th>Situation</th><th>Strict</th><th>Lenient</th></tr></thead>
+		<tbody>
+			<tr><td>Unknown variable</td><td>Error</td><td>null</td></tr>
+			<tr><td>Missing property</td><td>Error</td><td>null</td></tr>
+			<tr><td>Property of null</td><td>Error</td><td>null</td></tr>
+			<tr><td>Required prop missing</td><td>Error</td><td>null</td></tr>
+			<tr><td>Prop not declared</td><td>Error</td><td>Ignored</td></tr>
+			<tr><td>Prop of the wrong type</td><td>Error</td><td>Not checked</td></tr>
+			<tr><td>Unknown filter, function, test or tag</td><td>Error</td><td>Error</td></tr>
+			<tr><td>Type errors, such as <code>"a" + 1</code></td><td>Error</td><td>Error</td></tr>
+		</tbody>
+	</table>
 
-<h2>Turning it off</h2>
+	<h2>Turning it off</h2>
 
-<p>Lenient mode treats missing data as null. Turn it on for the whole environment:</p>
+	<p>Lenient mode treats missing data as null. Turn it on for the whole environment:</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
+	{% apply highlight("ts") %}
+		{% verbatim %}
 const kiln = createKiln({ loader, strict: false });
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<p>We recommend leaving strict mode on. Guarding optional data takes a few characters and catches real bugs.</p>
+	<p>We recommend leaving strict mode on. Guarding optional data takes a few characters and catches real bugs.</p>
 {% endblock %}

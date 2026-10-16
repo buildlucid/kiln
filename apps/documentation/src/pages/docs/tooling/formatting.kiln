@@ -1,10 +1,10 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-<p>Kiln has a formatter. It indents templates to match their structure and tidies the spacing inside tags, so every template in a project looks the same. It only changes whitespace that HTML ignores, so pages look the same before and after.</p>
+	<p>Kiln has a formatter. It indents templates to match their structure and tidies the spacing inside tags, so every template in a project looks the same. It only changes whitespace that HTML ignores, so pages look the same before and after.</p>
 
-{% apply highlight("kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln", format: false) %}
+		{% verbatim %}
 {# Before #}
 <ul>
 {% for post in posts %}
@@ -18,112 +18,112 @@
 		<li><a href="{{ post.url }}">{{ post.title|upper }}</a></li>
 	{% endfor %}
 </ul>
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h2>Running it</h2>
+	<h2>Running it</h2>
 
-<p>Run <code>kiln format</code> with the files or folders to format. Folders are searched for <code>.kiln</code> files.</p>
+	<p>Run <code>kiln format</code> with the files or folders to format. Folders are searched for <code>.kiln</code> files.</p>
 
-{% apply highlight("sh") %}
-{% verbatim %}
+	{% apply highlight("sh") %}
+		{% verbatim %}
 npx kiln format templates
 npx kiln format --check templates
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<ul>
-	<li>Without <code>--check</code>, it rewrites files that need formatting and lists them.</li>
-	<li>With <code>--check</code>, it changes nothing. It lists files that need formatting and exits with code 1 if there are any, which suits CI and pre-commit hooks.</li>
-	<li>Files and folders whose names start with a dot, and <code>node_modules</code>, are skipped.</li>
-	<li>Indentation uses tabs. Pass <code>--spaces 2</code>, or any other width, to indent with spaces.</li>
-</ul>
+	<ul>
+		<li>Without <code>--check</code>, it rewrites files that need formatting and lists them.</li>
+		<li>With <code>--check</code>, it changes nothing. It lists files that need formatting and exits with code 1 if there are any, which suits CI and pre-commit hooks.</li>
+		<li>Files and folders whose names start with a dot, and <code>node_modules</code>, are skipped.</li>
+		<li>Indentation uses tabs. Pass <code>--spaces 2</code>, or any other width, to indent with spaces.</li>
+	</ul>
 
-<p>Editors format through the language server. See <a href="/docs/tooling/editors/">Editor support</a>.</p>
+	<p>Editors format through the language server. See <a href="/docs/tooling/editors/">Editor support</a>.</p>
 
-<h2>What it changes</h2>
+	<h2>What it changes</h2>
 
-<ul>
-	<li><strong>Indentation.</strong> Each line is indented one step for every block tag and HTML element it sits inside.</li>
-	<li><strong>Spacing inside delimiters.</strong> One space inside <code>&#123;{ }}</code> and <code>&#123;% %}</code>, and consistent spacing around operators, commas and colons. Trim markers such as <code>&#123;%-</code> stay where they are.</li>
-	<li><strong>Blank lines.</strong> Runs of blank lines become one, and blank lines at the start and end of the file are removed.</li>
-	<li><strong>Line ends.</strong> Trailing spaces are removed and the file ends with one line break. Line breaks become <code>\n</code>.</li>
-</ul>
+	<ul>
+		<li><strong>Indentation.</strong> Each line is indented one step for every block tag and HTML element it sits inside.</li>
+		<li><strong>Spacing inside delimiters.</strong> One space inside <code>&#123;{ }}</code> and <code>&#123;% %}</code>, and consistent spacing around operators, commas and colons. Trim markers such as <code>&#123;%-</code> stay where they are.</li>
+		<li><strong>Blank lines.</strong> Runs of blank lines become one, and blank lines at the start and end of the file are removed.</li>
+		<li><strong>Line ends.</strong> Trailing spaces are removed and the file ends with one line break. Line breaks become <code>\n</code>.</li>
+	</ul>
 
-<p>It never joins or splits lines, rewraps text or reorders anything. A line break inside a tag stays, and the lines after it are indented one step further, or to match the brackets they are inside:</p>
+	<p>It never joins or splits lines, rewraps text or reorders anything. A line break inside a tag stays, and the lines after it are indented one step further, or to match the brackets they are inside:</p>
 
-{% apply highlight("kiln") %}
-{% verbatim %}
+	{% apply highlight("kiln") %}
+		{% verbatim %}
 {% include "components/card" with {
 	title: post.title,
 	url: post.url,
 } %}
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<h3>Expressions</h3>
+	<h3>Expressions</h3>
 
-<p>Inside delimiters, the formatter puts:</p>
+	<p>Inside delimiters, the formatter puts:</p>
 
-<ul>
-	<li>one space either side of operators such as <code>==</code>, <code>+</code>, <code>~</code>, <code>??</code>, <code>=</code> and <code>=&gt;</code>, and of the <code>?</code> and <code>:</code> in <code>a ? b : c</code>.</li>
-	<li>no space around <code>.</code>, <code>?.</code>, <code>|</code> and <code>..</code>, so you get <code>post.title|upper</code> and <code>1..10</code>.</li>
-	<li>no space after <code>(</code> or <code>[</code> or before <code>)</code> or <code>]</code>, and none before a call's brackets: <code>range(1, 3)</code>.</li>
-	<li>a space after a comma, and after the colon in <code>name: value</code>, but not before them.</li>
-	<li>a space inside a hash's braces: <code>{ title: "Home" }</code>. An empty hash stays <code>{}</code>.</li>
-	<li>no space after a minus or plus sign that makes a number negative or positive: <code>-1</code>.</li>
-</ul>
+	<ul>
+		<li>one space either side of operators such as <code>==</code>, <code>+</code>, <code>~</code>, <code>??</code>, <code>=</code> and <code>=&gt;</code>, and of the <code>?</code> and <code>:</code> in <code>a ? b : c</code>.</li>
+		<li>no space around <code>.</code>, <code>?.</code>, <code>|</code> and <code>..</code>, so you get <code>post.title|upper</code> and <code>1..10</code>.</li>
+		<li>no space after <code>(</code> or <code>[</code> or before <code>)</code> or <code>]</code>, and none before a call's brackets: <code>range(1, 3)</code>.</li>
+		<li>a space after a comma, and after the colon in <code>name: value</code>, but not before them.</li>
+		<li>a space inside a hash's braces: <code>{ title: "Home" }</code>. An empty hash stays <code>{}</code>.</li>
+		<li>no space after a minus or plus sign that makes a number negative or positive: <code>-1</code>.</li>
+	</ul>
 
-<p>In <code>props</code>, <code>|</code> joins types, so it gets a space either side: <code>variant: "primary" | "secondary"</code>. Strings are left exactly as written, quotes and all.</p>
+	<p>In <code>props</code>, <code>|</code> joins types, so it gets a space either side: <code>variant: "primary" | "secondary"</code>. Strings are left exactly as written, quotes and all.</p>
 
-<h3>HTML</h3>
+	<h3>HTML</h3>
 
-<ul>
-	<li>Void elements such as <code>&lt;br&gt;</code> and <code>&lt;img&gt;</code>, and self-closing tags, don't indent what follows.</li>
-	<li>An element that the next sibling closes, such as a <code>&lt;li&gt;</code> without <code>&lt;/li&gt;</code>, doesn't indent the next one.</li>
-	<li>Attributes on lines of their own are indented one step from their tag. A <code>&gt;</code> on a line of its own lines up with the tag.</li>
-	<li>An element opened inside a block tag counts only until that block, or that branch of an <code>if</code>, ends. Templates that open an element in one branch and close it in another format without errors.</li>
-</ul>
+	<ul>
+		<li>Void elements such as <code>&lt;br&gt;</code> and <code>&lt;img&gt;</code>, and self-closing tags, don't indent what follows.</li>
+		<li>An element that the next sibling closes, such as a <code>&lt;li&gt;</code> without <code>&lt;/li&gt;</code>, doesn't indent the next one.</li>
+		<li>Attributes on lines of their own are indented one step from their tag. A <code>&gt;</code> on a line of its own lines up with the tag.</li>
+		<li>An element opened inside a block tag counts only until that block, or that branch of an <code>if</code>, ends. Templates that open an element in one branch and close it in another format without errors.</li>
+	</ul>
 
-<h3>What it leaves alone</h3>
+	<h3>What it leaves alone</h3>
 
-<ul>
-	<li>Everything inside <code>&lt;pre&gt;</code>, <code>&lt;textarea&gt;</code> and <code>verbatim</code>, because whitespace there shows on the page.</li>
-	<li>Text inside attribute values.</li>
-	<li>The lines inside <code>&lt;script&gt;</code>, <code>&lt;style&gt;</code>, HTML comments and Kiln comments. They move with their opening line, but keep their own indentation relative to it.</li>
-</ul>
+	<ul>
+		<li>Everything inside <code>&lt;pre&gt;</code>, <code>&lt;textarea&gt;</code> and <code>verbatim</code>, because whitespace there shows on the page.</li>
+		<li>Text inside attribute values.</li>
+		<li>The lines inside <code>&lt;script&gt;</code>, <code>&lt;style&gt;</code>, HTML comments and Kiln comments. They move with their opening line, but keep their own indentation relative to it.</li>
+	</ul>
 
-<h2>Safety</h2>
+	<h2>Safety</h2>
 
-<p>The formatter only changes whitespace and the spacing inside delimiters. To prove it, it parses the template before and after, and compares the two. If anything differs apart from whitespace at the start and end of lines, it changes nothing and reports an error. Please <a href="https://github.com/buildlucid/kiln/issues">open an issue</a> if you see one.</p>
+	<p>The formatter only changes whitespace and the spacing inside delimiters. To prove it, it parses the template before and after, and compares the two. If anything differs apart from whitespace at the start and end of lines, it changes nothing and reports an error. Please <a href="https://github.com/buildlucid/kiln/issues">open an issue</a> if you see one.</p>
 
-<p>Whitespace at the start of a line can still change in the output, because the formatter assumes the template writes HTML, where it doesn't show. If a template writes plain text, such as an email's text version, check the output after formatting.</p>
+	<p>Whitespace at the start of a line can still change in the output, because the formatter assumes the template writes HTML, where it doesn't show. If a template writes plain text, such as an email's text version, check the output after formatting.</p>
 
-<p>A template with syntax errors isn't formatted. Fix the errors first. <code>kiln format</code> lists them.</p>
+	<p>A template with syntax errors isn't formatted. Fix the errors first. <code>kiln format</code> lists them.</p>
 
-<h2>From JavaScript</h2>
+	<h2>From JavaScript</h2>
 
-<p><code>format</code> comes from its own entry point, <code>@lucidcms/kiln/format</code>. Like the rest of Kiln, it runs anywhere, including in the browser and on Workers.</p>
+	<p><code>format</code> comes from its own entry point, <code>@lucidkiln/core/format</code>. Like the rest of Kiln, it runs anywhere, including in the browser and on Workers.</p>
 
-{% apply highlight("ts") %}
-{% verbatim %}
-import { format } from "@lucidcms/kiln/format";
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { format } from "@lucidkiln/core/format";
 
 const formatted = format(source);
 const withSpaces = format(source, { useTabs: false, tabWidth: 2 });
-{% endverbatim %}
-{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
 
-<table>
-	<thead><tr><th>Option</th><th>Description</th></tr></thead>
-	<tbody>
-		<tr><td><code>useTabs</code></td><td>Indent with tabs. Default <code>true</code>.</td></tr>
-		<tr><td><code>tabWidth</code></td><td>Spaces per step when <code>useTabs</code> is false, and the width of a tab when lining up the lines of a script or comment. Default <code>4</code>.</td></tr>
-		<tr><td><code>range</code></td><td>Only format lines that overlap this range, given as <code>{ start, end }</code> offsets. Editors use it to format a selection.</td></tr>
-	</tbody>
-</table>
+	<table>
+		<thead><tr><th>Option</th><th>Description</th></tr></thead>
+		<tbody>
+			<tr><td><code>useTabs</code></td><td>Indent with tabs. Default <code>true</code>.</td></tr>
+			<tr><td><code>tabWidth</code></td><td>Spaces per step when <code>useTabs</code> is false, and the width of a tab when lining up the lines of a script or comment. Default <code>4</code>.</td></tr>
+			<tr><td><code>range</code></td><td>Only format lines that overlap this range, given as <code>{ start, end }</code> offsets. Editors use it to format a selection.</td></tr>
+		</tbody>
+	</table>
 
-<p><code>format</code> throws a <code>KilnSyntaxError</code> when the template has syntax errors, and a <code>KilnFormatError</code> if the safety check fails.</p>
+	<p><code>format</code> throws a <code>KilnSyntaxError</code> when the template has syntax errors, and a <code>KilnFormatError</code> if the safety check fails.</p>
 
-<p><code>formatEdits</code> takes the same arguments and returns the changes as a list of <code>{ start, end, text }</code> edits, from first to last, instead of the new source. Editors apply them so the cursor and undo history stay put.</p>
+	<p><code>formatEdits</code> takes the same arguments and returns the changes as a list of <code>{ start, end, text }</code> edits, from first to last, instead of the new source. Editors apply them so the cursor and undo history stay put.</p>
 {% endblock %}
