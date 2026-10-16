@@ -20,6 +20,10 @@
           "named": true
         },
         {
+          "type": "cache_statement",
+          "named": true
+        },
+        {
           "type": "comment",
           "named": true
         },
@@ -492,6 +496,10 @@
           "named": true
         },
         {
+          "type": "cache_statement",
+          "named": true
+        },
+        {
           "type": "comment",
           "named": true
         },
@@ -948,6 +956,10 @@
           "named": true
         },
         {
+          "type": "cache_statement",
+          "named": true
+        },
+        {
           "type": "comment",
           "named": true
         },
@@ -1058,6 +1070,278 @@
     "type": "boolean",
     "named": true,
     "fields": {}
+  },
+  {
+    "type": "cache_statement",
+    "named": true,
+    "fields": {
+      "key": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "call_expression",
+            "named": true
+          },
+          {
+            "type": "conditional_expression",
+            "named": true
+          },
+          {
+            "type": "filter_expression",
+            "named": true
+          },
+          {
+            "type": "hash",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "member_expression",
+            "named": true
+          },
+          {
+            "type": "null",
+            "named": true
+          },
+          {
+            "type": "number",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "test_expression",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          }
+        ]
+      },
+      "seconds": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "call_expression",
+            "named": true
+          },
+          {
+            "type": "conditional_expression",
+            "named": true
+          },
+          {
+            "type": "filter_expression",
+            "named": true
+          },
+          {
+            "type": "hash",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "member_expression",
+            "named": true
+          },
+          {
+            "type": "null",
+            "named": true
+          },
+          {
+            "type": "number",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "test_expression",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "apply_statement",
+          "named": true
+        },
+        {
+          "type": "autoescape_statement",
+          "named": true
+        },
+        {
+          "type": "block_statement",
+          "named": true
+        },
+        {
+          "type": "cache_statement",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "component_statement",
+          "named": true
+        },
+        {
+          "type": "doctype",
+          "named": true
+        },
+        {
+          "type": "end_clause",
+          "named": true
+        },
+        {
+          "type": "end_tag",
+          "named": true
+        },
+        {
+          "type": "extends_statement",
+          "named": true
+        },
+        {
+          "type": "for_statement",
+          "named": true
+        },
+        {
+          "type": "from_statement",
+          "named": true
+        },
+        {
+          "type": "html_comment",
+          "named": true
+        },
+        {
+          "type": "if_statement",
+          "named": true
+        },
+        {
+          "type": "import_statement",
+          "named": true
+        },
+        {
+          "type": "include_statement",
+          "named": true
+        },
+        {
+          "type": "macro_statement",
+          "named": true
+        },
+        {
+          "type": "output",
+          "named": true
+        },
+        {
+          "type": "props_statement",
+          "named": true
+        },
+        {
+          "type": "script_element",
+          "named": true
+        },
+        {
+          "type": "self_closing_tag",
+          "named": true
+        },
+        {
+          "type": "set_block",
+          "named": true
+        },
+        {
+          "type": "set_statement",
+          "named": true
+        },
+        {
+          "type": "slot_statement",
+          "named": true
+        },
+        {
+          "type": "start_tag",
+          "named": true
+        },
+        {
+          "type": "style_element",
+          "named": true
+        },
+        {
+          "type": "tag_statement",
+          "named": true
+        },
+        {
+          "type": "text",
+          "named": true
+        },
+        {
+          "type": "verbatim_statement",
+          "named": true
+        },
+        {
+          "type": "with_statement",
+          "named": true
+        }
+      ]
+    }
   },
   {
     "type": "call_expression",
@@ -1252,6 +1536,10 @@
         },
         {
           "type": "block_statement",
+          "named": true
+        },
+        {
+          "type": "cache_statement",
           "named": true
         },
         {
@@ -1688,6 +1976,10 @@
           "named": true
         },
         {
+          "type": "cache_statement",
+          "named": true
+        },
+        {
           "type": "comment",
           "named": true
         },
@@ -1879,6 +2171,10 @@
         },
         {
           "type": "block_statement",
+          "named": true
+        },
+        {
+          "type": "cache_statement",
           "named": true
         },
         {
@@ -2142,6 +2438,10 @@
         },
         {
           "type": "block_statement",
+          "named": true
+        },
+        {
+          "type": "cache_statement",
           "named": true
         },
         {
@@ -2495,6 +2795,10 @@
           "named": true
         },
         {
+          "type": "cache_statement",
+          "named": true
+        },
+        {
           "type": "comment",
           "named": true
         },
@@ -2753,6 +3057,10 @@
         },
         {
           "type": "block_statement",
+          "named": true
+        },
+        {
+          "type": "cache_statement",
           "named": true
         },
         {
@@ -3175,6 +3483,10 @@
         },
         {
           "type": "block_statement",
+          "named": true
+        },
+        {
+          "type": "cache_statement",
           "named": true
         },
         {
@@ -4045,6 +4357,10 @@
           "named": true
         },
         {
+          "type": "cache_statement",
+          "named": true
+        },
+        {
           "type": "comment",
           "named": true
         },
@@ -4311,6 +4627,10 @@
         },
         {
           "type": "block_statement",
+          "named": true
+        },
+        {
+          "type": "cache_statement",
           "named": true
         },
         {
@@ -4846,6 +5166,10 @@
           "named": true
         },
         {
+          "type": "cache_statement",
+          "named": true
+        },
+        {
           "type": "comment",
           "named": true
         },
@@ -5249,6 +5573,10 @@
           "named": true
         },
         {
+          "type": "cache_statement",
+          "named": true
+        },
+        {
           "type": "comment",
           "named": true
         },
@@ -5532,6 +5860,10 @@
     "named": true
   },
   {
+    "type": "cache",
+    "named": false
+  },
+  {
     "type": "comment",
     "named": true
   },
@@ -5561,6 +5893,10 @@
   },
   {
     "type": "endblock",
+    "named": false
+  },
+  {
+    "type": "endcache",
     "named": false
   },
   {

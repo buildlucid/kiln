@@ -153,6 +153,23 @@ export type CallableEntry =
 /** Checks a value against a host type, such as `Post`. Hosts register these with the `types` option. */
 export type TypeCheck = (value: unknown) => boolean;
 
+/**
+ * Where the `cache` tag saves output, given as the `cache` option. See `memoryCache`. Each method takes one object, so
+ * more details can be added without breaking stores.
+ */
+export type KilnCache = {
+	/** Returns the HTML saved under `key`, or null when there is none. */
+	get(entry: {
+		key: string;
+	}): string | null | undefined | Promise<string | null | undefined>;
+	/** Saves `html` under `key`. `seconds` is the tag's `for` value, or null to let the store decide. */
+	set(entry: {
+		key: string;
+		html: string;
+		seconds: number | null;
+	}): void | Promise<void>;
+};
+
 /** What the runtime needs from the environment. */
 export interface EnvironmentCore {
 	readonly strict: boolean;
@@ -162,6 +179,8 @@ export interface EnvironmentCore {
 	readonly filters: ReadonlyMap<string, CallableEntry>;
 	readonly tests: ReadonlyMap<string, CallableEntry>;
 	readonly types: ReadonlyMap<string, TypeCheck>;
+	/** The store for the `cache` tag. Without one, the tag renders its content every time. */
+	readonly cache: KilnCache | null;
 	/** Goes up whenever `invalidate` drops templates, so templates found earlier are looked up again. */
 	readonly generation: number;
 	load(

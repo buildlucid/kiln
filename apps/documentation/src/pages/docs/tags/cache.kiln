@@ -1,0 +1,81 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+	<p><code>cache</code> saves the output of a section, so later renders reuse it instead of rendering the section again. Use it for parts that are slow to build, such as long lists or sections that load data.</p>
+
+	{% apply highlight("kiln") %}
+		{% verbatim %}
+{% cache ["post", post.id, post.updatedAt] for 600 %}
+	<article>
+		<h2>{{ post.title }}</h2>
+		{{ post.body|raw }}
+	</article>
+{% endcache %}
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>When a render reaches the tag, Kiln looks for a saved copy under the key. If there is one, Kiln outputs it and runs nothing inside the tag. If there isn't, Kiln renders the section, outputs it and saves it.</p>
+
+	<p>Caching does nothing until you give the environment a cache store. Without one, the section renders every time, so the same templates work in development and tests. See <a href="#cache-stores">Cache stores</a>.</p>
+
+	<h2>Keys</h2>
+
+	<p>The key decides when a saved copy is reused, so include everything the output depends on. A key is a string, a number, a boolean, a date or null, or a list of these.</p>
+
+	<ul>
+		<li>Put a version in the key, such as <code>post.updatedAt</code>. When the post changes, so does the key, and Kiln renders the section again. You never need to clear the cache.</li>
+		<li>Kiln adds the template's name and the render's locale and time zone to every key. Two templates can use the same key, and dates and numbers are never shown in the wrong language.</li>
+		<li>Never cache content for one visitor under a key that doesn't include them, or other visitors will see it.</li>
+	</ul>
+
+	<h2>How long copies last</h2>
+
+	<p><code>for</code> sets the most seconds a copy is kept. Without it, the store decides.</p>
+
+	{% apply highlight("kiln") %}
+		{% verbatim %}
+{% cache "footer" for 3600 %}…{% endcache %}
+{% cache "footer" %}…{% endcache %}
+		{% endverbatim %}
+	{% endapply %}
+
+	<h2>Scope</h2>
+
+	<p>The section can read the variables around it. Variables you <code>set</code> inside it stay inside it, even ones that already exist outside, so a saved copy leaves the same variables behind as a fresh render.</p>
+
+	<p>If the section fails, nothing is saved.</p>
+
+	<h2>Cache stores</h2>
+
+	<p>Pass a store as the <code>cache</code> option. <code>memoryCache</code> keeps copies in memory, which suits a long-running Node server. It holds 1,000 copies by default and drops the oldest first.</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { createKiln, memoryCache } from "@lucidkiln/core";
+
+const kiln = createKiln({ loader, cache: memoryCache({ max: 500 }) });
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>Any object with <code>get</code> and <code>set</code> methods is a store, so you can keep copies elsewhere, such as Workers KV:</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+const kiln = createKiln({
+	loader,
+	cache: {
+		get: ({ key }) => env.KV.get(key),
+		set: ({ key, html, seconds }) =>
+			env.KV.put(key, html, seconds ? { expirationTtl: seconds } : {}),
+	},
+});
+		{% endverbatim %}
+	{% endapply %}
+
+	<ul>
+		<li><code>get({ key })</code> returns the saved HTML, or null when there is none.</li>
+		<li><code>set({ key, html, seconds })</code> saves it. <code>seconds</code> is the value of <code>for</code>, or null.</li>
+		<li>Both take one object, so Kiln can pass more details later without breaking your store.</li>
+		<li>Either may return a promise. The render only waits when one does.</li>
+	</ul>
+{% endblock %}

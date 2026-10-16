@@ -1,0 +1,146 @@
+import { describe, expect, test, vi } from "vite-plus/test";
+import { type KilnCache, memoryCache } from "../../src/index.js";
+import { errorCode, lines, render } from "../helpers.js";
+
+/** A store that records what it saves. */
+const recording = () => {
+	const saved = new Map<string, { html: string; seconds: number | null }>();
+	const cache: KilnCache = {
+		get: ({ key }) => saved.get(key)?.html ?? null,
+		set: ({ key, html, seconds }) => {
+			saved.set(key, { html, seconds });
+		},
+	};
+	return { cache, saved };
+};
+
+describe("cache", () => {
+	test("renders its content every time without a store", async () => {
+		const template = '{% cache "a" %}{{ n }}{% endcache %}';
+		expect(await render(template, { context: { n: 1 } })).toBe("1");
+		expect(await render(template, { context: { n: 2 } })).toBe("2");
+	});
+
+	test("reuses the saved copy for the same key", async () => {
+		const cache = memoryCache();
+		const template = '{% cache "a" %}{{ n }}{% endcache %}';
+		expect(await render(template, { cache, context: { n: 1 } })).toBe("1");
+		expect(await render(template, { cache, context: { n: 2 } })).toBe("1");
+	});
+
+	test("renders again when the key changes", async () => {
+		const cache = memoryCache();
+		const template = '{% cache ["post", version] %}{{ version }}{% endcache %}';
+		expect(await render(template, { cache, context: { version: 1 } })).toBe(
+			"1",
+		);
+		expect(await render(template, { cache, context: { version: 2 } })).toBe(
+			"2",
+		);
+	});
+
+	test("adds the template, locale and time zone to the key, and passes for", async () => {
+		const { cache, saved } = recording();
+		await render('{% cache ["post", 1, true, null] for 600 %}x{% endcache %}', {
+			cache,
+		});
+		await render('{% cache "post" %}y{% endcache %}', {
+			cache,
+			locale: "de",
+			timeZone: "Europe/Berlin",
+		});
+		expect([...saved]).toEqual([
+			['index.kiln|en|UTC|["post",1,true,null]', { html: "x", seconds: 600 }],
+			['index.kiln|de|Europe/Berlin|["post"]', { html: "y", seconds: null }],
+		]);
+	});
+
+	test("dates in a key are written as ISO 8601", async () => {
+		const { cache, saved } = recording();
+		await render("{% cache at %}x{% endcache %}", {
+			cache,
+			context: { at: new Date(Date.UTC(2026, 9, 15)) },
+		});
+		expect([...saved.keys()]).toEqual([
+			'index.kiln|en|UTC|["2026-10-15T00:00:00.000Z"]',
+		]);
+	});
+
+	test("works with a store that returns promises", async () => {
+		const saved = new Map<string, string>();
+		const cache: KilnCache = {
+			get: async ({ key }) => saved.get(key),
+			set: async ({ key, html }) => {
+				saved.set(key, html);
+			},
+		};
+		const template = '{% cache "a" %}{{ n }}{% endcache %}';
+		expect(await render(template, { cache, context: { n: 1 } })).toBe("1");
+		expect(await render(template, { cache, context: { n: 2 } })).toBe("1");
+	});
+
+	test("a saved copy keeps the indentation it was rendered with", async () => {
+		const cache = memoryCache();
+		const template = lines(
+			"<ul>",
+			'	{% cache "list" %}',
+			"		{% for item in items %}",
+			"			<li>{{ item }}</li>",
+			"		{% endfor %}",
+			"	{% endcache %}",
+			"</ul>",
+		);
+		const options = { cache, context: { items: ["a", "b"] } };
+		const first = await render(template, options);
+		expect(first).toBe(lines("<ul>", "	<li>a</li>", "	<li>b</li>", "</ul>"));
+		expect(await render(template, options)).toBe(first);
+	});
+
+	test("variables set inside stay inside", async () => {
+		const template =
+			'{% set x = "out" %}{% cache "a" %}{% set x = "in" %}{{ x }}{% endcache %}{{ x }}';
+		expect(await render(template, { cache: memoryCache() })).toBe("inout");
+	});
+
+	test("globals still can't be set inside", async () => {
+		expect(
+			await errorCode('{% cache "a" %}{% set site = 1 %}{% endcache %}', {
+				globals: { site: 0 },
+			}),
+		).toBe("assign-global");
+	});
+
+	test("saves nothing when the content fails", async () => {
+		const set = vi.fn();
+		const cache: KilnCache = { get: () => null, set };
+		expect(
+			await errorCode('{% cache "a" %}{{ missing }}{% endcache %}', { cache }),
+		).toBe("undefined-variable");
+		expect(set).not.toHaveBeenCalled();
+	});
+
+	test("a key must be made of strings, numbers, booleans, dates and null", async () => {
+		expect(await errorCode("{% cache { a: 1 } %}{% endcache %}")).toBe(
+			"type-error",
+		);
+		expect(await errorCode('{% cache ["a", [1]] %}{% endcache %}')).toBe(
+			"type-error",
+		);
+	});
+
+	test("for must be a number of seconds above 0", async () => {
+		expect(await errorCode('{% cache "a" for 0 %}{% endcache %}')).toBe(
+			"invalid-argument",
+		);
+		expect(await errorCode('{% cache "a" for "1h" %}{% endcache %}')).toBe(
+			"invalid-argument",
+		);
+	});
+
+	test("needs a key and an endcache", async () => {
+		expect(await errorCode("{% cache %}{% endcache %}")).toBe(
+			"unexpected-token",
+		);
+		expect(await errorCode('{% cache "a" %}')).toBe("unclosed-block");
+	});
+});

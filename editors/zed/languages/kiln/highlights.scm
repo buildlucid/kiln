@@ -149,6 +149,8 @@
   "endmacro"
   "from"
   "endwith"
+  "cache"
+  "endcache"
   "apply"
   "endapply"
   "autoescape"

@@ -392,7 +392,7 @@ Autoescape
 Unknown tag
 ============================================================
 
-{% cache "key", 60 %}
+{% spaceless "key", 60 %}
 
 ------------------------------------------------------------
 
@@ -407,7 +407,7 @@ Unknown tag
 Unknown tag inside a block
 ============================================================
 
-{% if a %}{% cache %}{% endif %}
+{% if a %}{% spaceless %}{% endif %}
 
 ------------------------------------------------------------
 
@@ -448,4 +448,31 @@ Text after a fill
       (text)
       (end_clause))
     (text)
+    (end_clause)))
+
+============================================================
+Cache
+============================================================
+
+{% cache ["post", post.id] for 600 %}<p>{{ post.title }}</p>{% endcache %}
+
+------------------------------------------------------------
+
+(template
+  (cache_statement
+    (array
+      (string
+        (string_content))
+      (member_expression
+        (identifier)
+        (property_identifier)))
+    (number)
+    (start_tag
+      (tag_name))
+    (output
+      (member_expression
+        (identifier)
+        (property_identifier)))
+    (end_tag
+      (tag_name))
     (end_clause)))

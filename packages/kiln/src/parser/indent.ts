@@ -40,6 +40,7 @@ const bodiesOf = (node: Statement): Body[] => {
 			return [own([node.body], true)];
 		case "SetBlock":
 		case "Macro":
+		case "Cache":
 		case "With":
 		case "Apply":
 		case "Autoescape":

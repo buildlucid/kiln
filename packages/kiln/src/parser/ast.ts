@@ -202,6 +202,14 @@ export type Statement =
 			span: Span;
 	  }
 	| { type: "With"; value: Expression; body: Statement[]; span: Span }
+	/** `seconds` is the `for` value, or null. */
+	| {
+			type: "Cache";
+			key: Expression;
+			seconds: Expression | null;
+			body: Statement[];
+			span: Span;
+	  }
 	| { type: "Apply"; filters: FilterCall[]; body: Statement[]; span: Span }
 	| {
 			type: "Autoescape";

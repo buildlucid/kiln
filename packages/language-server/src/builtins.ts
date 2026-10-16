@@ -76,6 +76,11 @@ export const TAGS: Record<string, TagDoc> = {
 		snippet: block("with", " { ${1} }"),
 		description: "Adds variables for a section of a template.",
 	},
+	cache: {
+		snippet: block("cache", ' "${1:key}" for ${2:600}'),
+		description:
+			"Saves a section's output and reuses it in later renders, with the environment's cache store.",
+	},
 	apply: {
 		snippet: block("apply", " ${1:filter}"),
 		description: "Runs a section of output through filters.",
@@ -101,6 +106,7 @@ export const BLOCK_TAGS = new Set([
 	"slot",
 	"macro",
 	"with",
+	"cache",
 	"apply",
 	"autoescape",
 	"verbatim",

@@ -113,6 +113,11 @@ export const navigation = [
 				description: "Add variables for a section of a template.",
 			},
 			{
+				title: "cache",
+				url: "/docs/tags/cache/",
+				description: "Save a section's output and reuse it in later renders.",
+			},
+			{
 				title: "apply",
 				url: "/docs/tags/apply/",
 				description: "Run a section of output through filters.",

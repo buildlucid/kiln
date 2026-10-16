@@ -402,6 +402,8 @@ class Parser {
 				return this.#parseFromImport(open);
 			case "with":
 				return this.#parseWith(open);
+			case "cache":
+				return this.#parseCache(open);
 			case "apply":
 				return this.#parseApply(open);
 			case "autoescape":
@@ -912,6 +914,31 @@ class Parser {
 		return {
 			type: "With",
 			value,
+			body,
+			span: { start: open.start, end: this.#lastEnd },
+		};
+	}
+
+	#parseCache(open: Token): Statement {
+		const { key, seconds } = this.#header(
+			() => {
+				const key = this.#parseExpression();
+				let seconds: Expression | null = null;
+				if (this.#isName("for")) {
+					this.#next();
+					seconds = this.#parseExpression();
+				}
+				return { key, seconds };
+			},
+			{ key: this.#invalid(), seconds: null },
+		);
+		const { body, end } = this.#parseBody(["endcache"]);
+		if (end) this.#finishEndTag();
+		else this.#unclosed("cache", open, "endcache");
+		return {
+			type: "Cache",
+			key,
+			seconds,
 			body,
 			span: { start: open.start, end: this.#lastEnd },
 		};

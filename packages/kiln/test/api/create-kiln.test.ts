@@ -3,6 +3,7 @@ import {
 	createKiln,
 	type EscapeStrategy,
 	isSafe,
+	type KilnCache,
 	memoryLoader,
 	safe,
 	withRender,
@@ -59,6 +60,14 @@ describe("createKiln", () => {
 		const autoescape = "xml" as EscapeStrategy;
 		expect(() => createKiln({ loader: memoryLoader({}), autoescape })).toThrow(
 			/strategy/,
+		);
+	});
+
+	test("refuses a cache without get and set", () => {
+		// A value from untyped code, which the types would otherwise reject.
+		const cache = { get: () => null } as unknown as KilnCache;
+		expect(() => createKiln({ loader: memoryLoader({}), cache })).toThrow(
+			/cache/,
 		);
 	});
 

@@ -105,6 +105,7 @@ const BLOCK_TAGS = new Set([
 	"slot",
 	"macro",
 	"with",
+	"cache",
 	"apply",
 	"autoescape",
 	"verbatim",

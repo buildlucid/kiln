@@ -20,6 +20,7 @@ import {
 	type CallableEntry,
 	type CompiledTemplate,
 	type EnvironmentCore,
+	type KilnCache,
 	emptyOut,
 	type RenderInfo,
 	RenderState,
@@ -132,6 +133,8 @@ export type KilnOptions<State = undefined> = {
 	timeZone?: string;
 	/** Enables `dump`. Default `false`. */
 	debug?: boolean;
+	/** Where the `cache` tag saves output, such as `memoryCache()`. Without it, the tag renders every time. */
+	cache?: KilnCache;
 	limits?: Partial<Limits>;
 };
 
@@ -280,6 +283,7 @@ class Environment<State> implements EnvironmentCore {
 	readonly limits: Limits;
 	readonly locale: string;
 	readonly timeZone: string;
+	readonly cache: KilnCache | null;
 	readonly #loader: Loader;
 	readonly #cache = new Map<
 		string,
@@ -302,7 +306,15 @@ class Environment<State> implements EnvironmentCore {
 				`Unknown escaping strategy "${String(options.autoescape)}"`,
 			);
 		}
+		if (
+			options.cache !== undefined &&
+			(typeof options.cache?.get !== "function" ||
+				typeof options.cache.set !== "function")
+		) {
+			throw new TypeError("createKiln needs a cache with get and set methods");
+		}
 		this.#loader = options.loader;
+		this.cache = options.cache ?? null;
 		this.strict = options.strict ?? true;
 		this.debug = options.debug ?? false;
 		this.autoescape = options.autoescape ?? "html";
@@ -581,4 +593,37 @@ export const memoryLoader = (
 		map.set(resolveTemplateName(name), source);
 	}
 	return { load: (name) => map.get(name) ?? null, list: () => [...map.keys()] };
+};
+
+/**
+ * A store for the `cache` tag that keeps output in memory, for a long-running server. Holds up to `max` copies, 1,000
+ * by default, and drops the oldest first.
+ *
+ * ```ts
+ * const kiln = createKiln({ loader, cache: memoryCache() });
+ * ```
+ */
+export const memoryCache = ({
+	max = 1000,
+}: { max?: number } = {}): KilnCache => {
+	const entries = new Map<string, { html: string; expires: number }>();
+	return {
+		get: ({ key }) => {
+			const entry = entries.get(key);
+			if (!entry) return null;
+			if (entry.expires > Date.now()) return entry.html;
+			entries.delete(key);
+			return null;
+		},
+		set: ({ key, html, seconds }) => {
+			// Deleting first moves the key to the end, so the oldest copy is always first.
+			entries.delete(key);
+			entries.set(key, {
+				html,
+				expires: seconds === null ? Infinity : Date.now() + seconds * 1000,
+			});
+			const oldest = entries.keys().next();
+			if (entries.size > max && !oldest.done) entries.delete(oldest.value);
+		},
+	};
 };

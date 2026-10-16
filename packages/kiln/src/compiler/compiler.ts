@@ -576,6 +576,7 @@ class Compiler {
 				case "Block":
 				case "Slot":
 				case "Macro":
+				case "Cache":
 				case "With":
 				case "Apply":
 				case "Autoescape":
@@ -859,6 +860,7 @@ class Compiler {
 			case "Block":
 			case "Slot":
 			case "Macro":
+			case "Cache":
 			case "With":
 			case "Apply":
 			case "Autoescape":
@@ -982,6 +984,8 @@ class Compiler {
 				return NOOP;
 			case "With":
 				return this.#with(node);
+			case "Cache":
+				return this.#cache(node);
 			case "Apply":
 				return this.#apply(node);
 			case "Autoescape": {
@@ -1479,6 +1483,110 @@ class Compiler {
 			return after(value.ev(run, scope), (variables) =>
 				enter(run, scope, out, variables),
 			);
+		};
+	}
+
+	/**
+	 * `cache`: outputs the copy the environment's store saved under the key, or renders the body, outputs it and saves
+	 * it. The key and `for` are checked even without a store, so mistakes show up before a store is added.
+	 */
+	#cache(node: Extract<Statement, { type: "Cache" }>): Stmt {
+		const key = this.#expr(node.key);
+		const seconds = node.seconds ? this.#expr(node.seconds) : null;
+		const body = this.#body(node.body);
+		const span = node.span;
+		const templateName = this.#template.name;
+		// Variables the body sets. Each gets a copy in the body's scope, so setting one never changes an outer variable,
+		// and a saved copy leaves the same variables behind as a fresh render. Globals stay outside, so setting one fails.
+		const sets = new Set<string>();
+		this.#walkStatements(node.body, (statement) => {
+			if (statement.type === "Set" || statement.type === "SetBlock") {
+				sets.add(statement.name);
+			}
+		});
+		const bodyScope = (run: Run, scope: Scope): Scope => {
+			const inner = childScope(scope);
+			for (const name of sets) {
+				const owner = ownerOf(scope, name);
+				if (owner !== null && owner !== run.state.globals) {
+					inner[name] = owner[name];
+				}
+			}
+			return inner;
+		};
+
+		const part = (run: Run, value: unknown) => {
+			if (value === null || value === undefined) return null;
+			if (
+				typeof value === "string" ||
+				typeof value === "number" ||
+				typeof value === "boolean"
+			) {
+				return value;
+			}
+			if (value instanceof Date && !Number.isNaN(value.getTime())) {
+				return value.toISOString();
+			}
+			if (value instanceof Markup) return value.value;
+			throw fail(
+				run,
+				span,
+				"type-error",
+				`"cache" keys are made of strings, numbers, booleans, dates and null, but got a ${typeName(value)}`,
+			);
+		};
+		// The template, locale and time zone are part of every key, since the output depends on them.
+		const fullKey = (run: Run, value: unknown) => {
+			const parts = Array.isArray(value)
+				? value.map((item) => part(run, item))
+				: [part(run, value)];
+			const { locale, timeZone } = run.state;
+			return `${templateName}|${locale}|${timeZone}|${JSON.stringify(parts)}`;
+		};
+		const lifetime = (run: Run, value: unknown) => {
+			if (value === null || value === undefined) return null;
+			if (typeof value !== "number" || !(value > 0) || value === Infinity) {
+				throw fail(
+					run,
+					span,
+					"invalid-argument",
+					`"cache" needs a number of seconds above 0 after "for", but got ${typeof value === "number" ? value : `a ${typeName(value)}`}`,
+				);
+			}
+			return value;
+		};
+
+		const render = (
+			run: Run,
+			scope: Scope,
+			out: Out,
+			keyValue: unknown,
+			secondsValue: unknown,
+		): void | Promise<void> => {
+			const name = fullKey(run, keyValue);
+			const time = lifetime(run, secondsValue);
+			const store = run.state.env.cache;
+			if (!store) return body(run, bodyScope(run, scope), out);
+			return after(store.get({ key: name }), (saved) => {
+				if (typeof saved === "string") return write(run, out, saved, span);
+				// The body writes straight to `out`, so its indentation is the same as without the cache.
+				const start = out.s.length;
+				return after(body(run, bodyScope(run, scope), out), () =>
+					store.set({ key: name, html: out.s.slice(start), seconds: time }),
+				);
+			});
+		};
+
+		return (run, scope, out) => {
+			step(run, span);
+			const keyValue = key.ev(run, scope);
+			const secondsValue = seconds ? seconds.ev(run, scope) : null;
+			if (isPromise(keyValue) || isPromise(secondsValue)) {
+				return Promise.all([keyValue, secondsValue]).then(([k, t]) =>
+					render(run, scope, out, k, t),
+				);
+			}
+			return render(run, scope, out, keyValue, secondsValue);
 		};
 	}
 

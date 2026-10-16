@@ -8,6 +8,7 @@ export {
 	type KilnTypes,
 	type Limits,
 	type Loader,
+	memoryCache,
 	memoryLoader,
 	type RenderAware,
 	type RenderInfo,
@@ -34,6 +35,6 @@ export type {
 export { generateManifest, type KilnManifest } from "./manifest.js";
 export { expose, lookup } from "./runtime/exposure.js";
 export { isSafe, Markup, safe } from "./runtime/markup.js";
-export type { AbortSignalLike } from "./runtime/types.js";
+export type { AbortSignalLike, KilnCache } from "./runtime/types.js";
 export type { Position } from "./source.js";
 export { generateTypes } from "./typegen.js";
