@@ -210,6 +210,21 @@ export const navigation = [
 		],
 	},
 	{
+		title: "Tooling",
+		items: [
+			{
+				title: "Formatting",
+				url: "/docs/tooling/formatting/",
+				description: "Format templates from the command line or JavaScript.",
+			},
+			{
+				title: "Editor support",
+				url: "/docs/tooling/editors/",
+				description: "The language server and the Zed extension.",
+			},
+		],
+	},
+	{
 		title: "Guides",
 		items: [
 			{

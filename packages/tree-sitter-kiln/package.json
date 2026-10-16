@@ -1,0 +1,20 @@
+{
+	"name": "@lucidcms/tree-sitter-kiln",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Tree-sitter grammar for Kiln templates.",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/buildlucid/kiln.git",
+		"directory": "packages/tree-sitter-kiln"
+	},
+	"license": "MIT",
+	"scripts": {
+		"generate": "tree-sitter generate",
+		"test": "tree-sitter test",
+		"parse": "tree-sitter parse"
+	},
+	"devDependencies": {
+		"tree-sitter-cli": "0.27.1"
+	}
+}

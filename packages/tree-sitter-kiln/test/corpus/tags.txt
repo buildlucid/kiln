@@ -1,0 +1,434 @@
+============================================================
+If, elseif and else
+============================================================
+
+{% if a %}A{% elseif b %}B{% elseif c %}C{% else %}D{% endif %}
+
+------------------------------------------------------------
+
+(template
+  (if_statement
+    (identifier)
+    (text)
+    (elseif_clause
+      (identifier)
+      (text))
+    (elseif_clause
+      (identifier)
+      (text))
+    (else_clause
+      (text))
+    (end_clause)))
+
+============================================================
+Nested ifs
+============================================================
+
+{% if a %}{% if b %}x{% else %}y{% endif %}{% else %}z{% endif %}
+
+------------------------------------------------------------
+
+(template
+  (if_statement
+    (identifier)
+    (if_statement
+      (identifier)
+      (text)
+      (else_clause
+        (text))
+      (end_clause))
+    (else_clause
+      (text))
+    (end_clause)))
+
+============================================================
+For with key and else
+============================================================
+
+{% for key, value in items %}{{ key }}{% else %}None{% endfor %}
+
+------------------------------------------------------------
+
+(template
+  (for_statement
+    (identifier)
+    (identifier)
+    (identifier)
+    (output
+      (identifier))
+    (else_clause
+      (text))
+    (end_clause)))
+
+============================================================
+Set
+============================================================
+
+{% set title = page.title|upper %}
+
+------------------------------------------------------------
+
+(template
+  (set_statement
+    (identifier)
+    (filter_expression
+      (member_expression
+        (identifier)
+        (property_identifier))
+      (filter_identifier))))
+
+============================================================
+Set block
+============================================================
+
+{% set nav %}<nav></nav>{% endset %}
+
+------------------------------------------------------------
+
+(template
+  (set_block
+    (identifier)
+    (start_tag
+      (tag_name))
+    (end_tag
+      (tag_name))
+    (end_clause)))
+
+============================================================
+Props
+============================================================
+
+{% props title: string, items: Post[] = [], variant: "a" | "b" = "a", link: { url: string, label?: string }, levels: (2 | 3)[] = [], plain %}
+
+------------------------------------------------------------
+
+(template
+  (props_statement
+    (prop
+      (identifier)
+      (prop_type
+        (type_identifier)))
+    (prop
+      (identifier)
+      (prop_type
+        (array_type
+          (type_identifier)))
+      (array))
+    (prop
+      (identifier)
+      (prop_type
+        (string
+          (string_content))
+        (string
+          (string_content)))
+      (string
+        (string_content)))
+    (prop
+      (identifier)
+      (prop_type
+        (shape_type
+          (shape_field
+            (property_identifier)
+            (prop_type
+              (type_identifier)))
+          (shape_field
+            (property_identifier)
+            (prop_type
+              (type_identifier))))))
+    (prop
+      (identifier)
+      (prop_type
+        (array_type
+          (parenthesized_type
+            (prop_type
+              (number)
+              (number)))))
+      (array))
+    (prop
+      (identifier))))
+
+============================================================
+Extends
+============================================================
+
+{% extends "layouts/base" %}
+
+------------------------------------------------------------
+
+(template
+  (extends_statement
+    (string
+      (string_content))))
+
+============================================================
+Block
+============================================================
+
+{% block content %}<p>Hi</p>{% endblock content %}
+
+------------------------------------------------------------
+
+(template
+  (block_statement
+    (block_name)
+    (start_tag
+      (tag_name))
+    (text)
+    (end_tag
+      (tag_name))
+    (end_clause
+      (block_name))))
+
+============================================================
+Short block
+============================================================
+
+{% block title page.title %}
+
+------------------------------------------------------------
+
+(template
+  (block_statement
+    (block_name)
+    (member_expression
+      (identifier)
+      (property_identifier))))
+
+============================================================
+Include
+============================================================
+
+{% include "partials/card" with { post } ignore missing %}
+
+------------------------------------------------------------
+
+(template
+  (include_statement
+    (string
+      (string_content))
+    (hash
+      (shorthand_property))))
+
+============================================================
+Component with fills
+============================================================
+
+{% component "components/card" with { title: "Hi" } %}
+	Body
+	{% fill "footer" %}<a>More</a>{% endfill %}
+{% endcomponent %}
+
+------------------------------------------------------------
+
+(template
+  (component_statement
+    (string
+      (string_content))
+    (hash
+      (pair
+        (property_identifier)
+        (string
+          (string_content))))
+    (text)
+    (fill_statement
+      (string
+        (string_content))
+      (start_tag
+        (tag_name))
+      (text)
+      (end_tag
+        (tag_name))
+      (end_clause))
+    (end_clause)))
+
+============================================================
+Slot
+============================================================
+
+{% slot %}Default{% endslot %}{% slot "footer" %}{% endslot %}
+
+------------------------------------------------------------
+
+(template
+  (slot_statement
+    (text)
+    (end_clause))
+  (slot_statement
+    (string
+      (string_content))
+    (end_clause)))
+
+============================================================
+Macro
+============================================================
+
+{% macro button(label, kind = "primary") %}<button>{{ label }}</button>{% endmacro button %}
+
+------------------------------------------------------------
+
+(template
+  (macro_statement
+    (macro_name)
+    (parameters
+      (identifier)
+      (default_parameter
+        (identifier)
+        (string
+          (string_content))))
+    (start_tag
+      (tag_name))
+    (output
+      (identifier))
+    (end_tag
+      (tag_name))
+    (end_clause
+      (macro_name))))
+
+============================================================
+Import and from
+============================================================
+
+{% import "macros/forms" as forms %}
+{% from "macros/forms" import input, button as btn %}
+
+------------------------------------------------------------
+
+(template
+  (import_statement
+    (string
+      (string_content))
+    (identifier))
+  (from_statement
+    (string
+      (string_content))
+    (import_specifier
+      (identifier))
+    (import_specifier
+      (identifier)
+      (identifier))))
+
+============================================================
+With
+============================================================
+
+{% with { title: "Hi" } %}{{ title }}{% endwith %}
+
+------------------------------------------------------------
+
+(template
+  (with_statement
+    (hash
+      (pair
+        (property_identifier)
+        (string
+          (string_content))))
+    (output
+      (identifier))
+    (end_clause)))
+
+============================================================
+Apply
+============================================================
+
+{% apply upper|replace({ a: "b" }) %}text{% endapply %}
+
+------------------------------------------------------------
+
+(template
+  (apply_statement
+    (filter_call
+      (filter_identifier))
+    (filter_call
+      (filter_identifier)
+      (arguments
+        (hash
+          (pair
+            (property_identifier)
+            (string
+              (string_content))))))
+    (text)
+    (end_clause)))
+
+============================================================
+Autoescape
+============================================================
+
+{% autoescape %}a{% endautoescape %}{% autoescape "js" %}b{% endautoescape %}{% autoescape false %}c{% endautoescape %}
+
+------------------------------------------------------------
+
+(template
+  (autoescape_statement
+    (text)
+    (end_clause))
+  (autoescape_statement
+    (string
+      (string_content))
+    (text)
+    (end_clause))
+  (autoescape_statement
+    (boolean)
+    (text)
+    (end_clause)))
+
+============================================================
+Unknown tag
+============================================================
+
+{% cache "key", 60 %}
+
+------------------------------------------------------------
+
+(template
+  (tag_statement
+    (statement_name)
+    (string
+      (string_content))
+    (number)))
+
+============================================================
+Unknown tag inside a block
+============================================================
+
+{% if a %}{% cache %}{% endif %}
+
+------------------------------------------------------------
+
+(template
+  (if_statement
+    (identifier)
+    (tag_statement
+      (statement_name))
+    (end_clause)))
+
+============================================================
+Stray end tag is a generic tag
+============================================================
+
+{% endif %}
+
+------------------------------------------------------------
+
+(template
+  (tag_statement
+    (statement_name)))
+
+============================================================
+Text after a fill
+============================================================
+
+{% component "x" %}{% fill "a" %}A{% endfill %}after{% endcomponent %}
+
+------------------------------------------------------------
+
+(template
+  (component_statement
+    (string
+      (string_content))
+    (fill_statement
+      (string
+        (string_content))
+      (text)
+      (end_clause))
+    (text)
+    (end_clause)))

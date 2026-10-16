@@ -1,0 +1,88 @@
+{
+	"if": {
+		"prefix": "if",
+		"body": ["{% if ${1:condition} %}", "\t$0", "{% endif %}"],
+		"description": "Render content only when a condition holds."
+	},
+	"if else": {
+		"prefix": "ifelse",
+		"body": [
+			"{% if ${1:condition} %}",
+			"\t$2",
+			"{% else %}",
+			"\t$0",
+			"{% endif %}"
+		],
+		"description": "An if with an else branch."
+	},
+	"for": {
+		"prefix": "for",
+		"body": ["{% for ${1:item} in ${2:items} %}", "\t$0", "{% endfor %}"],
+		"description": "Loop over a collection."
+	},
+	"block": {
+		"prefix": "block",
+		"body": ["{% block ${1:name} %}", "\t$0", "{% endblock %}"],
+		"description": "Define a block a layout renders."
+	},
+	"component": {
+		"prefix": "component",
+		"body": [
+			"{% component \"${1}\" with { $2 } %}",
+			"\t$0",
+			"{% endcomponent %}"
+		],
+		"description": "Render a component with props and slots."
+	},
+	"fill": {
+		"prefix": "fill",
+		"body": ["{% fill \"${1:name}\" %}", "\t$0", "{% endfill %}"],
+		"description": "Fill a named slot of a component."
+	},
+	"slot": {
+		"prefix": "slot",
+		"body": ["{% slot %}$0{% endslot %}"],
+		"description": "Mark where a component renders its content."
+	},
+	"macro": {
+		"prefix": "macro",
+		"body": ["{% macro ${1:name}(${2}) %}", "\t$0", "{% endmacro %}"],
+		"description": "Define a reusable snippet."
+	},
+	"set block": {
+		"prefix": "setblock",
+		"body": ["{% set ${1:name} %}", "\t$0", "{% endset %}"],
+		"description": "Capture markup in a variable."
+	},
+	"with": {
+		"prefix": "with",
+		"body": ["{% with { $1 } %}", "\t$0", "{% endwith %}"],
+		"description": "Add variables for a section."
+	},
+	"apply": {
+		"prefix": "apply",
+		"body": ["{% apply ${1:filter} %}", "\t$0", "{% endapply %}"],
+		"description": "Run a section through filters."
+	},
+	"verbatim": {
+		"prefix": "verbatim",
+		"body": ["{% verbatim %}", "$0", "{% endverbatim %}"],
+		"description": "Output Kiln syntax without running it."
+	},
+	"extends": {
+		"prefix": "extends",
+		"body": [
+			"{% extends \"${1:layouts/base}\" %}",
+			"",
+			"{% block ${2:content} %}",
+			"\t$0",
+			"{% endblock %}"
+		],
+		"description": "Render this page inside a layout."
+	},
+	"props": {
+		"prefix": "props",
+		"body": ["{% props ${1:name} %}"],
+		"description": "Declare the variables a template expects."
+	}
+}

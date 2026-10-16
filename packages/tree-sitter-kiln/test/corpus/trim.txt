@@ -1,0 +1,42 @@
+============================================================
+Trim markers on every delimiter
+============================================================
+
+<b>
+	{{- label -}}
+</b>
+{%- if a -%}x{%- else -%}y{%- endif -%}
+
+------------------------------------------------------------
+
+(template
+  (start_tag
+    (tag_name))
+  (output
+    (identifier))
+  (end_tag
+    (tag_name))
+  (if_statement
+    (identifier)
+    (text)
+    (else_clause
+      (text))
+    (end_clause)))
+
+============================================================
+Trim marker on an end tag
+============================================================
+
+{% for item in items -%}
+	{{ item }}
+{%- endfor %}
+
+------------------------------------------------------------
+
+(template
+  (for_statement
+    (identifier)
+    (identifier)
+    (output
+      (identifier))
+    (end_clause)))

@@ -1,0 +1,354 @@
+============================================================
+Literals
+============================================================
+
+{{ 1_000.5 }}{{ true }}{{ false }}{{ null }}{{ name }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (number))
+  (output
+    (boolean))
+  (output
+    (boolean))
+  (output
+    (null))
+  (output
+    (identifier)))
+
+============================================================
+Arrays and hashes
+============================================================
+
+{{ [1, ...rest, 2,] }}{{ { a: 1, "b": 2, 3: c, (key): 4, short, ...more } }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (array
+      (number)
+      (spread
+        (identifier))
+      (number)))
+  (output
+    (hash
+      (pair
+        (property_identifier)
+        (number))
+      (pair
+        (string
+          (string_content))
+        (number))
+      (pair
+        (number)
+        (identifier))
+      (pair
+        (parenthesized_expression
+          (identifier))
+        (number))
+      (shorthand_property)
+      (spread
+        (identifier)))))
+
+============================================================
+Nested hash closes before output
+============================================================
+
+{{ {a: {b: 1}} }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (hash
+      (pair
+        (property_identifier)
+        (hash
+          (pair
+            (property_identifier)
+            (number)))))))
+
+============================================================
+Arithmetic precedence
+============================================================
+
+{{ 1 + 2 * 3 - 4 // 2 % 1 }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (binary_expression
+      (binary_expression
+        (number)
+        (binary_expression
+          (number)
+          (number)))
+      (binary_expression
+        (binary_expression
+          (number)
+          (number))
+        (number)))))
+
+============================================================
+Power binds tighter than unary minus
+============================================================
+
+{{ -2 ** 2 ** 3 }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (unary_expression
+      (binary_expression
+        (number)
+        (binary_expression
+          (number)
+          (number))))))
+
+============================================================
+Concat, range and comparison
+============================================================
+
+{{ a ~ b .. c ~ d == e }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (binary_expression
+      (binary_expression
+        (binary_expression
+          (identifier)
+          (identifier))
+        (binary_expression
+          (identifier)
+          (identifier)))
+      (identifier))))
+
+============================================================
+Logic precedence
+============================================================
+
+{{ not a and b or c ?? d }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (binary_expression
+      (binary_expression
+        (binary_expression
+          (unary_expression
+            (identifier))
+          (identifier))
+        (identifier))
+      (identifier))))
+
+============================================================
+Not binds looser than comparison
+============================================================
+
+{{ not a == b }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (unary_expression
+      (binary_expression
+        (identifier)
+        (identifier)))))
+
+============================================================
+Word operators
+============================================================
+
+{{ a in b }}{{ a not in b }}{{ a starts with "x" }}{{ a ends with "y" }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (binary_expression
+      (identifier)
+      (identifier)))
+  (output
+    (binary_expression
+      (identifier)
+      (identifier)))
+  (output
+    (binary_expression
+      (identifier)
+      (string
+        (string_content))))
+  (output
+    (binary_expression
+      (identifier)
+      (string
+        (string_content)))))
+
+============================================================
+Conditional
+============================================================
+
+{{ a ? b : c ? d : e }}{{ a ? b }}{{ a ?: b }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (conditional_expression
+      (identifier)
+      (identifier)
+      (conditional_expression
+        (identifier)
+        (identifier)
+        (identifier))))
+  (output
+    (conditional_expression
+      (identifier)
+      (identifier)))
+  (output
+    (binary_expression
+      (identifier)
+      (identifier))))
+
+============================================================
+Tests
+============================================================
+
+{{ a is defined }}{{ a is not empty }}{{ a is divisible by(3) and b }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (test_expression
+      (identifier)
+      (test_name)))
+  (output
+    (test_expression
+      (identifier)
+      (test_name)))
+  (output
+    (binary_expression
+      (test_expression
+        (identifier)
+        (test_name)
+        (test_name)
+        (arguments
+          (number)))
+      (identifier))))
+
+============================================================
+Members, subscripts and calls
+============================================================
+
+{{ a.b.0.c?.d?.[e][f](1, x: 2, ...g) }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (call_expression
+      (subscript_expression
+        (subscript_expression
+          (member_expression
+            (member_expression
+              (member_expression
+                (member_expression
+                  (identifier)
+                  (property_identifier))
+                (number))
+              (property_identifier))
+            (property_identifier))
+          (identifier))
+        (identifier))
+      (arguments
+        (number)
+        (named_argument
+          (identifier)
+          (number))
+        (spread
+          (identifier))))))
+
+============================================================
+Filters bind tightest
+============================================================
+
+{{ -a|abs + b|default(1) }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (binary_expression
+      (unary_expression
+        (filter_expression
+          (identifier)
+          (filter_identifier)))
+      (filter_expression
+        (identifier)
+        (filter_identifier)
+        (arguments
+          (number))))))
+
+============================================================
+Arrow functions as arguments
+============================================================
+
+{{ items|map(x => x.a)|sort((a, b) => a - b)|filter(by: () => true) }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (filter_expression
+      (filter_expression
+        (filter_expression
+          (identifier)
+          (filter_identifier)
+          (arguments
+            (arrow_function
+              (identifier)
+              (member_expression
+                (identifier)
+                (property_identifier)))))
+        (filter_identifier)
+        (arguments
+          (arrow_function
+            (parameters
+              (identifier)
+              (identifier))
+            (binary_expression
+              (identifier)
+              (identifier)))))
+      (filter_identifier)
+      (arguments
+        (named_argument
+          (identifier)
+          (arrow_function
+            (parameters)
+            (boolean)))))))
+
+============================================================
+Parenthesised expression
+============================================================
+
+{{ (a + b) * c }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (binary_expression
+      (parenthesized_expression
+        (binary_expression
+          (identifier)
+          (identifier)))
+      (identifier))))

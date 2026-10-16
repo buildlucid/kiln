@@ -1,0 +1,74 @@
+============================================================
+Single and double quotes
+============================================================
+
+{{ 'it\'s' ~ "say \"hi\"" }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (binary_expression
+      (string
+        (string_content)
+        (escape_sequence)
+        (string_content))
+      (string
+        (string_content)
+        (escape_sequence)
+        (string_content)
+        (escape_sequence)))))
+
+============================================================
+Interpolation
+============================================================
+
+{{ "Hello #{ user.name|title }, you have #{ count } messages" }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (string
+      (string_content)
+      (interpolation
+        (filter_expression
+          (member_expression
+            (identifier)
+            (property_identifier))
+          (filter_identifier)))
+      (string_content)
+      (interpolation
+        (identifier))
+      (string_content))))
+
+============================================================
+Escapes
+============================================================
+
+{{ "\n\t\u{1F600}\#{literal} # alone" }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (string
+      (escape_sequence)
+      (escape_sequence)
+      (escape_sequence)
+      (escape_sequence)
+      (string_content))))
+
+============================================================
+Empty strings
+============================================================
+
+{{ "" ~ '' }}
+
+------------------------------------------------------------
+
+(template
+  (output
+    (binary_expression
+      (string)
+      (string))))

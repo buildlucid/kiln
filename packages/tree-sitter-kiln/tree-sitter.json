@@ -1,0 +1,32 @@
+{
+	"$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+	"grammars": [
+		{
+			"name": "kiln",
+			"camelcase": "Kiln",
+			"title": "Kiln",
+			"scope": "text.html.kiln",
+			"file-types": ["kiln"],
+			"injection-regex": "^kiln$",
+			"highlights": "../../editors/zed/languages/kiln/highlights.scm",
+			"injections": "../../editors/zed/languages/kiln/injections.scm"
+		}
+	],
+	"metadata": {
+		"version": "0.1.0",
+		"license": "MIT",
+		"description": "Tree-sitter grammar for Kiln templates",
+		"authors": [
+			{ "name": "William Yallop", "email": "hello@williamyallop.com" }
+		],
+		"links": { "repository": "https://github.com/buildlucid/kiln" }
+	},
+	"bindings": {
+		"c": false,
+		"go": false,
+		"node": false,
+		"python": false,
+		"rust": false,
+		"swift": false
+	}
+}

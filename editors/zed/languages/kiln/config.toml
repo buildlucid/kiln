@@ -1,0 +1,73 @@
+name = "Kiln"
+grammar = "kiln"
+path_suffixes = ["kiln"]
+block_comment = { start = "{# ", prefix = "", end = " #}", tab_size = 0 }
+autoclose_before = ">})]%#\"'"
+wrap_characters = { start_prefix = "<", start_suffix = ">", end_prefix = "</", end_suffix = ">" }
+completion_query_characters = ["-"]
+tab_size = 4
+hard_tabs = true
+# A backup to indents.scm. HTML elements are not nested in the syntax tree, so their indentation comes from these.
+increase_indent_pattern = '^\s*(\{%-?\s*(if|elseif|else|for|component|fill|slot|macro|with|apply|autoescape|verbatim)\b[^%]*-?%\}|\{%-?\s*(set|block)\s+\w+\s*-?%\}|<(html|head|body|div|section|article|aside|header|footer|main|nav|ul|ol|li|dl|table|thead|tbody|tfoot|tr|td|th|form|fieldset|select|optgroup|details|summary|figure|blockquote|p|a|button|label|svg|g|template|picture|video|audio|dialog|menu|script|style)(\s[^<>]*)?>)\s*$'
+decrease_indent_pattern = '^\s*(\{%-?\s*(elseif|else|end[a-z]+)\b|</)'
+
+[[brackets]]
+start = "{"
+end = "}"
+close = true
+newline = true
+
+[[brackets]]
+start = "["
+end = "]"
+close = true
+newline = true
+
+[[brackets]]
+start = "("
+end = ")"
+close = true
+newline = true
+
+# Typing `{` already closes it with `}`, so these add only the inner half: `{%` becomes `{% %}` and `{#` becomes `{# #}`.
+[[brackets]]
+start = "{%"
+end = " %"
+close = true
+newline = false
+not_in = ["string", "comment"]
+
+[[brackets]]
+start = "{#"
+end = " #"
+close = true
+newline = false
+not_in = ["string", "comment"]
+
+[[brackets]]
+start = "\""
+end = "\""
+close = true
+newline = false
+not_in = ["string", "comment"]
+
+[[brackets]]
+start = "'"
+end = "'"
+close = true
+newline = false
+not_in = ["string", "comment"]
+
+[[brackets]]
+start = "<"
+end = ">"
+close = false
+newline = true
+not_in = ["string", "comment"]
+
+[[brackets]]
+start = "!--"
+end = " --"
+close = true
+newline = false
+not_in = ["string", "comment"]

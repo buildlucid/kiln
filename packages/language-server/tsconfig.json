@@ -1,0 +1,12 @@
+{
+	"extends": "../kiln/tsconfig.json",
+	"compilerOptions": {
+		"types": ["node"],
+		"noEmit": true,
+		"declaration": false,
+		"declarationMap": false,
+		// Tests read Kiln's own built-ins from its source, to check the server documents them all.
+		"rootDir": ".."
+	},
+	"include": ["./src"]
+}

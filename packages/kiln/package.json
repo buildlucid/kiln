@@ -19,7 +19,14 @@
 		"./node": {
 			"types": "./dist/node.d.ts",
 			"import": "./dist/node.js"
+		},
+		"./format": {
+			"types": "./dist/format.d.ts",
+			"import": "./dist/format.js"
 		}
+	},
+	"bin": {
+		"kiln": "./dist/cli.js"
 	},
 	"sideEffects": false,
 	"scripts": {

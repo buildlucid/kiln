@@ -473,6 +473,27 @@ export const createKiln = <State = undefined>(
 	options: KilnOptions<State>,
 ): Kiln<State> => {
 	const env = new Environment<State>(options);
+	const kiln = createApi(env);
+	environments.set(kiln, env);
+	return kiln;
+};
+
+/** The environment behind each object `createKiln` returns, for tools such as `generateManifest`. */
+const environments = new WeakMap<
+	object,
+	EnvironmentCore & { globals: Scope }
+>();
+
+/** The environment behind a Kiln object. Throws for an object `createKiln` didn't make. */
+export const environmentOf = (
+	kiln: object,
+): EnvironmentCore & { globals: Scope } => {
+	const env = environments.get(kiln);
+	if (!env) throw new TypeError("Expected an environment made by createKiln");
+	return env;
+};
+
+const createApi = <State>(env: Environment<State>): Kiln<State> => {
 	type Options = BaseRenderOptions & { state?: State };
 	// The typed signatures only narrow what callers may pass, so these take the plain shapes.
 	const render = (

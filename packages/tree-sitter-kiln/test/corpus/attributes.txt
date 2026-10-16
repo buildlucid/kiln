@@ -1,0 +1,226 @@
+============================================================
+Output in an attribute value
+============================================================
+
+<a href="/posts/{{ post.slug }}" class="link">x</a>
+
+------------------------------------------------------------
+
+(template
+  (start_tag
+    (tag_name)
+    (attribute
+      (attribute_name)
+      (quoted_attribute_value
+        (attribute_value)
+        (output
+          (member_expression
+            (identifier)
+            (property_identifier)))))
+    (attribute
+      (attribute_name)
+      (quoted_attribute_value
+        (attribute_value))))
+  (text)
+  (end_tag
+    (tag_name)))
+
+============================================================
+Tags in an attribute value
+============================================================
+
+<div class="a {% if x %}b{% endif %} {{ c }}"></div>
+
+------------------------------------------------------------
+
+(template
+  (start_tag
+    (tag_name)
+    (attribute
+      (attribute_name)
+      (quoted_attribute_value
+        (attribute_value)
+        (tag_statement
+          (statement_name)
+          (identifier))
+        (attribute_value)
+        (tag_statement
+          (statement_name))
+        (output
+          (identifier)))))
+  (end_tag
+    (tag_name)))
+
+============================================================
+Same quote inside Kiln in an attribute value
+============================================================
+
+<div class="{{ loop.first ? "" : "border-t border-line" }}"></div>
+
+------------------------------------------------------------
+
+(template
+  (start_tag
+    (tag_name)
+    (attribute
+      (attribute_name)
+      (quoted_attribute_value
+        (output
+          (conditional_expression
+            (member_expression
+              (identifier)
+              (property_identifier))
+            (string)
+            (string
+              (string_content)))))))
+  (end_tag
+    (tag_name)))
+
+============================================================
+Single-quoted value with Kiln
+============================================================
+
+<div title='{{ "it" ~ 's' }}'></div>
+
+------------------------------------------------------------
+
+(template
+  (start_tag
+    (tag_name)
+    (attribute
+      (attribute_name)
+      (quoted_attribute_value
+        (output
+          (binary_expression
+            (string
+              (string_content))
+            (string
+              (string_content)))))))
+  (end_tag
+    (tag_name)))
+
+============================================================
+Tags between attributes
+============================================================
+
+<input type="checkbox" {% if checked %}checked{% endif %}>
+
+------------------------------------------------------------
+
+(template
+  (start_tag
+    (tag_name)
+    (attribute
+      (attribute_name)
+      (quoted_attribute_value
+        (attribute_value)))
+    (tag_statement
+      (statement_name)
+      (identifier))
+    (attribute
+      (attribute_name))
+    (tag_statement
+      (statement_name))))
+
+============================================================
+Output as an attribute and as a value
+============================================================
+
+<a{{ attrs({ "aria-current": active ? "page" }) }} data-id={{ id }}>
+
+------------------------------------------------------------
+
+(template
+  (start_tag
+    (tag_name)
+    (output
+      (call_expression
+        (identifier)
+        (arguments
+          (hash
+            (pair
+              (string
+                (string_content))
+              (conditional_expression
+                (identifier)
+                (string
+                  (string_content))))))))
+    (attribute
+      (attribute_name)
+      (output
+        (identifier)))))
+
+============================================================
+Comment in a start tag
+============================================================
+
+<div {# note #} id="x">
+
+------------------------------------------------------------
+
+(template
+  (start_tag
+    (tag_name)
+    (comment)
+    (attribute
+      (attribute_name)
+      (quoted_attribute_value
+        (attribute_value)))))
+
+============================================================
+Dynamic tag name
+============================================================
+
+<h{{ level }} class="title">Title</h{{ level }}>
+
+------------------------------------------------------------
+
+(template
+  (start_tag
+    (tag_name)
+    (output
+      (identifier))
+    (attribute
+      (attribute_name)
+      (quoted_attribute_value
+        (attribute_value))))
+  (text)
+  (end_tag
+    (tag_name)
+    (output
+      (identifier))))
+
+============================================================
+Kiln in a start tag inside a block
+============================================================
+
+{% if a %}<div {% if b %}x{% else %}y{% endif %} class="{% if c %}c{% endif %}">{% endif %}
+
+------------------------------------------------------------
+
+(template
+  (if_statement
+    (identifier)
+    (start_tag
+      (tag_name)
+      (tag_statement
+        (statement_name)
+        (identifier))
+      (attribute
+        (attribute_name))
+      (tag_statement
+        (statement_name))
+      (attribute
+        (attribute_name))
+      (tag_statement
+        (statement_name))
+      (attribute
+        (attribute_name)
+        (quoted_attribute_value
+          (tag_statement
+            (statement_name)
+            (identifier))
+          (attribute_value)
+          (tag_statement
+            (statement_name)))))
+    (end_clause)))

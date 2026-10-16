@@ -1,0 +1,203 @@
+============================================================
+Plain text
+============================================================
+
+Hello, world.
+
+------------------------------------------------------------
+
+(template
+  (text))
+
+============================================================
+Lone angle bracket and brace stay text
+============================================================
+
+a < b and {x} and a<1 and {not kiln}
+
+------------------------------------------------------------
+
+(template
+  (text))
+
+============================================================
+Doctype and HTML comment
+============================================================
+
+<!doctype html>
+<!-- a comment {{ not parsed }} -->
+
+------------------------------------------------------------
+
+(template
+  (doctype)
+  (html_comment))
+
+============================================================
+Start, end and self-closing tags
+============================================================
+
+<div id="main" hidden data-x=1><br/><img src='a.png' /></div>
+
+------------------------------------------------------------
+
+(template
+  (start_tag
+    (tag_name)
+    (attribute
+      (attribute_name)
+      (quoted_attribute_value
+        (attribute_value)))
+    (attribute
+      (attribute_name))
+    (attribute
+      (attribute_name)
+      (attribute_value)))
+  (self_closing_tag
+    (tag_name))
+  (self_closing_tag
+    (tag_name)
+    (attribute
+      (attribute_name)
+      (quoted_attribute_value
+        (attribute_value))))
+  (end_tag
+    (tag_name)))
+
+============================================================
+Script with Kiln inside
+============================================================
+
+<script type="module">
+	const data = {{ data|json }};
+	if (a < b) { run() }
+</script>
+
+------------------------------------------------------------
+
+(template
+  (script_element
+    (start_tag
+      (tag_name)
+      (attribute
+        (attribute_name)
+        (quoted_attribute_value
+          (attribute_value))))
+    (raw_text)
+    (output
+      (filter_expression
+        (identifier)
+        (filter_identifier)))
+    (raw_text)
+    (end_tag
+      (tag_name))))
+
+============================================================
+Style with Kiln inside
+============================================================
+
+<STYLE>
+	:root { --accent: {{ accent }}; }
+</STYLE>
+
+------------------------------------------------------------
+
+(template
+  (style_element
+    (start_tag
+      (tag_name))
+    (raw_text)
+    (output
+      (identifier))
+    (raw_text)
+    (end_tag
+      (tag_name))))
+
+============================================================
+Tag names that start with script stay ordinary
+============================================================
+
+<scripts></scripts>
+
+------------------------------------------------------------
+
+(template
+  (start_tag
+    (tag_name))
+  (end_tag
+    (tag_name)))
+
+============================================================
+HTML opened and closed across branches
+============================================================
+
+{% if a %}<div class="a">{% else %}<section>{% endif %}
+<p>Body</p>
+{% if a %}</div>{% else %}</section>{% endif %}
+
+------------------------------------------------------------
+
+(template
+  (if_statement
+    (identifier)
+    (start_tag
+      (tag_name)
+      (attribute
+        (attribute_name)
+        (quoted_attribute_value
+          (attribute_value))))
+    (else_clause
+      (start_tag
+        (tag_name)))
+    (end_clause))
+  (start_tag
+    (tag_name))
+  (text)
+  (end_tag
+    (tag_name))
+  (if_statement
+    (identifier)
+    (end_tag
+      (tag_name))
+    (else_clause
+      (end_tag
+        (tag_name)))
+    (end_clause)))
+
+============================================================
+Tags inside a script stay flat
+============================================================
+
+<script>{% if a %}x(){% else %}y(){% endif %}</script>
+
+------------------------------------------------------------
+
+(template
+  (script_element
+    (start_tag
+      (tag_name))
+    (tag_statement
+      (statement_name)
+      (identifier))
+    (raw_text)
+    (tag_statement
+      (statement_name))
+    (raw_text)
+    (tag_statement
+      (statement_name))
+    (end_tag
+      (tag_name))))
+
+============================================================
+Closing delimiters in text stay text
+============================================================
+
+a{{x}}b }} c %} d #} e
+
+------------------------------------------------------------
+
+(template
+  (text)
+  (output
+    (identifier))
+  (text))

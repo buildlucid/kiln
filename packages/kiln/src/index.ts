@@ -31,6 +31,7 @@ export type {
 	ShapeKey,
 	TypeName,
 } from "./parser/ast.js";
+export { generateManifest, type KilnManifest } from "./manifest.js";
 export { expose, lookup } from "./runtime/exposure.js";
 export { isSafe, Markup, safe } from "./runtime/markup.js";
 export type { AbortSignalLike } from "./runtime/types.js";

@@ -42,7 +42,7 @@ export type LexResult = {
  */
 export type TextLine = { start: number; indentEnd: number };
 
-type TextPart = {
+export type TextPart = {
 	kind: "text";
 	start: number;
 	end: number;
@@ -51,7 +51,7 @@ type TextPart = {
 	to: number;
 };
 
-type DelimitedPart = {
+export type DelimitedPart = {
 	kind: "output" | "tag" | "comment";
 	start: number;
 	end: number;
@@ -60,7 +60,7 @@ type DelimitedPart = {
 	tokens: Token[];
 };
 
-type Part = TextPart | DelimitedPart;
+export type Part = TextPart | DelimitedPart;
 
 type ExpressionMode = "output" | "tag" | "interp";
 
@@ -135,6 +135,13 @@ const isNamePart = (code: number) => isNameStart(code) || isDigit(code);
  */
 export const lex = (text: string): LexResult => new Lexer(text).run();
 
+/**
+ * Splits source into text, outputs, tags and comments as written, before whitespace control. Tools such as the formatter use it. Comments have no tokens.
+ */
+export const scanParts = (
+	text: string,
+): { parts: Part[]; problems: LexProblem[] } => new Lexer(text).scan();
+
 class Lexer {
 	readonly #text: string;
 	#pos = 0;
@@ -143,6 +150,10 @@ class Lexer {
 
 	constructor(text: string) {
 		this.#text = text;
+	}
+
+	scan(): { parts: Part[]; problems: LexProblem[] } {
+		return { parts: this.#scanParts(), problems: this.#problems };
 	}
 
 	run(): LexResult {

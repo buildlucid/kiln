@@ -1,0 +1,33 @@
+    {% if user is defined %}
+{#  ^ punctuation.special #}
+{#     ^ keyword #}
+{#        ^ variable #}
+{#             ^ keyword #}
+{#                ^ function #}
+    <p class="greeting">{{ user.name|title }}</p>
+{#  ^ punctuation.bracket #}
+{#   ^ tag #}
+{#     ^ attribute #}
+{#            ^ string #}
+{#                      ^ punctuation.special #}
+{#                              ^ property #}
+{#                                   ^ function #}
+    {% set total = items|length + 1 %}
+{#     ^ keyword #}
+{#         ^ variable #}
+{#                       ^ function #}
+{#                              ^ operator #}
+{#                                ^ number #}
+    {{ "Hi #{ name }" ~ true ~ null }}
+{#     ^ string #}
+{#         ^ punctuation.special #}
+{#                      ^ boolean #}
+{#                             ^ constant.builtin #}
+    {% block title %}{% endblock %}
+{#           ^ title #}
+{#                      ^ keyword #}
+    <!-- html --><!doctype html>
+{#  ^ comment #}
+{#               ^ tag.doctype #}
+    {% endif %}
+{#     ^ keyword #}
