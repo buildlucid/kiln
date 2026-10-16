@@ -13,6 +13,7 @@ import { type Diagnostic, type KilnIssue, KilnRenderError } from "./errors.js";
 import { resolveTemplateName } from "./names.js";
 import type { EscapeStrategy } from "./parser/ast.js";
 import { ESCAPE_STRATEGIES } from "./parser/ast.js";
+import { fillOutlets } from "./runtime/outlets.js";
 import { addSlotFlags, isPromise, renderTemplate } from "./runtime/render.js";
 import { childScope } from "./runtime/scope.js";
 import {
@@ -456,6 +457,7 @@ class Environment<State> implements EnvironmentCore {
 		addSlotFlags(scope, template, null);
 
 		const out = emptyOut();
+		state.root = out;
 		const result = renderTemplate(
 			state,
 			template,
@@ -470,7 +472,15 @@ class Environment<State> implements EnvironmentCore {
 			block,
 		);
 		if (result !== undefined) await result;
-		return out.s;
+		const output = fillOutlets(state, out.s);
+		if (output.length > state.maxSize) {
+			throw new KilnRenderError(
+				"limit-output",
+				`Render stopped after ${state.maxSize} characters of output`,
+				resolved,
+			);
+		}
+		return output;
 	}
 }
 
@@ -606,20 +616,20 @@ export const memoryLoader = (
 export const memoryCache = ({
 	max = 1000,
 }: { max?: number } = {}): KilnCache => {
-	const entries = new Map<string, { html: string; expires: number }>();
+	const entries = new Map<string, { value: string; expires: number }>();
 	return {
 		get: ({ key }) => {
 			const entry = entries.get(key);
 			if (!entry) return null;
-			if (entry.expires > Date.now()) return entry.html;
+			if (entry.expires > Date.now()) return entry.value;
 			entries.delete(key);
 			return null;
 		},
-		set: ({ key, html, seconds }) => {
+		set: ({ key, value, seconds }) => {
 			// Deleting first moves the key to the end, so the oldest copy is always first.
 			entries.delete(key);
 			entries.set(key, {
-				html,
+				value,
 				expires: seconds === null ? Infinity : Date.now() + seconds * 1000,
 			});
 			const oldest = entries.keys().next();

@@ -659,6 +659,7 @@ class Generator {
 			case "Block":
 			case "Slot":
 			case "Macro":
+			case "Add":
 			case "Cache":
 			case "With":
 			case "Apply":

@@ -18,10 +18,12 @@ import {
 } from "../parser/ast.js";
 import { parse } from "../parser/parser.js";
 import { getAttr, getMethod, readableNames } from "../runtime/access.js";
+import { packSaved, unpackSaved } from "../runtime/cache.js";
 import { escapeHtml, escapeWith } from "../runtime/escape.js";
 import { callMacro } from "../runtime/macros.js";
 import { Markup } from "../runtime/markup.js";
 import { operatorFunction, rangeOperator } from "../runtime/operators.js";
+import { recordAddition } from "../runtime/outlets.js";
 import {
 	after,
 	checkLength,
@@ -576,6 +578,7 @@ class Compiler {
 				case "Block":
 				case "Slot":
 				case "Macro":
+				case "Add":
 				case "Cache":
 				case "With":
 				case "Apply":
@@ -860,6 +863,7 @@ class Compiler {
 			case "Block":
 			case "Slot":
 			case "Macro":
+			case "Add":
 			case "Cache":
 			case "With":
 			case "Apply":
@@ -986,6 +990,10 @@ class Compiler {
 				return this.#with(node);
 			case "Cache":
 				return this.#cache(node);
+			case "Outlet":
+				return this.#outlet(node);
+			case "Add":
+				return this.#add(node);
 			case "Apply":
 				return this.#apply(node);
 			case "Autoescape": {
@@ -1565,14 +1573,37 @@ class Compiler {
 		): void | Promise<void> => {
 			const name = fullKey(run, keyValue);
 			const time = lifetime(run, secondsValue);
-			const store = run.state.env.cache;
-			if (!store) return body(run, bodyScope(run, scope), out);
-			return after(store.get({ key: name }), (saved) => {
-				if (typeof saved === "string") return write(run, out, saved, span);
-				// The body writes straight to `out`, so its indentation is the same as without the cache.
+			const state = run.state;
+			const store = state.env.cache;
+			// The body writes straight to `out`, so its indentation is the same as without the cache.
+			const fresh = (): void | Promise<void> => {
+				state.caching++;
+				const result = body(run, bodyScope(run, scope), out);
+				return after(result, () => {
+					state.caching--;
+				});
+			};
+			if (!store) return fresh();
+			return after(store.get({ key: name }), (value) => {
+				const saved = typeof value === "string" ? unpackSaved(value) : null;
+				if (saved) {
+					write(run, out, saved.html, span);
+					for (const addition of saved.additions) {
+						recordAddition(state, addition);
+					}
+					return;
+				}
 				const start = out.s.length;
-				return after(body(run, bodyScope(run, scope), out), () =>
-					store.set({ key: name, html: out.s.slice(start), seconds: time }),
+				const from = state.additions?.length ?? 0;
+				return after(fresh(), () =>
+					store.set({
+						key: name,
+						value: packSaved(
+							out.s.slice(start),
+							state.additions?.slice(from) ?? [],
+						),
+						seconds: time,
+					}),
 				);
 			});
 		};
@@ -1587,6 +1618,69 @@ class Compiler {
 				);
 			}
 			return render(run, scope, out, keyValue, secondsValue);
+		};
+	}
+
+	/**
+	 * `outlet`: marks where its content goes in the render's output. The content is put in place when the render ends,
+	 * so the outlet must write to that output, not to a capture or a cached section.
+	 */
+	#outlet(node: Extract<Statement, { type: "Outlet" }>): Stmt {
+		const { name, span, indent } = node;
+		return (run, _scope, out) => {
+			step(run, span);
+			const state = run.state;
+			if (out !== state.root || state.caching > 0) {
+				throw fail(
+					run,
+					span,
+					"misplaced-outlet",
+					`Outlet "${name}" can't be inside "cache", "set", "apply" or a macro`,
+				);
+			}
+			state.outlets ??= new Map();
+			if (state.outlets.has(name)) {
+				throw fail(
+					run,
+					span,
+					"duplicate-outlet",
+					`Outlet "${name}" is used more than once in this render`,
+				);
+			}
+			// Without `indent` the tag shares its line, as `startPlace` treats it.
+			state.outlets.set(name, {
+				offset: out.s.length,
+				indent: indent === undefined ? out.indent : out.indent + indent,
+				inline: indent === undefined,
+			});
+		};
+	}
+
+	/**
+	 * `add to`: renders its content and records it for the outlet. The content takes the outlet's indentation when the
+	 * outlet has been reached. A `once` tag that already added doesn't render again, but is still recorded, so a cached
+	 * section saves it.
+	 */
+	#add(node: Extract<Statement, { type: "Add" }>): Stmt {
+		const body = this.#body(node.body);
+		const { outlet, span } = node;
+		const once = node.once ? `${this.#template.name}:${span.start}` : null;
+		return (run, scope, out) => {
+			step(run, span);
+			const state = run.state;
+			const first = once === null ? undefined : state.once?.get(once);
+			if (first !== undefined) {
+				recordAddition(state, { outlet, html: first, once });
+				return;
+			}
+			const capture: Out = {
+				s: "",
+				indent: state.outlets?.get(outlet)?.indent ?? "",
+				inline: false,
+			};
+			return after(body(run, childScope(scope), capture), () =>
+				recordAddition(state, { outlet, html: capture.s, once }),
+			);
 		};
 	}
 

@@ -71,6 +71,7 @@ const END_TAGS = [
 	"endmacro",
 	"endwith",
 	"endcache",
+	"endadd",
 	"endapply",
 	"endautoescape",
 	"endverbatim",
@@ -259,6 +260,8 @@ module.exports = grammar({
 				$.from_statement,
 				$.with_statement,
 				$.cache_statement,
+				$.outlet_statement,
+				$.add_statement,
 				$.apply_statement,
 				$.autoescape_statement,
 				$.verbatim_statement,
@@ -487,6 +490,20 @@ module.exports = grammar({
 				tagClose(),
 				repeat($._content),
 				endClause($, "endcache"),
+			),
+
+		outlet_statement: ($) =>
+			seq(tagOpen("outlet"), field("name", $.string), tagClose()),
+
+		add_statement: ($) =>
+			seq(
+				tagOpen("add"),
+				"to",
+				field("outlet", $.string),
+				optional("once"),
+				tagClose(),
+				repeat($._content),
+				endClause($, "endadd"),
 			),
 
 		apply_statement: ($) =>

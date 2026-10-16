@@ -476,3 +476,21 @@ Cache
     (end_tag
       (tag_name))
     (end_clause)))
+
+============================================================
+Outlet and add
+============================================================
+
+{% outlet "head" %}{% add to "head" once %}x{% endadd %}
+
+------------------------------------------------------------
+
+(template
+  (outlet_statement
+    (string
+      (string_content)))
+  (add_statement
+    (string
+      (string_content))
+    (text)
+    (end_clause)))

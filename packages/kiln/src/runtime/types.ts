@@ -1,6 +1,7 @@
 import type { Diagnostic, KilnSyntaxError } from "../errors.js";
 import type { EscapeStrategy, TemplateNode } from "../parser/ast.js";
 import type { Source, Span } from "../source.js";
+import type { Addition, OutletMark } from "./outlets.js";
 import { childScope, type Scope } from "./scope.js";
 
 /** The part of `AbortSignal` Kiln reads. A real `AbortSignal` fits. */
@@ -158,14 +159,17 @@ export type TypeCheck = (value: unknown) => boolean;
  * more details can be added without breaking stores.
  */
 export type KilnCache = {
-	/** Returns the HTML saved under `key`, or null when there is none. */
+	/** Returns the value saved under `key`, or null when there is none. */
 	get(entry: {
 		key: string;
 	}): string | null | undefined | Promise<string | null | undefined>;
-	/** Saves `html` under `key`. `seconds` is the tag's `for` value, or null to let the store decide. */
+	/**
+	 * Saves `value` under `key`. The value is Kiln's own string, holding the HTML and what the section added to outlets,
+	 * to save as it is. `seconds` is the tag's `for` value, or null to let the store decide.
+	 */
 	set(entry: {
 		key: string;
-		html: string;
+		value: string;
 		seconds: number | null;
 	}): void | Promise<void>;
 };
@@ -204,6 +208,16 @@ export class RenderState {
 	blockDepth = 0;
 	/** Imports loaded so far this render, by importing template. Made when a template first imports. */
 	importsCache: Map<CompiledTemplate, CompiledTemplate[]> | null = null;
+	/** The render's output, where outlets mark their places. Captures such as `set` write elsewhere. */
+	root: Out | null = null;
+	/** Outlets reached so far, by name, in the order reached. See `outlets.ts`. */
+	outlets: Map<string, OutletMark> | null = null;
+	/** Every `add to` that ran, in order. */
+	additions: Addition[] | null = null;
+	/** The first content of each `once` tag that added. */
+	once: Map<string, string> | null = null;
+	/** How many cached sections are rendering, where an outlet can't go. */
+	caching = 0;
 
 	constructor(
 		readonly env: EnvironmentCore,

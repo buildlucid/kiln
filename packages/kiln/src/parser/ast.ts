@@ -202,6 +202,16 @@ export type Statement =
 			span: Span;
 	  }
 	| { type: "With"; value: Expression; body: Statement[]; span: Span }
+	/** A place other templates add content to with `add to`, filled when the render ends. */
+	| ({ type: "Outlet"; name: string; span: Span } & Placement)
+	/** Content for the outlet named `outlet`. `once` adds it only the first time the tag runs in a render. */
+	| {
+			type: "Add";
+			outlet: string;
+			once: boolean;
+			body: Statement[];
+			span: Span;
+	  }
 	/** `seconds` is the `for` value, or null. */
 	| {
 			type: "Cache";
@@ -223,7 +233,7 @@ export type TemplateNode = { type: "Template"; body: Statement[]; span: Span };
 /** Tags that insert content, which lines up with them when they stand on a line of their own. See `Placement`. */
 export type PlacedStatement = Extract<
 	Statement,
-	{ type: "Include" | "Component" | "Slot" | "Block" }
+	{ type: "Include" | "Component" | "Slot" | "Block" | "Outlet" }
 >;
 
 /** The name of the default slot, filled by content outside any `fill`. */

@@ -59,6 +59,7 @@ export const childStatements = (node: Statement): Statement[][] => {
 		case "Block":
 		case "Slot":
 		case "Macro":
+		case "Add":
 		case "Cache":
 		case "With":
 		case "Apply":
@@ -363,6 +364,9 @@ export const analyzeTemplate = (
 				withScope(names, () => statements(node.body));
 				return;
 			}
+			case "Add":
+				withScope([], () => statements(node.body));
+				return;
 			case "Cache":
 				expression(node.key);
 				if (node.seconds) expression(node.seconds);

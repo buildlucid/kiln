@@ -404,6 +404,17 @@ class Parser {
 				return this.#parseWith(open);
 			case "cache":
 				return this.#parseCache(open);
+			case "outlet": {
+				const name = this.#parseStringLiteral("an outlet name");
+				const close = this.#expectTagEnd();
+				return this.#placed({
+					type: "Outlet",
+					name,
+					span: { start: open.start, end: close.end },
+				});
+			}
+			case "add":
+				return this.#parseAdd(open);
 			case "apply":
 				return this.#parseApply(open);
 			case "autoescape":
@@ -914,6 +925,29 @@ class Parser {
 		return {
 			type: "With",
 			value,
+			body,
+			span: { start: open.start, end: this.#lastEnd },
+		};
+	}
+
+	#parseAdd(open: Token): Statement {
+		const { outlet, once } = this.#header(
+			() => {
+				this.#expectKeyword("to");
+				const outlet = this.#parseStringLiteral("an outlet name");
+				const once = this.#isName("once");
+				if (once) this.#next();
+				return { outlet, once };
+			},
+			{ outlet: "", once: false },
+		);
+		const { body, end } = this.#parseBody(["endadd"]);
+		if (end) this.#finishEndTag();
+		else this.#unclosed("add", open, "endadd");
+		return {
+			type: "Add",
+			outlet,
+			once,
 			body,
 			span: { start: open.start, end: this.#lastEnd },
 		};

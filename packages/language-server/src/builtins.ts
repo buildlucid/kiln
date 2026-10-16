@@ -81,6 +81,16 @@ export const TAGS: Record<string, TagDoc> = {
 		description:
 			"Saves a section's output and reuses it in later renders, with the environment's cache store.",
 	},
+	outlet: {
+		snippet: 'outlet "${1:head}" %}',
+		description:
+			"Marks a place in the page that templates add content to with `add to`.",
+	},
+	add: {
+		snippet: block("add", ' to "${1:head}"'),
+		description:
+			"Adds content to an outlet, such as a component's styles. `once` adds it only the first time.",
+	},
 	apply: {
 		snippet: block("apply", " ${1:filter}"),
 		description: "Runs a section of output through filters.",
@@ -107,6 +117,7 @@ export const BLOCK_TAGS = new Set([
 	"macro",
 	"with",
 	"cache",
+	"add",
 	"apply",
 	"autoescape",
 	"verbatim",

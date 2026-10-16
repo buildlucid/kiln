@@ -37,6 +37,7 @@ const bodiesOf = (node: Statement): Body[] => {
 			];
 		case "Block":
 		case "Slot":
+		case "Add":
 			return [own([node.body], true)];
 		case "SetBlock":
 		case "Macro":

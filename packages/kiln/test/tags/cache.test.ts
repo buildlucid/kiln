@@ -4,11 +4,11 @@ import { errorCode, lines, render } from "../helpers.js";
 
 /** A store that records what it saves. */
 const recording = () => {
-	const saved = new Map<string, { html: string; seconds: number | null }>();
+	const saved = new Map<string, { value: string; seconds: number | null }>();
 	const cache: KilnCache = {
-		get: ({ key }) => saved.get(key)?.html ?? null,
-		set: ({ key, html, seconds }) => {
-			saved.set(key, { html, seconds });
+		get: ({ key }) => saved.get(key)?.value ?? null,
+		set: ({ key, value, seconds }) => {
+			saved.set(key, { value, seconds });
 		},
 	};
 	return { cache, saved };
@@ -49,9 +49,9 @@ describe("cache", () => {
 			locale: "de",
 			timeZone: "Europe/Berlin",
 		});
-		expect([...saved]).toEqual([
-			['index.kiln|en|UTC|["post",1,true,null]', { html: "x", seconds: 600 }],
-			['index.kiln|de|Europe/Berlin|["post"]', { html: "y", seconds: null }],
+		expect([...saved].map(([key, { seconds }]) => [key, seconds])).toEqual([
+			['index.kiln|en|UTC|["post",1,true,null]', 600],
+			['index.kiln|de|Europe/Berlin|["post"]', null],
 		]);
 	});
 
@@ -70,13 +70,20 @@ describe("cache", () => {
 		const saved = new Map<string, string>();
 		const cache: KilnCache = {
 			get: async ({ key }) => saved.get(key),
-			set: async ({ key, html }) => {
-				saved.set(key, html);
+			set: async ({ key, value }) => {
+				saved.set(key, value);
 			},
 		};
 		const template = '{% cache "a" %}{{ n }}{% endcache %}';
 		expect(await render(template, { cache, context: { n: 1 } })).toBe("1");
 		expect(await render(template, { cache, context: { n: 2 } })).toBe("1");
+	});
+
+	test("a value Kiln didn't make is treated as missing", async () => {
+		const cache: KilnCache = { get: () => "<p>old</p>", set: () => {} };
+		expect(await render('{% cache "a" %}new{% endcache %}', { cache })).toBe(
+			"new",
+		);
 	});
 
 	test("a saved copy keeps the indentation it was rendered with", async () => {
@@ -94,6 +101,24 @@ describe("cache", () => {
 		const first = await render(template, options);
 		expect(first).toBe(lines("<ul>", "	<li>a</li>", "	<li>b</li>", "</ul>"));
 		expect(await render(template, options)).toBe(first);
+	});
+
+	test("saves what the section adds to outlets, and adds it again", async () => {
+		const cache = memoryCache();
+		const templates = {
+			card: '{% add to "head" once %}<link>{% endadd %}<p>{{ n }}</p>',
+		};
+		const template =
+			'<head>{% outlet "head" %}</head>{% cache "cards" %}{% include "card" with { n } %}{% include "card" with { n } %}{% endcache %}';
+		const first = await render(template, {
+			cache,
+			templates,
+			context: { n: 1 },
+		});
+		expect(first).toBe("<head><link></head><p>1</p><p>1</p>");
+		expect(
+			await render(template, { cache, templates, context: { n: 2 } }),
+		).toBe(first);
 	});
 
 	test("variables set inside stay inside", async () => {

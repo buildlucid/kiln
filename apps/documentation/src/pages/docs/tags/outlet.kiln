@@ -1,0 +1,68 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+	<p><code>outlet</code> marks a place in the page that any template can add to, and <code>add to</code> adds content there. Use them so a component can bring its own styles and scripts, and they end up in the page's <code>&lt;head&gt;</code>.</p>
+
+	{% set base %}
+		{% verbatim %}
+<html>
+	<head>
+		<title>{{ title }}</title>
+		{% outlet "head" %}
+	</head>
+	<body>
+		{% block content %}{% endblock %}
+	</body>
+</html>
+		{% endverbatim %}
+	{% endset %}
+	{% set card %}
+		{% verbatim %}
+{% props title %}
+{% add to "head" once %}
+	<link rel="stylesheet" href="/card.css">
+{% endadd %}
+<article class="card">{{ title }}</article>
+		{% endverbatim %}
+	{% endset %}
+	{% apply example(templates: { "layouts/base.kiln": base, "components/card.kiln": card }) %}
+		{% verbatim %}
+{% extends "layouts/base" %}
+{% set title = "Home" %}
+{% block content %}
+	{% include "components/card" with { title: "One" } %}
+	{% include "components/card" with { title: "Two" } %}
+{% endblock %}
+		{% endverbatim %}
+	{% endapply %}
+
+	<h2>Adding content</h2>
+
+	<ul>
+		<li>Content goes to the outlet with the same name, in the order it was added. It doesn't matter whether <code>add to</code> runs before or after the outlet.</li>
+		<li>The content lines up with the outlet's indentation.</li>
+		<li>The content can read the variables around it. Variables you <code>set</code> inside it stay inside it.</li>
+		<li>Content for an outlet the page doesn't have is dropped. A component still works on a page without that outlet, and when you <a href="/docs/api/rendering/#rendering-one-block">render one block</a>.</li>
+	</ul>
+
+	<h2>Adding once</h2>
+
+	<p><code>once</code> adds the content only the first time that tag runs in a render. A component used many times on a page adds its styles once.</p>
+
+	{% apply highlight("kiln") %}
+		{% verbatim %}
+{% add to "head" once %}
+	<script type="module" src="/tabs.js"></script>
+{% endadd %}
+		{% endverbatim %}
+	{% endapply %}
+
+	<h2>Rules</h2>
+
+	<ul>
+		<li>Each outlet name can be used once per render.</li>
+		<li>Outlet names are plain strings, in both tags.</li>
+		<li>An outlet can't be inside <code>cache</code>, <code>set</code>, <code>apply</code> or a macro, because its content is only known when the render ends.</li>
+		<li>Content added inside <a href="/docs/tags/cache/"><code>cache</code></a> is saved with the section, and added again when the saved copy is used.</li>
+	</ul>
+{% endblock %}

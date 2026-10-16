@@ -65,16 +65,16 @@ const kiln = createKiln({
 	loader,
 	cache: {
 		get: ({ key }) => env.KV.get(key),
-		set: ({ key, html, seconds }) =>
-			env.KV.put(key, html, seconds ? { expirationTtl: seconds } : {}),
+		set: ({ key, value, seconds }) =>
+			env.KV.put(key, value, seconds ? { expirationTtl: seconds } : {}),
 	},
 });
 		{% endverbatim %}
 	{% endapply %}
 
 	<ul>
-		<li><code>get({ key })</code> returns the saved HTML, or null when there is none.</li>
-		<li><code>set({ key, html, seconds })</code> saves it. <code>seconds</code> is the value of <code>for</code>, or null.</li>
+		<li><code>set({ key, value, seconds })</code> saves a copy. <code>value</code> is a string Kiln makes, holding the HTML and anything the section <a href="/docs/tags/outlet/">added to an outlet</a>. Save it as it is. <code>seconds</code> is the value of <code>for</code>, or null.</li>
+		<li><code>get({ key })</code> returns the saved value, or null when there is none.</li>
 		<li>Both take one object, so Kiln can pass more details later without breaking your store.</li>
 		<li>Either may return a promise. The render only waits when one does.</li>
 	</ul>

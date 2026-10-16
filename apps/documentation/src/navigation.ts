@@ -118,6 +118,12 @@ export const navigation = [
 				description: "Save a section's output and reuse it in later renders.",
 			},
 			{
+				title: "outlet and add",
+				url: "/docs/tags/outlet/",
+				description:
+					"Let components add styles and scripts to the page's head.",
+			},
+			{
 				title: "apply",
 				url: "/docs/tags/apply/",
 				description: "Run a section of output through filters.",
@@ -233,6 +239,12 @@ export const navigation = [
 	{
 		title: "Guides",
 		items: [
+			{
+				title: "Compared with other languages",
+				url: "/docs/comparison/",
+				description:
+					"What Kiln has next to Twig, Nunjucks, LiquidJS and Handlebars.",
+			},
 			{
 				title: "Coming from Twig",
 				url: "/docs/coming-from-twig/",

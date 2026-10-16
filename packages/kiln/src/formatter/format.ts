@@ -106,6 +106,7 @@ const BLOCK_TAGS = new Set([
 	"macro",
 	"with",
 	"cache",
+	"add",
 	"apply",
 	"autoescape",
 	"verbatim",

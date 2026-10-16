@@ -49,7 +49,7 @@
 	<h2>Removed</h2>
 
 	<ul>
-		<li><strong>Tags:</strong> <code>sandbox</code>, <code>use</code>, <code>deprecated</code>, <code>flush</code>, <code>do</code>, <code>cache</code> and <code>guard</code>. Kiln's <a href="/docs/api/safety/">safety model</a> replaces the sandbox.</li>
+		<li><strong>Tags:</strong> <code>sandbox</code>, <code>use</code>, <code>deprecated</code>, <code>flush</code>, <code>do</code> and <code>guard</code>. Kiln's <a href="/docs/api/safety/">safety model</a> replaces the sandbox.</li>
 		<li><strong>Functions:</strong> <code>include()</code>, <code>attribute</code>, <code>constant</code>, <code>source</code>, <code>template_from_string</code> and <code>random</code>. Use the <code>include</code> tag and <code>[]</code> instead of the first two.</li>
 		<li><strong>Filters:</strong> <code>spaceless</code>, <code>convert_encoding</code>, <code>format</code>, <code>date_modify</code> and the <code>e</code> alias. Use <code>-</code> to trim whitespace, and <code>#{ }</code> to build strings.</li>
 		<li><strong>Tests:</strong> <code>same as</code>, <code>constant</code> and <code>none</code>. <code>==</code> is already strict, and <code>null</code> replaces <code>none</code>.</li>
