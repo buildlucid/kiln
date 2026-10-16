@@ -6,7 +6,10 @@
 
 Kiln is a template language for building websites on the server. The syntax will feel familiar if you know Twig, Jinja or Liquid.
 
+**[Read the documentation at kilnlang.com](https://kilnlang.com)**
+
 - **Async data.** Templates can call async functions to load what they need. Kiln only waits where a call returns a promise.
+- **Server islands.** Build a page as static HTML and let the parts that need live data load on each visit, or stream them in from a server.
 - **Runs anywhere.** No dependencies and no `eval`. Works on Node 24 and Cloudflare Workers.
 - **Safe by default.** Templates only read what you give them, output is escaped, and limits stop runaway templates.
 - **Layouts and components.** Blocks, includes, components with typed props and slots, and macros.
@@ -18,45 +21,14 @@ Kiln is a template language for building websites on the server. The syntax will
 npm install @lucidkiln/core
 ```
 
-## Usage
+Then follow the [quick start](https://kilnlang.com/docs/quick-start/) to render your first page.
 
-`templates/pages/home.kiln`:
+## Learn more
 
-```twig
-{% extends "layouts/base" %}
-
-{% block content %}
-	<h1>{{ title }}</h1>
-	<ul>
-		{% for post in documents("post", limit: 3) %}
-		<li><a href="{{ post.url }}">{{ post.title }}</a></li>
-		{% endfor %}
-	</ul>
-{% endblock %}
-```
-
-`render.ts`:
-
-```ts
-import { createKiln } from "@lucidkiln/core";
-import { fileLoader } from "@lucidkiln/core/node";
-
-const kiln = createKiln({
-	loader: fileLoader({ root: "templates" }),
-	functions: {
-		documents: (collection: string, query: { limit: number }) =>
-			db.find(collection, query),
-	},
-});
-
-const html = await kiln.render("pages/home", { title: "Home" });
-```
-
-On Cloudflare Workers, use `memoryLoader` from `@lucidkiln/core` to pass templates in as strings.
-
-## Documentation
-
-The full documentation lives in the [Kiln repository](https://github.com/buildlucid/kiln).
+- [Documentation](https://kilnlang.com/docs/)
+- [Compared with other template languages](https://kilnlang.com/docs/comparison/)
+- [Benchmarks](https://kilnlang.com/docs/benchmarks/)
+- [Editor support](https://kilnlang.com/docs/tooling/editors/)
 
 ## Licence
 

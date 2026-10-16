@@ -3,6 +3,7 @@
 	"version": "0.0.0",
 	"private": true,
 	"description": "A fast, safe, async-aware template language for building websites. Runs on Node and Cloudflare Workers.",
+	"homepage": "https://kilnlang.com",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/buildlucid/kiln.git",

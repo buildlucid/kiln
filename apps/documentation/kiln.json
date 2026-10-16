@@ -4,6 +4,6 @@
 	"functions": [],
 	"filters": ["example", "highlight"],
 	"tests": [],
-	"globals": ["benchmarks", "navigation", "site"],
+	"globals": ["benchmarks", "comparison", "navigation", "site"],
 	"types": []
 }

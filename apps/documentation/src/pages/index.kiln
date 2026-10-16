@@ -1,5 +1,7 @@
 {% extends "layouts/base" %}
 
+{% from "macros/comparison" import mark, legend %}
+
 {% block title %}{{ site.name }} · {{ site.tagline }}{% endblock %}
 
 {% set features = [
@@ -35,18 +37,20 @@
 	},
 ] %}
 
-{# The hero's template. It is shown, then rendered at build time for the output below it. #}
+{# The hero's template, and the product the browser below it shows. #}
 {% set heroTemplate %}
 	{% verbatim %}
-<h1>{{ title }}</h1>
-{% for post in documents("post", limit: 2) %}
-	<a href="{{ post.url }}">
-		<h2>{{ post.title }}</h2>
-		<time>{{ post.publishedAt|formatDate(dateStyle: "medium") }}</time>
-	</a>
-{% endfor %}
+{% set product = document("product", slug) %}
+
+<h1>{{ product.name }}</h1>
+<p>{{ product.price|formatNumber(style: "currency", currency: "GBP") }}</p>
+
+{% island "components/stock" with { id: product.id } %}
+	<p>Checking stock…</p>
+{% endisland %}
 	{% endverbatim %}
 {% endset %}
+{% set product = { name: "Stoneware mug", price: 18, stock: 12 } %}
 
 {# Benchmarks: every page a real site renders, without the cold start, which measures compiling. #}
 {% set pageScenarios = benchmarks.scenarios|filter(scenario => not scenario.cold) %}
@@ -88,17 +92,48 @@
 
 				<div class="mx-auto w-full max-w-[36rem] lg:max-w-none">
 					<div class="hero-window enter" style="--enter: 2">
-						{{ heroTemplate|highlight("kiln", title: "pages/blog.kiln") }}
+						{{ heroTemplate|highlight("kiln", title: "pages/product.kiln") }}
 					</div>
+					{#
+						Between the template and the browser, the mascot eats packets of template and sends
+						the page down. The line up from the island is the island loading from the server.
+					#}
 					<div class="hero-flow enter" style="--enter: 3" aria-hidden="true">
-						<span class="hero-flow-label">
-							<svg viewBox="0 0 16 16" width="13" height="13" class="text-ember"><path d="M8 3v10M4 9l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
-							Rendered by {{ site.name }}
+						{% for colour in ["var(--code-tag)", "var(--code-string)", "var(--code-keyword)"] %}
+							<span class="hero-packet" style="--packet: {{ loop.index0 }}; background: {{ colour }}"></span>
+						{% endfor %}
+						<span class="hero-mascot">{% include "components/logo" with { size: 56, animated: true, mouth: true } %}</span>
+						<span class="hero-spark"></span>
+						<span class="hero-return">
+							<svg viewBox="0 0 88 74" width="88" height="74"><path d="M84 74V14Q84 2 72 2H0" fill="none" stroke="currentColor" stroke-dasharray="3 3"/></svg>
+							<span class="hero-return-dot"></span>
 						</span>
 					</div>
-					<div class="hero-window enter" style="--enter: 4">
-						{{ heroTemplate|example(context: { title: "Blog" }, source: false) }}
-					</div>
+					{#
+						The page in a browser. The name and price are static HTML. The stock is an island,
+						which shows its fallback, then loads. Screen readers get the description instead.
+					#}
+					<figure class="hero-window enter" style="--enter: 4" role="img" aria-label="The rendered page in a browser. The name and price are static HTML. The stock level is an island, which shows its fallback until it loads.">
+						<div class="code-head" aria-hidden="true"><span class="code-label">shop.example/mugs/stoneware</span></div>
+						<div class="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-5 p-5 sm:grid-cols-[7rem_minmax(0,1fr)]" aria-hidden="true">
+							<div class="grid aspect-square place-items-center rounded-xl border border-line bg-raised bg-[radial-gradient(70%_70%_at_30%_25%,color-mix(in_oklab,var(--color-ember)_30%,transparent),transparent)] text-ember-soft">
+								<svg viewBox="0 0 24 24" width="40%" height="40%"><path d="M5 7h11v8a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V7ZM16 9h1.5a2.5 2.5 0 0 1 0 5H16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+							</div>
+							<div class="min-w-0">
+								<p class="text-lg font-semibold tracking-tight text-fg">{{ product.name }}</p>
+								<p class="mt-0.5 text-sm text-muted tabular-nums">{{ product.price|formatNumber(style: "currency", currency: "GBP") }}</p>
+								<div class="hero-island mt-4">
+									<span class="hero-island-tag">island</span>
+									<p class="hero-island-fallback">Checking stock…</p>
+									<p class="hero-island-live"><span class="size-1.5 rounded-full bg-[#7fd6a0]"></span>{{ product.stock }} in stock</p>
+								</div>
+							</div>
+						</div>
+						<ul class="flex flex-wrap gap-x-5 gap-y-1.5 border-t border-line px-5 py-3 text-[12px] text-muted" aria-hidden="true">
+							<li class="flex items-center gap-2"><span class="size-2.5 rounded-sm border border-line-strong bg-raised"></span>Static HTML, built once</li>
+							<li class="flex items-center gap-2"><span class="size-2.5 rounded-sm border border-dashed border-ember"></span>Island, loaded on each visit</li>
+						</ul>
+					</figure>
 				</div>
 			</div>
 		</section>
@@ -156,6 +191,44 @@
 					</li>
 				{% endfor %}
 			</ul>
+		</section>
+
+		<section aria-labelledby="compare-title" class="mx-auto max-w-[72rem] px-4 pb-28 sm:px-6">
+			<div class="reveal flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+				<div class="max-w-[38rem]">
+					<p class="text-sm font-medium text-ember">Compared</p>
+					<h2 id="compare-title" class="mt-3 text-3xl font-semibold tracking-tight text-balance text-fg sm:text-4xl">Built in, not bolted on.</h2>
+					<p class="mt-4 leading-relaxed text-muted">Async data, islands, streaming and typed props come with {{ site.name }}. Here is how it compares with Twig and the most popular JavaScript template languages.</p>
+				</div>
+				{{ legend() }}
+			</div>
+			<div class="reveal mt-10 overflow-x-auto rounded-2xl border border-line bg-bg">
+				<table class="w-full min-w-[36rem] table-fixed border-collapse text-[15px]">
+					<colgroup>
+						<col class="w-44 sm:w-[34%]">
+						{% for engine in comparison.engines %}<col{{ attrs({ class: loop.first ? "bg-ember/[0.06]" }) }}>{% endfor %}
+					</colgroup>
+					<thead>
+						<tr>
+							<th scope="col" class="sticky left-0 z-10 bg-bg px-5 py-4 text-left font-medium text-fg">Feature</th>
+							{% for engine in comparison.engines %}
+								<th scope="col" class="px-2 py-4 text-center text-[13px] font-medium {{ loop.first ? "text-ember" : "text-muted" }}">{{ engine }}</th>
+							{% endfor %}
+						</tr>
+					</thead>
+					<tbody>
+						{% for row in comparison.featured %}
+							<tr class="border-t border-line">
+								<th scope="row" class="sticky left-0 z-10 bg-bg px-5 py-3.5 text-left font-normal"><a href="{{ row.link }}" class="text-text underline decoration-transparent underline-offset-4 transition-colors hover:text-fg hover:decoration-line-strong">{{ row.feature }}</a></th>
+								{% for cell in row.cells %}
+									<td class="px-2 py-3.5 text-center">{{ mark(cell, loop.first, loop.last) }}</td>
+								{% endfor %}
+							</tr>
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
+			<a href="/docs/comparison/" class="reveal mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-fg underline decoration-line-strong underline-offset-4 transition-colors hover:decoration-fg">See the full comparison</a>
 		</section>
 
 		<section aria-labelledby="speed-title" class="border-y border-line bg-surface/50">

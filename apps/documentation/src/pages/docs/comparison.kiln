@@ -1,115 +1,24 @@
 {% extends "layouts/docs" %}
 
-{#
-	Each cell is true (has it), false (doesn't) or a short note, which means it partly has it.
-	Cells follow the order of `engines`.
-#}
-{% set engines = ["Kiln", "Twig", "Nunjucks", "LiquidJS", "Handlebars"] %}
-
-{% set groups = [
-	{
-		title: "Layouts and reuse",
-		rows: [
-			{ feature: "Layouts with blocks", link: "/docs/tags/extends/", cells: [true, true, true, true, "Partial blocks"] },
-			{ feature: "Includes", link: "/docs/tags/include/", cells: [true, true, true, true, true] },
-			{ feature: "Macros", link: "/docs/tags/macro/", cells: [true, true, true, false, false] },
-			{ feature: "Components with named slots", link: "/docs/tags/component/", cells: [true, true, "One slot", false, "One slot"] },
-			{ feature: "Props with types and defaults", link: "/docs/tags/props/", cells: [true, "Types aren't checked", false, false, false] },
-			{ feature: "Includes isolated by default", link: "/docs/tags/include/#isolated-by-default", cells: [true, "With only", false, "With render", false] },
-			{ feature: "Render a single block", link: "/docs/api/rendering/#rendering-one-block", cells: [true, true, false, false, false] },
-		],
-	},
-	{
-		title: "Expressions",
-		rows: [
-			{ feature: "Your own filters and functions", link: "/docs/api/extending/", cells: [true, true, true, "Filters only", "Helpers"] },
-			{ feature: "Arrow functions", link: "/docs/language/expressions/#arrow-functions", cells: [true, true, false, false, false] },
-			{ feature: "Null coalescing with ??", link: "/docs/language/expressions/#operators", cells: [true, true, false, false, false] },
-			{ feature: "Missing variables are errors by default", link: "/docs/language/strict-mode/", cells: [true, "Option", "Option", "Option", "Option"] },
-		],
-	},
-	{
-		title: "Escaping and safety",
-		rows: [
-			{ feature: "Output escaped by default", link: "/docs/language/escaping/", cells: [true, true, true, "Option", true] },
-			{ feature: "Escaping for attributes, JavaScript, CSS and URLs", link: "/docs/language/escaping/#strategies", cells: [true, true, false, false, false] },
-			{ feature: "Safe for templates you didn't write", link: "/docs/api/safety/", cells: [true, "Opt-in sandbox", false, true, "Blocks prototypes"] },
-			{ feature: "Limits on steps, output and depth", link: "/docs/api/safety/#limits", cells: [true, false, false, true, false] },
-		],
-	},
-	{
-		title: "Data and output",
-		rows: [
-			{ feature: "Async data", link: "/docs/language/async-data/", cells: [true, false, "Callback API", true, false] },
-			{ feature: "Streaming", link: "/docs/api/streaming/", cells: [true, true, false, "Node streams only", false] },
-			{ feature: "Server islands", link: "/docs/tags/island/", cells: [true, false, false, false, false] },
-			{ feature: "Fragment caching", link: "/docs/tags/cache/", cells: [true, "Extension", false, false, false] },
-			{ feature: "Number and date formatting with Intl", link: "/docs/filters/numbers-and-dates/", cells: [true, "Extension", false, "Dates only", false] },
-			{ feature: "Plurals for any locale", link: "/docs/filters/numbers-and-dates/#plural", cells: [true, false, false, false, false] },
-			{ feature: "Lines up indentation", link: "/docs/language/syntax/#indentation", cells: [true, false, false, false, false] },
-		],
-	},
-	{
-		title: "Running and tooling",
-		rows: [
-			{ feature: "Runs on Cloudflare Workers", link: "/docs/installation/#cloudflare-workers", cells: [true, false, "Precompiled only", true, "Precompiled only"] },
-			{ feature: "Precompile at build time", link: "/docs/api/precompiling/", cells: [true, true, true, false, true] },
-			{ feature: "Types generated from templates", link: "/docs/api/types/", cells: [true, false, false, false, false] },
-			{ feature: "Formatter and language server", link: "/docs/tooling/formatting/", cells: [true, "Third party", "Third party", "Third party", "Third party"] },
-		],
-	},
-] %}
-
-{# The icon for a cell: "yes", "no" or "partly". #}
-{% macro icon(kind, isKiln = false) %}
-	{% if kind == "yes" %}
-		<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" class="mx-auto block shrink-0 {{ isKiln ? "text-ember" : "text-fg" }}"><circle cx="8" cy="8" r="7" fill="currentColor" opacity=".16"/><path d="m5 8.25 2 2 4-4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-	{% elseif kind == "no" %}
-		<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" class="mx-auto block shrink-0 text-muted/50"><path d="M5.5 8h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-	{% else %}
-		<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" class="mx-auto block shrink-0 text-muted"><circle cx="8" cy="8" r="7" fill="currentColor" opacity=".16"/><path d="M8 4.5a3.5 3.5 0 0 1 0 7Z" fill="currentColor"/></svg>
-	{% endif %}
-{% endmacro %}
-
-{#
-	One table cell. A partial cell shows its note in a tooltip on hover or focus. The note stays
-	in the page, so screen readers and the Markdown copy get "Partly" and the note.
-	The last column's tooltip lines up with the right edge, so it doesn't overflow the table.
-#}
-{% macro mark(value, isKiln = false, isLast = false) %}
-	{% if value == true %}
-		{{ icon("yes", isKiln) }}<span class="sr-only">Yes</span>
-	{% elseif value == false %}
-		{{ icon("no") }}<span class="sr-only">No</span>
-	{% else %}
-		<span class="group relative inline-block rounded-full align-middle" tabindex="0">
-			{{ icon("partly") }}
-			<span class="pointer-events-none absolute bottom-full z-20 mb-2 w-max max-w-40 rounded-md border border-line-strong bg-raised px-2.5 py-1.5 text-left text-xs leading-snug text-fg opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100 {{ isLast ? "right-0" : "left-1/2 -translate-x-1/2" }}"><span class="sr-only">Partly: </span>{{ value }}</span>
-		</span>
-	{% endif %}
-{% endmacro %}
+{% from "macros/comparison" import mark, legend %}
 
 {% block content %}
-	<p>Kiln has every feature most sites use from Twig, plus async data, typed props, render limits and tooling. This page compares it with Twig and the most popular JavaScript template languages.</p>
+	<p>Kiln has every feature most sites use from Twig, plus async data, server islands, typed props, render limits and tooling. This page compares it with Twig and the most popular JavaScript template languages.</p>
 
-	<ul class="flex list-none flex-wrap gap-x-5 gap-y-1 pl-0 text-sm text-muted">
-		<li class="flex items-center gap-1.5 pl-0">{{ icon("yes") }} Has it</li>
-		<li class="flex items-center gap-1.5 pl-0">{{ icon("partly") }} Partly. Hover for details</li>
-		<li class="flex items-center gap-1.5 pl-0">{{ icon("no") }} Doesn't have it</li>
-	</ul>
+	{{ legend() }}
 
-	{% for group in groups %}
+	{% for group in comparison.groups %}
 		<h2>{{ group.title }}</h2>
 
 		<table class="min-w-[38rem] table-fixed">
 			<colgroup>
 				<col class="w-[34%]">
-				{% for engine in engines %}<col{{ attrs({ class: loop.first ? "bg-ember/[0.06]" }) }}>{% endfor %}
+				{% for engine in comparison.engines %}<col{{ attrs({ class: loop.first ? "bg-ember/[0.06]" }) }}>{% endfor %}
 			</colgroup>
 			<thead>
 				<tr>
 					<th class="sticky left-0 z-10 bg-surface">Feature</th>
-					{% for engine in engines %}
+					{% for engine in comparison.engines %}
 						<th class="px-2 text-center {{ loop.first ? "text-ember" : "" }}">{{ engine }}</th>
 					{% endfor %}
 				</tr>

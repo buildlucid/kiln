@@ -2,6 +2,7 @@ import benchmarks from "@lucidkiln/benchmarks/results.json" with { type: "json" 
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite-plus";
 import { kilnPages } from "./plugin/index.js";
+import { comparison } from "./src/comparison.js";
 import { siteFiles } from "./src/files.js";
 import { navigation, pageContext } from "./src/navigation.js";
 import { site } from "./src/site.js";
@@ -13,6 +14,7 @@ export default defineConfig({
 				site,
 				navigation,
 				benchmarks,
+				comparison,
 			},
 			context: (page) => pageContext(page.url, page.template),
 			files: siteFiles,
