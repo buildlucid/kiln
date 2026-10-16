@@ -1,0 +1,49 @@
+<%- include("/layout/start", { title: post.title + " · " + site.name }) %>
+<article class="post">
+	<header>
+		<h1><%= post.title %></h1>
+		<p class="meta">
+			By <a href="<%= post.author.url %>"><%= post.author.name %></a>
+			on <time datetime="<%= post.publishedAt %>"><%= formatDate(post.publishedAt) %></time>
+			· <%= post.readingTime %> min read
+		</p>
+	</header>
+	<div class="body"><%- post.body %></div>
+	<ul class="tags">
+		<% for (const tag of post.tags) { %>
+		<li><a href="/tags/<%= tag %>/">#<%= tag %></a></li>
+		<% } %>
+	</ul>
+	<aside class="author">
+		<h2>About <%= post.author.name %></h2>
+		<p><%= post.author.bio %></p>
+	</aside>
+</article>
+
+<section class="related">
+	<h2>Related posts</h2>
+	<ul>
+		<% for (const item of related) { %>
+		<li>
+			<a href="<%= item.url %>"><%= item.title %></a>
+			<time datetime="<%= item.publishedAt %>"><%= formatDate(item.publishedAt) %></time>
+			<p><%= item.excerpt %></p>
+		</li>
+		<% } %>
+	</ul>
+</section>
+
+<section class="comments">
+	<h2><%= comments.length %> comments</h2>
+	<% if (comments.length > 0) { %>
+	<% comments.forEach((comment, index) => { %>
+	<article class="comment" id="comment-<%= index + 1 %>">
+		<header><strong><%= comment.author %></strong> <time><%= formatDate(comment.postedAt) %></time></header>
+		<p><%= comment.body %></p>
+	</article>
+	<% }) %>
+	<% } else { %>
+	<p>No comments yet.</p>
+	<% } %>
+</section>
+<%- include("/layout/end") %>

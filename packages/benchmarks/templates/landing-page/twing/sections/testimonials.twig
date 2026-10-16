@@ -1,0 +1,9 @@
+<section class="testimonials">
+	<h2>{{ section.heading }}</h2>
+	{% for item in section.items %}
+	<figure>
+		<blockquote>{{ item.quote }}</blockquote>
+		<figcaption>{{ item.name }}, {{ item.role }}</figcaption>
+	</figure>
+	{% endfor %}
+</section>

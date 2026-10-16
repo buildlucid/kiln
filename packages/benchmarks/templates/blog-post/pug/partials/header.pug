@@ -1,0 +1,6 @@
+header.site-header
+	a.logo(href="/")= site.name
+	nav
+		ul
+			each item in site.nav
+				li: a(href=item.url aria-current=item.url === current && "page")= item.title

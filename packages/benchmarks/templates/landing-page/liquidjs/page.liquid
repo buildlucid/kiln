@@ -1,0 +1,9 @@
+{% layout "layout" %}
+
+{% block title %}{{ page.title }} · {{ site.name }}{% endblock %}
+
+{% block content %}
+{% for section in page.sections %}
+{% render "sections/{{ section.type }}", section: section %}
+{% endfor %}
+{% endblock %}

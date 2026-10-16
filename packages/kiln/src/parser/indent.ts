@@ -43,9 +43,11 @@ const bodiesOf = (node: Statement): Body[] => {
 	}
 };
 
-/** The statement lists inside a statement, each once. */
-const childLists = (bodies: Body[]): Set<Statement[]> =>
-	new Set(bodies.flatMap((body) => body.lists));
+/** The statement lists inside a statement, each once. Only a component's fills appear in more than one body. */
+const childLists = (bodies: Body[]): Iterable<Statement[]> =>
+	bodies.length === 1
+		? (bodies[0] as Body).lists
+		: new Set(bodies.flatMap((body) => body.lists));
 
 /** The index of the first item whose key is at least `value`, in a list sorted by that key. */
 const firstAtLeast = <T>(
@@ -120,6 +122,7 @@ export const removeIndentation = (
 	const visit = (list: Statement[]): void => {
 		for (const node of list) {
 			const bodies = bodiesOf(node);
+			if (bodies.length === 0) continue;
 			for (const child of childLists(bodies)) visit(child);
 			for (const body of bodies) trim(body);
 		}
@@ -176,7 +179,10 @@ export const removeIndentation = (
 				}
 				node.value = value;
 			}
-			for (const child of childLists(bodiesOf(node))) rewrite(child);
+			const bodies = bodiesOf(node);
+			if (bodies.length > 0) {
+				for (const child of childLists(bodies)) rewrite(child);
+			}
 		}
 	};
 	rewrite(ast.body);

@@ -1,0 +1,51 @@
+{% layout "layout" %}
+
+{% block title %}{{ post.title }} · {{ site.name }}{% endblock %}
+
+{% block content %}
+<article class="post">
+	<header>
+		<h1>{{ post.title }}</h1>
+		<p class="meta">
+			By <a href="{{ post.author.url }}">{{ post.author.name }}</a>
+			on <time datetime="{{ post.publishedAt }}">{{ post.publishedAt | date: "%-d %b %Y" }}</time>
+			· {{ post.readingTime }} min read
+		</p>
+	</header>
+	<div class="body">{{ post.body | raw }}</div>
+	<ul class="tags">
+		{% for tag in post.tags %}
+		<li><a href="/tags/{{ tag }}/">#{{ tag }}</a></li>
+		{% endfor %}
+	</ul>
+	<aside class="author">
+		<h2>About {{ post.author.name }}</h2>
+		<p>{{ post.author.bio }}</p>
+	</aside>
+</article>
+
+<section class="related">
+	<h2>Related posts</h2>
+	<ul>
+		{% for item in related %}
+		<li>
+			<a href="{{ item.url }}">{{ item.title }}</a>
+			<time datetime="{{ item.publishedAt }}">{{ item.publishedAt | date: "%-d %b %Y" }}</time>
+			<p>{{ item.excerpt }}</p>
+		</li>
+		{% endfor %}
+	</ul>
+</section>
+
+<section class="comments">
+	<h2>{{ comments.size }} comments</h2>
+	{% for comment in comments %}
+	<article class="comment" id="comment-{{ forloop.index }}">
+		<header><strong>{{ comment.author }}</strong> <time>{{ comment.postedAt | date: "%-d %b %Y" }}</time></header>
+		<p>{{ comment.body }}</p>
+	</article>
+	{% else %}
+	<p>No comments yet.</p>
+	{% endfor %}
+</section>
+{% endblock %}

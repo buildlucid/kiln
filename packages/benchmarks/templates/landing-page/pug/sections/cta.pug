@@ -1,0 +1,5 @@
+mixin cta(section)
+	section.cta
+		h2= section.heading
+		p= section.text
+		a.button.button--primary(href=section.action.url)= section.action.label

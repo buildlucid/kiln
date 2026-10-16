@@ -1,0 +1,10 @@
+include components/product-card
+
+main.category
+	h1= category
+	p #{products.length} products
+	ul.products
+		each product in products
+			li
+				+productCard(product)
+					button(type="button" data-product=product.id disabled=!product.inStock) Add to basket

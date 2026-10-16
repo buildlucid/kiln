@@ -1,0 +1,49 @@
+<% layout("@layout") %>
+<% block("title", () => { %><%= it.post.title %> · <%= it.site.name %><% }) %>
+<article class="post">
+	<header>
+		<h1><%= it.post.title %></h1>
+		<p class="meta">
+			By <a href="<%= it.post.author.url %>"><%= it.post.author.name %></a>
+			on <time datetime="<%= it.post.publishedAt %>"><%= formatDate(it.post.publishedAt) %></time>
+			· <%= it.post.readingTime %> min read
+		</p>
+	</header>
+	<div class="body"><%~ it.post.body %></div>
+	<ul class="tags">
+		<% it.post.tags.forEach((tag) => { %>
+		<li><a href="/tags/<%= tag %>/">#<%= tag %></a></li>
+		<% }) %>
+	</ul>
+	<aside class="author">
+		<h2>About <%= it.post.author.name %></h2>
+		<p><%= it.post.author.bio %></p>
+	</aside>
+</article>
+
+<section class="related">
+	<h2>Related posts</h2>
+	<ul>
+		<% it.related.forEach((item) => { %>
+		<li>
+			<a href="<%= item.url %>"><%= item.title %></a>
+			<time datetime="<%= item.publishedAt %>"><%= formatDate(item.publishedAt) %></time>
+			<p><%= item.excerpt %></p>
+		</li>
+		<% }) %>
+	</ul>
+</section>
+
+<section class="comments">
+	<h2><%= it.comments.length %> comments</h2>
+	<% if (it.comments.length > 0) { %>
+	<% it.comments.forEach((comment, index) => { %>
+	<article class="comment" id="comment-<%= index + 1 %>">
+		<header><strong><%= comment.author %></strong> <time><%= formatDate(comment.postedAt) %></time></header>
+		<p><%= comment.body %></p>
+	</article>
+	<% }) %>
+	<% } else { %>
+	<p>No comments yet.</p>
+	<% } %>
+</section>

@@ -1,0 +1,33 @@
+<% /* Eta has no slots, so the card renders its own "Add to basket" button. */ %>
+<% const { product } = it %>
+<article class="card">
+	<a href="<%= product.url %>">
+		<img src="<%= product.image.src %>" alt="<%= product.image.alt %>" loading="lazy">
+		<h2><%= product.name %></h2>
+	</a>
+	<% if (product.badges.length > 0) { %>
+	<ul class="badges">
+		<% product.badges.forEach((badge) => { %>
+		<li><%= badge %></li>
+		<% }) %>
+	</ul>
+	<% } %>
+	<p class="price">
+		<% if (product.salePrice) { %>
+		<del><%= formatPrice(product.price) %></del>
+		<ins><%= formatPrice(product.salePrice) %></ins>
+		<% } else { %>
+		<%= formatPrice(product.price) %>
+		<% } %>
+	</p>
+	<p class="rating" aria-label="<%= product.rating %> out of 5">
+		<% for (let star = 1; star <= 5; star++) { %><span class="star<% if (star <= product.rating) { %> star--filled<% } %>">★</span><% } %>
+		<span>(<%= product.reviewCount %>)</span>
+	</p>
+	<% if (!product.inStock) { %>
+	<p class="stock">Out of stock</p>
+	<% } %>
+	<div class="actions">
+		<button type="button" data-product="<%= product.id %>"<% if (!product.inStock) { %> disabled<% } %>>Add to basket</button>
+	</div>
+</article>

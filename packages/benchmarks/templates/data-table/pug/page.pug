@@ -1,0 +1,14 @@
+table.users
+	thead
+		tr
+			each column in columns
+				th(scope="col")= column
+	tbody
+		each row, index in rows
+			tr(class=index % 2 === 0 ? "odd" : "even")
+				td= row.id
+				td= row.name
+				td: a(href=`mailto:${row.email}`)= row.email
+				td= row.role
+				td: span.status(class=row.active ? "status--active" : "status--inactive")= row.active ? "Active" : "Inactive"
+				td= row.score

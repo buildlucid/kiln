@@ -1,0 +1,9 @@
+mixin hero(section)
+	section.hero
+		div
+			h1= section.heading
+			p= section.text
+			.actions
+				each action in section.actions
+					a.button(class=action.primary ? "button--primary" : "button--secondary" href=action.url)= action.label
+		img(src=section.image.src alt=section.image.alt)

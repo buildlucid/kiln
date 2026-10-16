@@ -1,0 +1,9 @@
+<section class="faq">
+	<h2><%= it.section.heading %></h2>
+	<% it.section.items.forEach((item, index) => { %>
+	<details<% if (index === 0) { %> open<% } %>>
+		<summary><%= item.question %></summary>
+		<p><%= item.answer %></p>
+	</details>
+	<% }) %>
+</section>

@@ -1,0 +1,9 @@
+<section class="faq">
+	<h2>{{heading}}</h2>
+	{{#each items}}
+	<details{{#if @first}} open{{/if}}>
+		<summary>{{question}}</summary>
+		<p>{{answer}}</p>
+	</details>
+	{{/each}}
+</section>

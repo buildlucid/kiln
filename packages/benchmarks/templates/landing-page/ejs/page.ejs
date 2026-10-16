@@ -1,0 +1,5 @@
+<%- include("/layout/start", { title: page.title + " · " + site.name }) %>
+<% for (const section of page.sections) { %>
+<%- include("/sections/" + section.type, { section }) %>
+<% } %>
+<%- include("/layout/end") %>

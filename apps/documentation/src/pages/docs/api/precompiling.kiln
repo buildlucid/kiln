@@ -1,0 +1,88 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+<p>Precompiling turns the templates in your codebase into JavaScript modules when you build your site. They render the same HTML, with the same errors, but faster. See the <a href="/docs/benchmarks/">benchmarks</a>.</p>
+
+<p>Kiln never generates code while your site runs, so precompiled templates work everywhere, including Cloudflare Workers.</p>
+
+<h2>Precompiling at build time</h2>
+
+<p>Call <code>precompile</code> on an environment for each template, and save what it returns as a <code>.js</code> file. Do this in a build script or a bundler plugin.</p>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import { createKiln } from "@lucidcms/kiln";
+import { fileLoader } from "@lucidcms/kiln/node";
+import { options } from "./src/kiln-options.ts";
+
+const loader = fileLoader({ root: "src/templates" });
+const kiln = createKiln({ ...options, loader });
+
+for (const name of await loader.list()) {
+	const file = `build/templates/${name.replace(/\.kiln$/, ".js")}`;
+	await mkdir(dirname(file), { recursive: true });
+	await writeFile(file, await kiln.precompile(name));
+}
+{% endverbatim %}
+{% endapply %}
+
+<p><code>precompile</code> throws a <a href="/docs/api/errors/#error-types"><code>KilnSyntaxError</code></a> if the template has a problem, so a broken template fails the build instead of a page.</p>
+
+<h2>Rendering precompiled templates</h2>
+
+<p>Import the modules and give them to <code>memoryLoader</code> in place of the template source. Everything else stays the same.</p>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+import { createKiln, memoryLoader } from "@lucidcms/kiln";
+import layout from "./build/templates/layouts/base.js";
+import home from "./build/templates/pages/home.js";
+import { options } from "./kiln-options.ts";
+
+const kiln = createKiln({
+	...options,
+	loader: memoryLoader({ "layouts/base": layout, "pages/home": home }),
+});
+
+const html = await kiln.render("pages/home", { title: "Home" });
+{% endverbatim %}
+{% endapply %}
+
+<p>With Vite, <code>import.meta.glob</code> can import every module at once:</p>
+
+{% apply highlight("ts") %}
+{% verbatim %}
+import type { PrecompiledTemplate } from "@lucidcms/kiln";
+
+const modules = import.meta.glob<PrecompiledTemplate>(
+	"./build/templates/**/*.js",
+	{ eager: true, import: "default" },
+);
+const templates = Object.fromEntries(
+	Object.entries(modules).map(([path, module]) => [
+		path.slice("./build/templates/".length, -".js".length),
+		module,
+	]),
+);
+const kiln = createKiln({ ...options, loader: memoryLoader(templates) });
+{% endverbatim %}
+{% endapply %}
+
+<p>Your own loaders can return a precompiled module from <code>load</code> too, in place of the source.</p>
+
+<h2>Use the same options</h2>
+
+<p>A precompiled template is built for the options it was compiled with. Create the environment that renders it with the same <code>autoescape</code> setting, and the same functions, filters and tests. If something the module depends on is different, such as a built-in filter you replaced with your own, or the module came from another version of Kiln, rendering it fails with a <code>precompiled-mismatch</code> error. Precompile again to fix it.</p>
+
+<h2>Only precompile templates you trust</h2>
+
+<p>Precompile the templates that live in your codebase, which you review like the rest of your code. Templates written by other people, such as editors in a CMS or AI agents, should load as source. Kiln renders source without generating code, with the same <a href="/docs/api/safety/">safety rules and limits</a>.</p>
+
+<p>One environment can render both: a loader can return precompiled modules for your own templates and source for everything else.</p>
+
+<h2>What a module holds</h2>
+
+<p>A precompiled module holds the template's source and the JavaScript Kiln generated from it. Kiln reads the source when it loads the module, so errors point at the right line, and <code>check</code> and <code>analyze</code> work as they do for source.</p>
+{% endblock %}

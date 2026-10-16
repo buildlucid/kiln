@@ -29,4 +29,12 @@ describe("edge cases", () => {
 			await render('{{ "abc"|truncate(3) }}|{{ "abc"|truncate(0) }}'),
 		).toBe("abc|…");
 	});
+
+	test("a lone surrogate counts as one code point", async () => {
+		expect(
+			await render("{{ text|truncate(1) }}", {
+				context: { text: "\uDC00\uDC00x" },
+			}),
+		).toBe("\uDC00…");
+	});
 });

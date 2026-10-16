@@ -1,0 +1,22 @@
+<section class="pricing">
+	<h2>{{ section.heading }}</h2>
+	<div class="plans">
+		{% for plan in section.plans %}
+		<div class="plan{% if plan.featured %} plan--featured{% endif %}">
+			<h3>{{ plan.name }}</h3>
+			<p class="price">
+				{% if plan.price == 0 %}
+				Free
+				{% else %}
+				{{ plan.price | formatPrice }}<span>/month</span>
+				{% endif %}
+			</p>
+			<ul>
+				{% for feature in plan.features %}
+				<li>{{ feature }}</li>
+				{% endfor %}
+			</ul>
+		</div>
+		{% endfor %}
+	</div>
+</section>

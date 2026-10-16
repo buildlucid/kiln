@@ -1,0 +1,12 @@
+<section class="features">
+	<h2><%= it.section.heading %></h2>
+	<ul class="grid">
+		<% it.section.items.forEach((item) => { %>
+		<li>
+			<svg class="icon" aria-hidden="true"><use href="#icon-<%= item.icon %>"></use></svg>
+			<h3><%= item.title %></h3>
+			<p><%= item.text %></p>
+		</li>
+		<% }) %>
+	</ul>
+</section>

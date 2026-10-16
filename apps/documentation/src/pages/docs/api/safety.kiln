@@ -47,6 +47,7 @@ const kiln = createKiln({
 	<li>Output is <a href="/docs/language/escaping/">escaped</a> by default.</li>
 	<li>Templates can't build regular expressions, so they can't cause slow pattern matching.</li>
 	<li>Templates can't compile other templates from strings.</li>
+	<li>Kiln never generates code while rendering. <a href="/docs/api/precompiling/">Precompiled templates</a> are JavaScript you build and ship, so only precompile templates you trust.</li>
 	<li><code>dump</code> outputs nothing unless you turn on <code>debug</code>.</li>
 	<li>A failed render returns no partial output.</li>
 </ul>

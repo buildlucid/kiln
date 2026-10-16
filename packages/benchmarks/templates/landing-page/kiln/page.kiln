@@ -1,0 +1,9 @@
+{% extends "layout" %}
+
+{% block title %}{{ page.title }} · {{ site.name }}{% endblock %}
+
+{% block content %}
+{% for section in page.sections %}
+{% include "sections/" ~ section.type with { section } %}
+{% endfor %}
+{% endblock %}

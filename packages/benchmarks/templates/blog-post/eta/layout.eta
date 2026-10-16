@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title><%~ block("title", () => { %><%= it.site.name %><% }) %></title>
+	<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+	<%~ include("@partials/header", { site: it.site, current: it.current }) %>
+	<main>
+		<%~ it.body %>
+	</main>
+	<%~ include("@partials/footer", { site: it.site }) %>
+</body>
+</html>

@@ -1,0 +1,7 @@
+mixin testimonials(section)
+	section.testimonials
+		h2= section.heading
+		each item in section.items
+			figure
+				blockquote= item.quote
+				figcaption #{item.name}, #{item.role}

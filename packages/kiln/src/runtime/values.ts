@@ -27,9 +27,36 @@ export const isHashLike = (
 /** Own enumerable keys of a plain object, without blocked names. */
 export const hashKeys = (value: Hash): string[] => {
 	const keys = Object.keys(value);
-	return keys.some((key) => BLOCKED_NAMES.has(key))
-		? keys.filter((key) => !BLOCKED_NAMES.has(key))
-		: keys;
+	for (let i = 0; i < keys.length; i++) {
+		// The names in `BLOCKED_NAMES`, compared directly, which is quicker than the set for every key.
+		const key = keys[i] as string;
+		if (key === "constructor" || key === "prototype" || key === "__proto__") {
+			return keys.filter((item) => !BLOCKED_NAMES.has(item));
+		}
+	}
+	return keys;
+};
+
+/** Where a literal options hash keeps the formatters it resolved to, by kind. See `cachedFormatter`. */
+export const FORMATTERS: unique symbol = Symbol("kiln.formatters");
+
+/** Formatters an options hash last resolved to, with the render settings each was for. */
+export type FormatterCells = Partial<
+	Record<
+		"number" | "date",
+		{ locale: string; timeZone: string; formatter: object }
+	>
+>;
+
+/**
+ * A built-in's options hash of literals, such as `formatNumber(style: "currency")`'s, frozen, with a hidden place
+ * for the formatter it resolves to. Built once per call site, so a filter called in a loop finds its formatter there.
+ */
+export const literalOptions = (
+	options: Record<string, unknown>,
+): Readonly<Record<string, unknown>> => {
+	Object.defineProperty(options, FORMATTERS, { value: {} });
+	return Object.freeze(options);
 };
 
 /** Sets an own property without triggering the `__proto__` setter. */

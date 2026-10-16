@@ -1,0 +1,10 @@
+<header class="site-header">
+	<a class="logo" href="/"><%= site.name %></a>
+	<nav>
+		<ul>
+			<% for (const item of site.nav) { %>
+			<li><a href="<%= item.url %>"<% if (item.url === current) { %> aria-current="page"<% } %>><%= item.title %></a></li>
+			<% } %>
+		</ul>
+	</nav>
+</header>

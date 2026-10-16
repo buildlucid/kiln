@@ -1,0 +1,12 @@
+<section class="hero">
+	<div>
+		<h1>{{ section.heading }}</h1>
+		<p>{{ section.text }}</p>
+		<div class="actions">
+			{% for action in section.actions %}
+			<a class="button {% if action.primary %}button--primary{% else %}button--secondary{% endif %}" href="{{ action.url }}">{{ action.label }}</a>
+			{% endfor %}
+		</div>
+	</div>
+	<img src="{{ section.image.src }}" alt="{{ section.image.alt }}">
+</section>

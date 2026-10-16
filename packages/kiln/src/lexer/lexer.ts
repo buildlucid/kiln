@@ -100,6 +100,15 @@ const PUNCTUATORS = [
 	"?",
 ];
 
+/** Punctuators by their first character's code, longest first as in `PUNCTUATORS`, so lexing tries only a few. */
+const PUNCTUATORS_BY_CHARACTER = new Map<number, string[]>();
+for (const punct of PUNCTUATORS) {
+	const code = punct.charCodeAt(0);
+	const list = PUNCTUATORS_BY_CHARACTER.get(code);
+	if (list) list.push(punct);
+	else PUNCTUATORS_BY_CHARACTER.set(code, [punct]);
+}
+
 const ESCAPES: Record<string, string> = {
 	n: "\n",
 	r: "\r",
@@ -417,7 +426,13 @@ class Lexer {
 				continue;
 			}
 
-			const punct = PUNCTUATORS.find((p) => text.startsWith(p, pos));
+			let punct: string | undefined;
+			for (const candidate of PUNCTUATORS_BY_CHARACTER.get(code) ?? []) {
+				if (candidate.length === 1 || text.startsWith(candidate, pos)) {
+					punct = candidate;
+					break;
+				}
+			}
 			if (punct) {
 				if (punct === "{") depth++;
 				else if (punct === "}") depth = Math.max(0, depth - 1);

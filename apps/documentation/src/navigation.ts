@@ -178,6 +178,11 @@ export const navigation = [
 				description: "Tell Kiln where templates come from.",
 			},
 			{
+				title: "Precompiling",
+				url: "/docs/api/precompiling/",
+				description: "Compile your templates to JavaScript at build time.",
+			},
+			{
 				title: "Functions, filters and tests",
 				url: "/docs/api/extending/",
 				description: "Add your own functions, filters, tests and globals.",
@@ -211,6 +216,12 @@ export const navigation = [
 				title: "Coming from Twig",
 				url: "/docs/coming-from-twig/",
 				description: "What is the same, what changed and why.",
+			},
+			{
+				title: "Benchmarks",
+				url: "/docs/benchmarks/",
+				description:
+					"How fast Kiln renders real pages, compared with other JavaScript template engines.",
 			},
 		],
 	},

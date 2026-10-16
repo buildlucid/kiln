@@ -1,0 +1,16 @@
+mixin pricing(section)
+	section.pricing
+		h2= section.heading
+		.plans
+			each plan in section.plans
+				.plan(class={"plan--featured": plan.featured})
+					h3= plan.name
+					p.price
+						if plan.price === 0
+							| Free
+						else
+							= formatPrice(plan.price)
+							span /month
+					ul
+						each feature in plan.features
+							li= feature

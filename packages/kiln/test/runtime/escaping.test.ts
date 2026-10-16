@@ -8,6 +8,14 @@ describe("autoescaping", () => {
 		).toBe("&lt;a href=&#39;x&#39;&gt;&amp;&quot;&lt;/a&gt;");
 	});
 
+	test("escapes string literals as well as data", async () => {
+		expect(
+			await render('{{ on ? "<b>" : "&" }}{{ off ? "<b>" : "&" }}', {
+				context: { on: true, off: false },
+			}),
+		).toBe("&lt;b&gt;&amp;");
+	});
+
 	test("can be turned off for the environment", async () => {
 		expect(
 			await render("{{ html }}", {

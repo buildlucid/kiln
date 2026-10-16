@@ -7,14 +7,19 @@ import {
 import { resolveTemplateName } from "../names.js";
 import type { Span } from "../source.js";
 import { suggest } from "../suggest.js";
+import { childScope } from "./scope.js";
 import {
+	type BlockDef,
 	type BlockEntry,
+	blockScope,
 	type CompiledTemplate,
+	NO_IMPORTS,
 	type Out,
 	type RenderState,
 	Run,
 	type Scope,
 	type SlotFill,
+	type TemplateRef,
 } from "./types.js";
 import { hashKeys, isPlainObject, setOwn, typeName } from "./values.js";
 
@@ -146,8 +151,7 @@ export const checkLength = (run: Run, text: string): string => {
 export const write = (run: Run, out: Out, text: string, span: Span): void => {
 	out.s += text;
 	const state = run.state;
-	if (out.root) state.size += text.length;
-	if ((out.root ? state.size : out.s.length) > state.maxSize) {
+	if (out.s.length > state.maxSize) {
 		throw fail(
 			run,
 			span,
@@ -182,38 +186,40 @@ export const runFrom = (
 };
 
 /** Records the caller's location on a render error that passes through an include, component or `extends`. */
+export const markCaller = (run: Run, span: Span, error: unknown): unknown => {
+	if (error instanceof KilnRenderError) {
+		const start = run.template.source.position(span.start);
+		(
+			error.templateStack as {
+				template: string;
+				line: number;
+				column: number;
+			}[]
+		).unshift({
+			template: run.template.name,
+			line: start.line,
+			column: start.column,
+		});
+	}
+	return error;
+};
+
+/** Runs `work`, recording the caller's location on any render error. See `markCaller`. */
 export const withCaller = <T>(
 	run: Run,
 	span: Span,
 	work: () => T | Promise<T>,
 ): T | Promise<T> => {
-	const mark = (error: unknown) => {
-		if (error instanceof KilnRenderError) {
-			const start = run.template.source.position(span.start);
-			(
-				error.templateStack as {
-					template: string;
-					line: number;
-					column: number;
-				}[]
-			).unshift({
-				template: run.template.name,
-				line: start.line,
-				column: start.column,
-			});
-		}
-		return error;
-	};
 	try {
 		const result = work();
 		if (result instanceof Promise) {
 			return result.catch((error: unknown) => {
-				throw mark(error);
+				throw markCaller(run, span, error);
 			});
 		}
 		return result;
 	} catch (error) {
-		throw mark(error);
+		throw markCaller(run, span, error);
 	}
 };
 
@@ -232,38 +238,288 @@ export const loadTemplate = (
 			`Template name must be a string, but got a ${typeName(name)}`,
 		);
 	}
-	const resolved = locating(run, span, () =>
-		resolveTemplateName(name, run.template.name),
-	);
-	const loaded = locating(
+	const names = run.template.resolved;
+	let ref = names.get(name);
+	if (ref === undefined) {
+		const resolved = locating(run, span, () =>
+			resolveTemplateName(name, run.template.name),
+		);
+		ref = { resolved, template: null, generation: -1 };
+		remember(names, name, ref);
+	}
+	return loadRef(run, ref, span, ignoreMissing);
+};
+
+/** Names may come from data, so the caches of resolved names can't grow without limit. */
+const remember = (
+	names: Map<string, TemplateRef>,
+	name: string,
+	ref: TemplateRef,
+) => {
+	if (names.size >= MAX_NAMES) names.clear();
+	names.set(name, ref);
+};
+
+const MAX_NAMES = 1000;
+
+/** The template a reference found, while the environment hasn't dropped templates since, or else loads it again. */
+const loadRef = (
+	run: Run,
+	ref: TemplateRef,
+	span: Span,
+	ignoreMissing: boolean,
+): CompiledTemplate | null | Promise<CompiledTemplate | null> => {
+	const generation = run.state.env.generation;
+	if (ref.template !== null && ref.generation === generation) {
+		return ref.template;
+	}
+	const loaded = loadResolved(run, ref.resolved, span, ignoreMissing);
+	if (loaded !== null && !(loaded instanceof Promise)) {
+		ref.template = loaded;
+		ref.generation = generation;
+	}
+	return loaded;
+};
+
+/** Loads a template by its resolved name. */
+const loadResolved = (
+	run: Run,
+	resolved: string,
+	span: Span,
+	ignoreMissing: boolean,
+): CompiledTemplate | null | Promise<CompiledTemplate | null> => {
+	let loaded: ReturnType<RenderState["env"]["load"]>;
+	try {
+		loaded = run.state.env.load(resolved);
+	} catch (error) {
+		throw locate(run, span, error, LOADER);
+	}
+	if (loaded instanceof Promise) {
+		const path = resolved;
+		return loaded.then(
+			(template) => checkLoaded(run, span, path, template, ignoreMissing),
+			(error: unknown) => {
+				throw locate(run, span, error, LOADER);
+			},
+		);
+	}
+	return checkLoaded(run, span, resolved, loaded, ignoreMissing);
+};
+
+const LOADER = "The template loader";
+
+const checkLoaded = (
+	run: Run,
+	span: Span,
+	resolved: string,
+	template: CompiledTemplate | null,
+	ignoreMissing: boolean,
+): CompiledTemplate | null => {
+	if (!template) {
+		if (ignoreMissing) return null;
+		throw fail(
+			run,
+			span,
+			"missing-template",
+			`Template "${resolved}" was not found`,
+		);
+	}
+	if (template.hasErrors) throw template.syntaxError();
+	return template;
+};
+
+/**
+ * Renders an include or a component into `out`: loads the template, gives it a scope of its own holding `variables`,
+ * and renders it. `slots` holds a component's fills. Waits only when loading or rendering returns a promise.
+ */
+export const embed = (
+	run: Run,
+	out: Out,
+	span: Span,
+	name: unknown,
+	variables: unknown,
+	slots: Map<string, SlotFill> | null,
+	ignoreMissing: boolean,
+): void | Promise<void> => {
+	const loaded = loadTemplate(run, name, span, ignoreMissing);
+	if (loaded instanceof Promise) {
+		return loaded.then((template) => {
+			if (!template) return;
+			const { scope, passed } = isolatedScope(run, variables, span);
+			return enter(run, out, span, template, scope, passed, slots);
+		});
+	}
+	if (!loaded) return;
+	const { scope, passed } = isolatedScope(run, variables, span);
+	return enter(run, out, span, loaded, scope, passed, slots);
+};
+
+/**
+ * `embed` for a scope the caller made, holding the variables named in `passed`. Precompiled templates make it
+ * themselves when `with` is a hash of known keys.
+ */
+export const embedScope = (
+	run: Run,
+	out: Out,
+	span: Span,
+	name: unknown,
+	scope: Scope,
+	passed: readonly string[],
+	slots: Map<string, SlotFill> | null,
+	ignoreMissing: boolean,
+): void | Promise<void> => {
+	return embedLoaded(
 		run,
+		out,
 		span,
-		() => run.state.env.load(resolved),
-		"The template loader",
+		loadTemplate(run, name, span, ignoreMissing),
+		scope,
+		passed,
+		slots,
 	);
-	return after(loaded, (template) => {
-		if (!template) {
-			if (ignoreMissing) return null;
+};
+
+/**
+ * `embedScope` for a name made of a known prefix and a string key, such as `"sections/" ~ section.type`. Each key's
+ * resolved name is kept on the including template, so the full name isn't built and looked up on every render.
+ * `nameSpan` is where the name is joined, for its errors.
+ */
+export const embedKeyed = (
+	run: Run,
+	out: Out,
+	span: Span,
+	prefix: string,
+	key: string,
+	nameSpan: Span,
+	scope: Scope,
+	passed: readonly string[],
+	slots: Map<string, SlotFill> | null,
+	ignoreMissing: boolean,
+): void | Promise<void> => {
+	const template = run.template;
+	template.keyed ??= new Map();
+	let names = template.keyed.get(prefix);
+	if (!names) {
+		names = new Map();
+		template.keyed.set(prefix, names);
+	}
+	let ref = names.get(key);
+	if (ref === undefined) {
+		const name = locating(run, nameSpan, () => checkLength(run, prefix + key));
+		const resolved = locating(run, span, () =>
+			resolveTemplateName(name, template.name),
+		);
+		ref = { resolved, template: null, generation: -1 };
+		remember(names, key, ref);
+	}
+	return embedLoaded(
+		run,
+		out,
+		span,
+		loadRef(run, ref, span, ignoreMissing),
+		scope,
+		passed,
+		slots,
+	);
+};
+
+const embedLoaded = (
+	run: Run,
+	out: Out,
+	span: Span,
+	loaded: CompiledTemplate | null | Promise<CompiledTemplate | null>,
+	scope: Scope,
+	passed: readonly string[],
+	slots: Map<string, SlotFill> | null,
+): void | Promise<void> => {
+	if (loaded instanceof Promise) {
+		return loaded.then((template) =>
+			template
+				? enter(run, out, span, template, scope, passed, slots)
+				: undefined,
+		);
+	}
+	if (!loaded) return;
+	// Most partials extend nothing, define no blocks and import nothing, so they render without `renderTemplate`.
+	if (
+		loaded.parent === null &&
+		loaded.blocks.size === 0 &&
+		loaded.imports.length === 0
+	) {
+		const state = run.state;
+		const depth = run.depth + 1;
+		if (depth > state.maxDepth) {
 			throw fail(
 				run,
 				span,
-				"missing-template",
-				`Template "${resolved}" was not found`,
+				"limit-depth",
+				`Render stopped after nesting ${state.maxDepth} templates, macros or layouts deep`,
 			);
 		}
-		if (template.hasErrors) throw template.syntaxError();
-		return template;
-	});
+		if (slots !== null || loaded.slotNames.length > 0) {
+			addSlotFlags(scope, loaded, slots);
+		}
+		try {
+			const result = loaded.body(
+				new Run(state, loaded, depth, slots, passed),
+				scope,
+				out,
+			);
+			if (result instanceof Promise) {
+				return result.catch((error: unknown) => {
+					throw markCaller(run, span, error);
+				});
+			}
+			return result;
+		} catch (error) {
+			throw markCaller(run, span, error);
+		}
+	}
+	return enter(run, out, span, loaded, scope, passed, slots);
+};
+
+const enter = (
+	run: Run,
+	out: Out,
+	span: Span,
+	template: CompiledTemplate,
+	scope: Scope,
+	passed: readonly string[],
+	slots: Map<string, SlotFill> | null,
+): void | Promise<void> => {
+	addSlotFlags(scope, template, slots);
+	try {
+		const result = renderTemplate(
+			run.state,
+			template,
+			scope,
+			out,
+			run.depth + 1,
+			slots,
+			passed,
+			null,
+			run,
+			span,
+		);
+		if (result instanceof Promise) {
+			return result.catch((error: unknown) => {
+				throw markCaller(run, span, error);
+			});
+		}
+		return result;
+	} catch (error) {
+		throw markCaller(run, span, error);
+	}
 };
 
 /** Loads every template a template imports, once per render. */
 export const importsFor = (
 	run: Run,
 	template: CompiledTemplate,
-): CompiledTemplate[] | Promise<CompiledTemplate[]> => {
-	if (template.imports.length === 0) return [];
+): readonly CompiledTemplate[] | Promise<readonly CompiledTemplate[]> => {
+	if (template.imports.length === 0) return NO_IMPORTS;
 	const state = run.state;
-	const cached = state.importsCache.get(template);
+	const cached = state.importsCache?.get(template);
 	if (cached) return cached;
 
 	const loaded = template.imports.map(({ name, span }) =>
@@ -271,6 +527,7 @@ export const importsFor = (
 	);
 	const finish = (list: (CompiledTemplate | null)[]) => {
 		const imports = list as CompiledTemplate[];
+		state.importsCache ??= new Map();
 		state.importsCache.set(template, imports);
 		return imports;
 	};
@@ -284,18 +541,18 @@ export const isolatedScope = (
 	variables: unknown,
 	span: Span,
 ): { scope: Scope; passed: string[] } => {
-	const scope = Object.create(run.state.globals) as Scope;
+	const scope = childScope(run.state.globals);
 	const passed: string[] = [];
 	if (variables === null || variables === undefined) return { scope, passed };
 	if (isPlainObject(variables)) {
-		for (const key of hashKeys(variables)) {
-			setOwn(scope as Record<string, unknown>, key, variables[key]);
-			passed.push(key);
-		}
-	} else if (variables instanceof Map) {
+		const keys = hashKeys(variables);
+		for (const key of keys) scope[key] = variables[key] ?? null;
+		return { scope, passed: keys };
+	}
+	if (variables instanceof Map) {
 		for (const [key, value] of variables) {
 			if (typeof key === "string") {
-				setOwn(scope as Record<string, unknown>, key, value);
+				scope[key] = value ?? null;
 				passed.push(key);
 			}
 		}
@@ -310,48 +567,43 @@ export const isolatedScope = (
 	return { scope, passed };
 };
 
-export type RenderTemplateOptions = {
-	depth: number;
-	slots: Map<string, SlotFill> | null;
-	passed: readonly string[] | null;
-	inherited: Map<string, BlockEntry[]> | null;
-	/** Where the render was requested, for depth errors. Null for the outermost render. */
-	caller: { run: Run; span: Span } | null;
-	/** For `renderBlock`: the block to render once the top-most template is reached, instead of its content. */
-	block?: string;
-};
-
 /**
- * Renders a template into `out`, following `extends` and sharing `scope` along the inheritance chain.
+ * Renders a template into `out`, following `extends` and sharing `scope` along the inheritance chain. `inherited` is
+ * the block table of the child templates below it, and `caller` the render that asked for it, for depth errors: null
+ * for the outermost render. `block`, for `renderBlock`, is the block to render once the top-most template is reached,
+ * instead of its content.
  */
 export const renderTemplate = (
 	state: RenderState,
 	template: CompiledTemplate,
 	scope: Scope,
 	out: Out,
-	options: RenderTemplateOptions,
+	depth: number,
+	slots: Map<string, SlotFill> | null,
+	passed: readonly string[] | null,
+	inherited: Map<string, BlockEntry[]> | null,
+	caller: Run | null,
+	callerSpan: Span,
+	block?: string,
 ): void | Promise<void> => {
-	if (options.caller && options.depth > state.maxDepth) {
+	if (caller && depth > state.maxDepth) {
 		throw fail(
-			options.caller.run,
-			options.caller.span,
+			caller,
+			callerSpan,
 			"limit-depth",
 			`Render stopped after nesting ${state.maxDepth} templates, macros or layouts deep`,
 		);
 	}
 
-	const run = new Run(
-		state,
-		template,
-		options.depth,
-		options.slots,
-		options.passed,
-	);
+	const run = new Run(state, template, depth, slots, passed);
 
 	// Every template in an inheritance chain shares one block table, most derived definition first, so `parent()` can find the next one from any level.
-	if (options.inherited || template.blocks.size > 0) {
-		const blocks = options.inherited ?? new Map<string, BlockEntry[]>();
-		for (const [name, def] of template.blocks) {
+	if (inherited || template.blocks.size > 0) {
+		const blocks = inherited ?? new Map<string, BlockEntry[]>();
+		template.blockList ??= [...template.blocks];
+		const defined = template.blockList;
+		for (let i = 0; i < defined.length; i++) {
+			const [name, def] = defined[i] as readonly [string, BlockDef];
 			const entry = { def, run };
 			const list = blocks.get(name);
 			if (list) list.push(entry);
@@ -360,39 +612,100 @@ export const renderTemplate = (
 		run.blocks = blocks;
 	}
 
-	return after(importsFor(run, template), (imports) => {
-		run.imports = imports;
-		const parent = template.parent;
-		if (!parent && options.block !== undefined) {
-			return renderOnlyBlock(run, scope, out, options.block);
-		}
-		const result = template.body(run, scope, out);
-		if (!parent) return result;
+	const imports = importsFor(run, template);
+	if (imports instanceof Promise) {
+		return imports.then((list) => renderBody(run, scope, out, list, block));
+	}
+	return renderBody(run, scope, out, imports, block);
+};
 
-		return after(result, () =>
-			after(parent.ev(run, scope), (name) =>
-				after(loadTemplate(run, name, template.parentSpan), (parentTemplate) =>
-					withCaller(run, template.parentSpan, () =>
-						renderTemplate(
-							state,
-							parentTemplate as CompiledTemplate,
-							scope,
-							out,
-							{
-								depth: options.depth + 1,
-								slots: options.slots,
-								// Layouts check required props, but not undeclared ones: the context was meant for the page.
-								passed: null,
-								inherited: run.blocks,
-								caller: { run, span: template.parentSpan },
-								block: options.block,
-							},
-						),
-					),
+/** Renders a template's own content once its imports are loaded, then its layout if it extends one. */
+const renderBody = (
+	run: Run,
+	scope: Scope,
+	out: Out,
+	imports: readonly CompiledTemplate[],
+	block: string | undefined,
+): void | Promise<void> => {
+	run.imports = imports;
+	const { template, state } = run;
+	const parent = template.parent;
+	if (!parent && block !== undefined) {
+		return renderOnlyBlock(run, scope, out, block);
+	}
+	const result = template.body(run, scope, out);
+	if (!parent) return result;
+
+	const span = template.parentSpan;
+	// Usually nothing waits: the layout is found and rendered without callbacks.
+	if (result === undefined && !parent.async) {
+		const loaded = loadTemplate(run, parent.ev(run, scope), span);
+		if (!(loaded instanceof Promise)) {
+			try {
+				const layout = renderTemplate(
+					state,
+					loaded as CompiledTemplate,
+					scope,
+					out,
+					run.depth + 1,
+					run.slots,
+					// Layouts check required props, but not undeclared ones: the context was meant for the page.
+					null,
+					run.blocks,
+					run,
+					span,
+					block,
+				);
+				if (layout instanceof Promise) {
+					return layout.catch((error: unknown) => {
+						throw markCaller(run, span, error);
+					});
+				}
+				return layout;
+			} catch (error) {
+				throw markCaller(run, span, error);
+			}
+		}
+		return loaded.then((layout) =>
+			withCaller(run, span, () =>
+				renderTemplate(
+					state,
+					layout as CompiledTemplate,
+					scope,
+					out,
+					run.depth + 1,
+					run.slots,
+					null,
+					run.blocks,
+					run,
+					span,
+					block,
 				),
 			),
 		);
-	});
+	}
+	return after(result, () =>
+		after(parent.ev(run, scope), (name) =>
+			after(loadTemplate(run, name, span), (parentTemplate) =>
+				withCaller(run, span, () =>
+					renderTemplate(
+						state,
+						parentTemplate as CompiledTemplate,
+						scope,
+						out,
+						run.depth + 1,
+						run.slots,
+						// Layouts check required props, but not undeclared ones: the context was meant for the page.
+						null,
+						run.blocks,
+						run,
+						span,
+						block,
+					),
+				),
+			),
+		),
+	);
 };
 
 /**
@@ -415,7 +728,7 @@ const renderOnlyBlock = (
 				{ hint: suggest(name, run.blocks.keys()) },
 			);
 		}
-		return entry.def.body(entry.run, Object.create(scope) as Scope, out);
+		return entry.def.body(entry.run, blockScope(entry.def, scope), out);
 	});
 
 /** Gives a component or include scope its `slots` hash, with a key for every slot the template outputs. */
@@ -425,8 +738,9 @@ export const addSlotFlags = (
 	slots: Map<string, SlotFill> | null,
 ): void => {
 	if (template.slotNames.length === 0 && !slots) return;
-	const flags = Object.create(null) as Record<string, boolean>;
-	for (const name of template.slotNames) flags[name] = false;
-	if (slots) for (const name of slots.keys()) flags[name] = true;
+	// A plain object, which V8 keeps fast; templates only read its own properties.
+	const flags: Record<string, boolean> = {};
+	for (const name of template.slotNames) setOwn(flags, name, false);
+	if (slots) for (const name of slots.keys()) setOwn(flags, name, true);
 	scope.slots = flags;
 };

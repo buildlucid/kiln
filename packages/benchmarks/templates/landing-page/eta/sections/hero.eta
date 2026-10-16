@@ -1,0 +1,12 @@
+<section class="hero">
+	<div>
+		<h1><%= it.section.heading %></h1>
+		<p><%= it.section.text %></p>
+		<div class="actions">
+			<% it.section.actions.forEach((action) => { %>
+			<a class="button <%= action.primary ? "button--primary" : "button--secondary" %>" href="<%= action.url %>"><%= action.label %></a>
+			<% }) %>
+		</div>
+	</div>
+	<img src="<%= it.section.image.src %>" alt="<%= it.section.image.alt %>">
+</section>

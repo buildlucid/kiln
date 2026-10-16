@@ -18,6 +18,7 @@ export {
 	type TypeChecks,
 	withRender,
 } from "./environment.js";
+export type { PrecompiledTemplate } from "./compiler/precompiled.js";
 export {
 	type Diagnostic,
 	KilnRenderError,

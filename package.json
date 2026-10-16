@@ -4,6 +4,7 @@
 	"type": "module",
 	"scripts": {
 		"build": "vp run -r build",
+		"bench": "vp run @lucidcms/kiln-benchmarks#bench",
 		"test": "vp test run",
 		"test:watch": "vp test watch",
 		"format": "vp fmt --check",

@@ -1,0 +1,5 @@
+<% layout("@layout") %>
+<% block("title", () => { %><%= it.page.title %> · <%= it.site.name %><% }) %>
+<% it.page.sections.forEach((section) => { %>
+<%~ include(`@sections/${section.type}`, { section }) %>
+<% }) %>

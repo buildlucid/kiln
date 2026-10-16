@@ -50,5 +50,10 @@ describe("host values", () => {
 				context: { obj: { value: undefined } },
 			}),
 		).toBe("[]");
+		expect(
+			await render("[{{ value }}|{{ value is defined }}]", {
+				context: { value: undefined },
+			}),
+		).toBe("[|true]");
 	});
 });

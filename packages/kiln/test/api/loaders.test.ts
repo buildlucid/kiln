@@ -52,6 +52,27 @@ describe("caching", () => {
 		expect(await kiln.render("a")).toBe("v3");
 	});
 
+	test("templates a template uses are loaded again after invalidate", async () => {
+		const sources: Record<string, string> = {
+			"page.kiln":
+				'{% extends "layout" %}{% block main %}{% include "part" %}{% include "parts/" ~ key %}{% endblock %}',
+			"layout.kiln": "<{% block main %}{% endblock %}>",
+			"part.kiln": "a1",
+			"parts/b.kiln": "b1",
+		};
+		const kiln = createKiln({
+			loader: { load: (name) => sources[name] ?? null },
+		});
+		expect(await kiln.render("page", { key: "b" })).toBe("<a1b1>");
+		sources["part.kiln"] = "a2";
+		sources["parts/b.kiln"] = "b2";
+		sources["layout.kiln"] = "[{% block main %}{% endblock %}]";
+		kiln.invalidate("part");
+		kiln.invalidate("parts/b");
+		kiln.invalidate("layout");
+		expect(await kiln.render("page", { key: "b" })).toBe("[a2b2]");
+	});
+
 	test("async loaders work, and concurrent renders share one load", async () => {
 		const load = vi.fn(async (name: string) =>
 			name === "a.kiln" ? "{{ x }}" : null,

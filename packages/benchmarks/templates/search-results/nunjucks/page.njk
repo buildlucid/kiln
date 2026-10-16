@@ -1,0 +1,22 @@
+<main class="search">
+	<form action="/search" role="search">
+		<input type="search" name="q" value="{{ query }}">
+	</form>
+	<h1>{{ total | formatNumber }} results for “{{ query }}”</h1>
+	<p>Showing {{ results | length }}</p>
+	<ol class="results">
+		{% for result in results %}
+		<li class="result result--{{ result.category | lower }}">
+			<p class="category">{{ result.category | upper }}</p>
+			<h2><a href="{{ result.url }}?q={{ query | urlencode }}">{{ result.title }}</a></h2>
+			<p>{{ result.excerpt | truncateText(160) }}</p>
+			<p class="meta">By {{ result.author.name | default("Anonymous") }} · {{ result.tags | sort | join(", ") }}</p>
+		</li>
+		{% endfor %}
+	</ol>
+	<nav class="pagination">
+		{% for number in range(1, 6) %}
+		<a href="/search?q={{ query | urlencode }}&amp;page={{ number }}"{% if number == 1 %} aria-current="page"{% endif %}>{{ number }}</a>
+		{% endfor %}
+	</nav>
+</main>

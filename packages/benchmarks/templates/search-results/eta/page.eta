@@ -1,0 +1,22 @@
+<main class="search">
+	<form action="/search" role="search">
+		<input type="search" name="q" value="<%= it.query %>">
+	</form>
+	<h1><%= formatNumber(it.total) %> results for “<%= it.query %>”</h1>
+	<p>Showing <%= it.results.length %></p>
+	<ol class="results">
+		<% it.results.forEach((result) => { %>
+		<li class="result result--<%= result.category.toLowerCase() %>">
+			<p class="category"><%= result.category.toUpperCase() %></p>
+			<h2><a href="<%= result.url %>?q=<%= urlEncode(it.query) %>"><%= result.title %></a></h2>
+			<p><%= truncate(result.excerpt, 160) %></p>
+			<p class="meta">By <%= result.author?.name ?? "Anonymous" %> · <%= result.tags.toSorted().join(", ") %></p>
+		</li>
+		<% }) %>
+	</ol>
+	<nav class="pagination">
+		<% for (let number = 1; number <= 5; number++) { %>
+		<a href="/search?q=<%= urlEncode(it.query) %>&amp;page=<%= number %>"<% if (number === 1) { %> aria-current="page"<% } %>><%= number %></a>
+		<% } %>
+	</nav>
+</main>

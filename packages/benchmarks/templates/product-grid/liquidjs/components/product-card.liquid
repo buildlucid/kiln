@@ -1,0 +1,32 @@
+{%- comment -%} A product summary. Liquid has no slots, so the card renders its own button. {%- endcomment -%}
+<article class="card">
+	<a href="{{ product.url }}">
+		<img src="{{ product.image.src }}" alt="{{ product.image.alt }}" loading="lazy">
+		<h2>{{ product.name }}</h2>
+	</a>
+	{% if product.badges.size > 0 %}
+	<ul class="badges">
+		{% for badge in product.badges %}
+		<li>{{ badge }}</li>
+		{% endfor %}
+	</ul>
+	{% endif %}
+	<p class="price">
+		{% if product.salePrice %}
+		<del>{{ product.price | formatPrice }}</del>
+		<ins>{{ product.salePrice | formatPrice }}</ins>
+		{% else %}
+		{{ product.price | formatPrice }}
+		{% endif %}
+	</p>
+	<p class="rating" aria-label="{{ product.rating }} out of 5">
+		{% for star in (1..5) %}<span class="star{% if star <= product.rating %} star--filled{% endif %}">★</span>{% endfor %}
+		<span>({{ product.reviewCount }})</span>
+	</p>
+	{% unless product.inStock %}
+	<p class="stock">Out of stock</p>
+	{% endunless %}
+	<div class="actions">
+		<button type="button" data-product="{{ product.id }}"{% unless product.inStock %} disabled{% endunless %}>Add to basket</button>
+	</div>
+</article>

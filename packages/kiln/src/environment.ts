@@ -2,12 +2,19 @@ import { type Analysis, analyzeTemplate } from "./analyzer.js";
 import { builtinFilters } from "./builtins/filters.js";
 import { builtinFunctions, builtinTests } from "./builtins/functions.js";
 import { checkReferences } from "./checker.js";
+import { generateModule } from "./compiler/codegen.js";
 import { compileTemplate } from "./compiler/compiler.js";
+import {
+	compilePrecompiled,
+	isPrecompiled,
+	type PrecompiledTemplate,
+} from "./compiler/precompiled.js";
 import { type Diagnostic, type KilnIssue, KilnRenderError } from "./errors.js";
 import { resolveTemplateName } from "./names.js";
 import type { EscapeStrategy } from "./parser/ast.js";
 import { ESCAPE_STRATEGIES } from "./parser/ast.js";
 import { addSlotFlags, isPromise, renderTemplate } from "./runtime/render.js";
+import { childScope } from "./runtime/scope.js";
 import {
 	type AbortSignalLike,
 	type CallableEntry,
@@ -18,14 +25,23 @@ import {
 	type Scope,
 	type TypeCheck,
 } from "./runtime/types.js";
-import { hashKeys, isPlainObject, setOwn } from "./runtime/values.js";
+import { hashKeys, isPlainObject } from "./runtime/values.js";
 
 export type { RenderInfo };
 
 /** Where templates come from. Kiln calls `load` once per resolved name, until `invalidate`. */
 export type Loader = {
-	/** Returns the source for a resolved name, such as `pages/page.kiln`, or `null` if it does not exist. */
-	load(name: string): string | null | Promise<string | null>;
+	/**
+	 * Returns the source for a resolved name, such as `pages/page.kiln`, or a precompiled module's default export, or
+	 * `null` if it does not exist.
+	 */
+	load(
+		name: string,
+	):
+		| string
+		| PrecompiledTemplate
+		| null
+		| Promise<string | PrecompiledTemplate | null>;
 	/** Returns every resolved name the loader holds. Rendering never calls it; tools such as `generateTypes` do. */
 	list?(): string[] | Promise<string[]>;
 };
@@ -156,6 +172,11 @@ export type Kiln<State = undefined> = {
 	check(name: string, source?: string): Promise<Diagnostic[]>;
 	/** Reports what a template uses: variables, props, functions, filters, tests, templates, blocks and macros. */
 	analyze(name: string, source?: string): Promise<Analysis>;
+	/**
+	 * Compiles a template to the source of a JavaScript module, at build time. Loaders return the module's default
+	 * export in place of the source. Rejects with `KilnSyntaxError` when the template has problems.
+	 */
+	precompile(name: string, source?: string): Promise<string>;
 	/** Drops one compiled template, or all of them, from the cache. */
 	invalidate(name?: string): void;
 };
@@ -189,13 +210,32 @@ const RESERVED = {
 	test: new Set(["defined"]),
 };
 
+const builtinMaps = new WeakMap<
+	Record<string, CallableEntry>,
+	ReadonlyMap<string, CallableEntry>
+>();
+
+/** Built-ins of one kind as a map, made once and shared by environments that add none of their own. */
+const builtinMap = (
+	builtins: Record<string, CallableEntry>,
+): ReadonlyMap<string, CallableEntry> => {
+	let map = builtinMaps.get(builtins);
+	if (!map) {
+		map = new Map(Object.entries(builtins));
+		builtinMaps.set(builtins, map);
+	}
+	return map;
+};
+
 const registry = <State>(
 	kind: "function" | "filter" | "test",
 	builtins: Record<string, CallableEntry>,
 	host: Record<string, KilnCallable<State>> | undefined,
-): Map<string, CallableEntry> => {
-	const entries = new Map<string, CallableEntry>(Object.entries(builtins));
-	for (const [name, value] of Object.entries(host ?? {})) {
+): ReadonlyMap<string, CallableEntry> => {
+	const shared = builtinMap(builtins);
+	if (!host || Object.keys(host).length === 0) return shared;
+	const entries = new Map(shared);
+	for (const [name, value] of Object.entries(host)) {
 		if (!(kind === "test" ? TEST_NAME : NAME).test(name)) {
 			throw new TypeError(`"${name}" is not a valid ${kind} name`);
 		}
@@ -231,9 +271,9 @@ class Environment<State> implements EnvironmentCore {
 	readonly strict: boolean;
 	readonly debug: boolean;
 	readonly autoescape: EscapeStrategy | false;
-	readonly functions: Map<string, CallableEntry>;
-	readonly filters: Map<string, CallableEntry>;
-	readonly tests: Map<string, CallableEntry>;
+	readonly functions: ReadonlyMap<string, CallableEntry>;
+	readonly filters: ReadonlyMap<string, CallableEntry>;
+	readonly tests: ReadonlyMap<string, CallableEntry>;
 	readonly types: Map<string, TypeCheck>;
 	readonly globals: Scope;
 	readonly limits: Limits;
@@ -244,6 +284,9 @@ class Environment<State> implements EnvironmentCore {
 		string,
 		CompiledTemplate | null | Promise<CompiledTemplate | null>
 	>();
+	/** Names passed to `render`, resolved. */
+	readonly #names = new Map<string, string>();
+	generation = 0;
 
 	constructor(options: KilnOptions<State>) {
 		if (typeof options.loader?.load !== "function") {
@@ -283,11 +326,11 @@ class Environment<State> implements EnvironmentCore {
 			this.types.set(name, check);
 		}
 
-		const globals = Object.create(null) as Record<string, unknown>;
+		const globals = childScope(null);
 		const provided = options.globals ?? {};
 		if (!isPlainObject(provided))
 			throw new TypeError("globals must be a plain object");
-		for (const key of hashKeys(provided)) setOwn(globals, key, provided[key]);
+		for (const key of hashKeys(provided)) globals[key] = provided[key] ?? null;
 		this.globals = globals;
 	}
 
@@ -297,11 +340,13 @@ class Environment<State> implements EnvironmentCore {
 		const cached = this.#cache.get(name);
 		if (cached !== undefined) return cached;
 
-		const compile = (source: string | null) => {
-			if (source !== null && typeof source !== "string") {
-				throw new TypeError(`Loader returned a ${typeof source} for "${name}"`);
+		const compile = (source: string | PrecompiledTemplate | null) => {
+			if (source === null) return null;
+			if (typeof source === "string") {
+				return compileTemplate(this, name, source);
 			}
-			return source === null ? null : compileTemplate(this, name, source);
+			if (isPrecompiled(source)) return compilePrecompiled(this, name, source);
+			throw new TypeError(`Loader returned a ${typeof source} for "${name}"`);
 		};
 
 		const loaded = this.#loader.load(name);
@@ -331,6 +376,7 @@ class Environment<State> implements EnvironmentCore {
 	invalidate(name?: string): void {
 		if (name === undefined) this.#cache.clear();
 		else this.#cache.delete(resolveTemplateName(name));
+		this.generation++;
 	}
 
 	/** Compiles unsaved source, or loads the template, for `check` and `analyze`. */
@@ -350,12 +396,17 @@ class Environment<State> implements EnvironmentCore {
 		options: BaseRenderOptions & { state?: State } = {},
 		block?: string,
 	): Promise<string> {
-		let resolved: string;
-		try {
-			resolved = resolveTemplateName(name);
-		} catch (error) {
-			const issue = error as KilnIssue;
-			throw new KilnRenderError(issue.code, issue.message, name);
+		let resolved = this.#names.get(name);
+		if (resolved === undefined) {
+			try {
+				resolved = resolveTemplateName(name);
+			} catch (error) {
+				const issue = error as KilnIssue;
+				throw new KilnRenderError(issue.code, issue.message, name);
+			}
+			// Names may come from requests, so the cache can't grow without limit.
+			if (this.#names.size >= 1000) this.#names.clear();
+			this.#names.set(name, resolved);
 		}
 		let template = this.load(resolved);
 		if (isPromise(template)) template = await template;
@@ -386,21 +437,25 @@ class Environment<State> implements EnvironmentCore {
 			throw new KilnRenderError("aborted", "Render was aborted", resolved);
 		}
 
-		const scope = Object.create(this.globals) as Scope;
+		const scope = childScope(this.globals);
 		const passed = hashKeys(context);
-		for (const key of passed)
-			setOwn(scope as Record<string, unknown>, key, context[key]);
+		for (const key of passed) scope[key] = context[key] ?? null;
 		addSlotFlags(scope, template, null);
 
-		const out = { s: "", root: true };
-		const result = renderTemplate(state, template, scope, out, {
-			depth: 0,
-			slots: null,
+		const out = { s: "" };
+		const result = renderTemplate(
+			state,
+			template,
+			scope,
+			out,
+			0,
+			null,
 			passed,
-			inherited: null,
-			caller: null,
+			null,
+			null,
+			template.parentSpan,
 			block,
-		});
+		);
 		if (result !== undefined) await result;
 		return out.s;
 	}
@@ -470,19 +525,34 @@ export const createKiln = <State = undefined>(
 			}
 			return analyzeTemplate(template, env.globals);
 		},
+		precompile: async (name, source) => {
+			const template = await env.compileFor(name, source);
+			if (!template) {
+				throw new KilnRenderError(
+					"missing-template",
+					`Template "${resolveTemplateName(name)}" was not found`,
+					resolveTemplateName(name),
+				);
+			}
+			if (template.hasErrors) throw template.syntaxError();
+			return generateModule(env, template.ast, template.source.text);
+		},
 		invalidate: (name) => env.invalidate(name),
 	};
 };
 
 /**
- * A loader for templates held in memory, keyed by name. Keys without an extension get `.kiln`.
+ * A loader for templates held in memory, keyed by name. Keys without an extension get `.kiln`. Each template is its
+ * source or a precompiled module's default export.
  *
  * Works on every runtime, including Cloudflare Workers.
  */
 export const memoryLoader = (
-	templates: Record<string, string> | Map<string, string>,
+	templates:
+		| Record<string, string | PrecompiledTemplate>
+		| Map<string, string | PrecompiledTemplate>,
 ): Omit<Loader, "list"> & { list(): string[] } => {
-	const map = new Map<string, string>();
+	const map = new Map<string, string | PrecompiledTemplate>();
 	const entries =
 		templates instanceof Map ? templates : Object.entries(templates);
 	for (const [name, source] of entries) {

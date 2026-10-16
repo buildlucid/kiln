@@ -34,6 +34,15 @@ describe("formatDate", () => {
 		).toBe("10:00 AM");
 	});
 
+	test("reads milliseconds, and days past the end of a month as JavaScript does", async () => {
+		const options = 'timeStyle: "medium", dateStyle: "short", locale: "en-GB"';
+		expect(
+			await render(
+				`{{ "2026-10-15T09:30:05.250Z"|formatDate(${options}) }}|{{ "2026-02-29"|formatDate(${options}) }}`,
+			),
+		).toBe("15/10/2026, 09:30:05|01/03/2026, 00:00:00");
+	});
+
 	test("refuses strings that are not ISO 8601", async () => {
 		expect(await errorCode('{{ "next tuesday"|formatDate }}')).toBe(
 			"invalid-argument",

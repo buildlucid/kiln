@@ -1,0 +1,12 @@
+<section class="features">
+	<h2>{{heading}}</h2>
+	<ul class="grid">
+		{{#each items}}
+		<li>
+			<svg class="icon" aria-hidden="true"><use href="#icon-{{icon}}"></use></svg>
+			<h3>{{title}}</h3>
+			<p>{{text}}</p>
+		</li>
+		{{/each}}
+	</ul>
+</section>

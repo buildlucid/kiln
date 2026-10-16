@@ -1,3 +1,4 @@
+import benchmarks from "@lucidcms/kiln-benchmarks/results.json" with { type: "json" };
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite-plus";
 import { kilnPages } from "./plugin/index.js";
@@ -13,6 +14,7 @@ export default defineConfig({
 					repository: "https://github.com/buildlucid/kiln",
 				},
 				navigation,
+				benchmarks,
 			},
 			context: (page) => pageContext(page.url),
 		}),

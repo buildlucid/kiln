@@ -1,0 +1,31 @@
+{# A product summary. The default slot holds the card's button. #}
+{% props product %}
+<article class="card">
+	<a href="{{ product.url }}">
+		<img src="{{ product.image.src }}" alt="{{ product.image.alt }}" loading="lazy">
+		<h2>{{ product.name }}</h2>
+	</a>
+	{% if product.badges|length > 0 %}
+	<ul class="badges">
+		{% for badge in product.badges %}
+		<li>{{ badge }}</li>
+		{% endfor %}
+	</ul>
+	{% endif %}
+	<p class="price">
+		{% if product.salePrice %}
+		<del>{{ product.price|formatNumber(style: "currency", currency: "GBP") }}</del>
+		<ins>{{ product.salePrice|formatNumber(style: "currency", currency: "GBP") }}</ins>
+		{% else %}
+		{{ product.price|formatNumber(style: "currency", currency: "GBP") }}
+		{% endif %}
+	</p>
+	<p class="rating" aria-label="{{ product.rating }} out of 5">
+		{% for star in 1..5 %}<span class="star{% if star <= product.rating %} star--filled{% endif %}">★</span>{% endfor %}
+		<span>({{ product.reviewCount }})</span>
+	</p>
+	{% if not product.inStock %}
+	<p class="stock">Out of stock</p>
+	{% endif %}
+	<div class="actions">{% slot %}{% endslot %}</div>
+</article>

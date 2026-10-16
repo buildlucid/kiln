@@ -1,0 +1,14 @@
+{% from "components/product-card.njk" import productCard %}
+<main class="category">
+	<h1>{{ category }}</h1>
+	<p>{{ products | length }} products</p>
+	<ul class="products">
+		{% for product in products %}
+		<li>
+			{% call productCard(product) %}
+			<button type="button" data-product="{{ product.id }}"{% if not product.inStock %} disabled{% endif %}>Add to basket</button>
+			{% endcall %}
+		</li>
+		{% endfor %}
+	</ul>
+</main>

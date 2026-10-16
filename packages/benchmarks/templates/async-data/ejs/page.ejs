@@ -1,0 +1,22 @@
+<%- await include("/layout/start", { title: "Blog · " + site.name }) %>
+<% const posts = await latestPosts(10) %>
+<h1>Latest posts</h1>
+<ul class="posts">
+	<% for (const post of posts) { %>
+	<% const postAuthor = await author(post.authorId) %>
+	<li>
+		<a href="<%= post.url %>"><%= post.title %></a>
+		<p>By <a href="<%= postAuthor.url %>"><%= postAuthor.name %></a> on <time datetime="<%= post.publishedAt %>"><%= formatDate(post.publishedAt) %></time></p>
+		<p><%= post.excerpt %></p>
+	</li>
+	<% } %>
+</ul>
+<aside class="categories">
+	<h2>Categories</h2>
+	<ul>
+		<% for (const category of await categories()) { %>
+		<li><a href="/categories/<%= category.toLowerCase() %>/"><%= category %></a></li>
+		<% } %>
+	</ul>
+</aside>
+<%- await include("/layout/end") %>

@@ -92,11 +92,91 @@ export const functionArgument = (
 const ISO_DATE =
 	/^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
 
+/** Reads `count` digits from `at`, or returns -1 if any is not a digit. */
+const readDigits = (text: string, at: number, count: number): number => {
+	let number = 0;
+	for (let i = at; i < at + count; i++) {
+		const digit = text.charCodeAt(i) - 48;
+		if (digit < 0 || digit > 9) return -1;
+		number = number * 10 + digit;
+	}
+	return number;
+};
+
+const daysInMonth = (year: number, month: number): number =>
+	month === 2
+		? year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+			? 29
+			: 28
+		: month === 4 || month === 6 || month === 9 || month === 11
+			? 30
+			: 31;
+
+/**
+ * Reads the two commonest ISO 8601 forms, `2026-10-15` and `2026-10-15T09:30:00.000Z`, as milliseconds since the
+ * epoch, without parsing a string as a date. Returns null for anything else, including out of range parts, which
+ * `toDate` then reads in full.
+ */
+const quickTime = (text: string): number | null => {
+	const length = text.length;
+	if (length !== 10 && length !== 24) return null;
+	const year = readDigits(text, 0, 4);
+	const month = readDigits(text, 5, 2);
+	const day = readDigits(text, 8, 2);
+	if (
+		year < 100 ||
+		month < 1 ||
+		month > 12 ||
+		day < 1 ||
+		day > daysInMonth(year, month) ||
+		text[4] !== "-" ||
+		text[7] !== "-"
+	) {
+		return null;
+	}
+	let time = 0;
+	if (length === 24) {
+		const hour = readDigits(text, 11, 2);
+		const minute = readDigits(text, 14, 2);
+		const second = readDigits(text, 17, 2);
+		const millisecond = readDigits(text, 20, 3);
+		if (
+			text[10] !== "T" ||
+			text[13] !== ":" ||
+			text[16] !== ":" ||
+			text[19] !== "." ||
+			text[23] !== "Z" ||
+			hour < 0 ||
+			hour > 23 ||
+			minute < 0 ||
+			minute > 59 ||
+			second < 0 ||
+			second > 59 ||
+			millisecond < 0
+		) {
+			return null;
+		}
+		time = ((hour * 60 + minute) * 60 + second) * 1000 + millisecond;
+	}
+	return Date.UTC(year, month - 1, day) + time;
+};
+
+/** `toDate` as milliseconds since the epoch, which formatters take without making a `Date`. */
+export const toTime = (value: unknown, what: string): number => {
+	if (typeof value === "string") {
+		const time = quickTime(value);
+		if (time !== null) return time;
+	}
+	return toDate(value, what).getTime();
+};
+
 /** Converts a date, ISO 8601 string or milliseconds since the epoch into a valid `Date`. */
 export const toDate = (value: unknown, what: string): Date => {
 	let date: Date | undefined;
+	const quick = typeof value === "string" ? quickTime(value) : null;
 	if (value instanceof Date) date = value;
 	else if (typeof value === "number") date = new Date(value);
+	else if (quick !== null) date = new Date(quick);
 	else if (value instanceof Markup || typeof value === "string") {
 		const text = String(value).trim();
 		if (!ISO_DATE.test(text)) {

@@ -1,0 +1,11 @@
+{{#> layout}}
+
+{{#*inline "title"}}{{page.title}} · {{site.name}}{{/inline}}
+
+{{#*inline "content"}}
+{{#each page.sections}}
+{{> (concat "sections/" type)}}
+{{/each}}
+{{/inline}}
+
+{{/layout}}

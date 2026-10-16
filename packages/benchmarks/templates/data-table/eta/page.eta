@@ -1,0 +1,21 @@
+<table class="users">
+	<thead>
+		<tr>
+			<% it.columns.forEach((column) => { %>
+			<th scope="col"><%= column %></th>
+			<% }) %>
+		</tr>
+	</thead>
+	<tbody>
+		<% it.rows.forEach((row, index) => { %>
+		<tr class="<%= index % 2 === 0 ? "odd" : "even" %>">
+			<td><%= row.id %></td>
+			<td><%= row.name %></td>
+			<td><a href="mailto:<%= row.email %>"><%= row.email %></a></td>
+			<td><%= row.role %></td>
+			<td><span class="status status--<%= row.active ? "active" : "inactive" %>"><%= row.active ? "Active" : "Inactive" %></span></td>
+			<td><%= row.score %></td>
+		</tr>
+		<% }) %>
+	</tbody>
+</table>

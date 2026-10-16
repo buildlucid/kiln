@@ -1,0 +1,21 @@
+<table class="users">
+	<thead>
+		<tr>
+			{{#each columns}}
+			<th scope="col">{{this}}</th>
+			{{/each}}
+		</tr>
+	</thead>
+	<tbody>
+		{{#each rows}}
+		<tr class="{{#if (odd (inc @index))}}odd{{else}}even{{/if}}">
+			<td>{{id}}</td>
+			<td>{{name}}</td>
+			<td><a href="mailto:{{email}}">{{email}}</a></td>
+			<td>{{role}}</td>
+			<td><span class="status status--{{#if active}}active{{else}}inactive{{/if}}">{{#if active}}Active{{else}}Inactive{{/if}}</span></td>
+			<td>{{score}}</td>
+		</tr>
+		{{/each}}
+	</tbody>
+</table>

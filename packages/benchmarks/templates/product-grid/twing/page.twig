@@ -1,0 +1,15 @@
+<main class="category">
+	<h1>{{ category }}</h1>
+	<p>{{ products|length }} products</p>
+	<ul class="products">
+		{% for product in products %}
+		<li>
+			{% embed "components/product-card.twig" with { product: product } only %}
+			{% block actions %}
+			<button type="button" data-product="{{ product.id }}"{% if not product.inStock %} disabled{% endif %}>Add to basket</button>
+			{% endblock %}
+			{% endembed %}
+		</li>
+		{% endfor %}
+	</ul>
+</main>

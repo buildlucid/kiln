@@ -1,0 +1,11 @@
+<main class="category">
+	<h1>{{ category }}</h1>
+	<p>{{ products.size }} products</p>
+	<ul class="products">
+		{% for product in products %}
+		<li>
+			{% render "components/product-card", product: product %}
+		</li>
+		{% endfor %}
+	</ul>
+</main>

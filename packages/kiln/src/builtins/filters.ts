@@ -5,6 +5,8 @@ import { checkLength, consume, isPromise, silence } from "../runtime/render.js";
 import type { CallableEntry, Run } from "../runtime/types.js";
 import {
 	compare,
+	FORMATTERS,
+	type FormatterCells,
 	hashKeys,
 	isHashLike,
 	isPlainObject,
@@ -22,7 +24,7 @@ import {
 	integerArgument,
 	listOf,
 	readProperty,
-	toDate,
+	toTime,
 	toPlainData,
 } from "./helpers.js";
 
@@ -42,6 +44,22 @@ const codePointLength = (text: string): number => {
 		if (code < 0xdc00 || code > 0xdfff) count++;
 	}
 	return count;
+};
+
+const SURROGATE = /[\uD800-\uDFFF]/;
+
+/** The UTF-16 index just after the first `count` code points, or the text's length when it has fewer. */
+const codePointOffset = (text: string, count: number): number => {
+	let index = 0;
+	for (let n = 0; n < count && index < text.length; n++) {
+		const code = text.charCodeAt(index);
+		const next = text.charCodeAt(index + 1);
+		index +=
+			code >= 0xd800 && code <= 0xdbff && next >= 0xdc00 && next <= 0xdfff
+				? 2
+				: 1;
+	}
+	return index;
 };
 
 const trimCharacters = (
@@ -138,34 +156,85 @@ const formatterCache = new Map<
 	Intl.NumberFormat | Intl.DateTimeFormat
 >();
 
-/** Splits `locale` out of filter options and caches the formatter by its settings. */
-const cachedFormatter = <T extends Intl.NumberFormat | Intl.DateTimeFormat>(
+/** Keys of frozen options hashes, which the compiler builds once for literal named arguments. */
+const optionsKeys = new WeakMap<object, string>();
+
+const optionsKey = (options: Record<string, unknown>): string => {
+	const frozen = Object.isFrozen(options);
+	let key = frozen ? optionsKeys.get(options) : undefined;
+	if (key !== undefined) return key;
+	key = "";
+	for (const name of hashKeys(options)) {
+		if (name !== "locale") key += `|${name}=${JSON.stringify(options[name])}`;
+	}
+	if (frozen) optionsKeys.set(options, key);
+	return key;
+};
+
+type Formatter = Intl.NumberFormat | Intl.DateTimeFormat;
+
+/** Formatters that calls without options last resolved to. */
+const NO_OPTIONS: FormatterCells = {};
+
+/**
+ * Splits `locale` out of filter options and caches the formatter by its settings. `defaults` gives the settings the
+ * options are merged over.
+ *
+ * Calls without options, or with a hash of literals such as `formatNumber(style: "currency")`'s, which
+ * `literalOptions` gives a place for it, first try the formatter they used last, so a filter called in a loop skips
+ * building the cache key.
+ */
+const cachedFormatter = <T extends Formatter>(
 	kind: "number" | "date",
 	run: Run,
 	options: unknown,
-	defaults: Record<string, unknown>,
+	defaults: (options: Record<string, unknown>) => Record<string, unknown>,
 	create: (locale: string, options: Record<string, unknown>) => T,
 ): T => {
+	const { state } = run;
+	const cells =
+		options === undefined || options === null
+			? NO_OPTIONS
+			: typeof options === "object"
+				? (options as { [FORMATTERS]?: FormatterCells })[FORMATTERS]
+				: undefined;
+	const recent = cells?.[kind];
+	if (
+		recent &&
+		recent.locale === state.locale &&
+		recent.timeZone === state.timeZone
+	) {
+		return recent.formatter as T;
+	}
 	if (options !== undefined && options !== null && !isPlainObject(options)) {
 		return issue(
 			"type-error",
 			`Formatting options must be a hash, but got a ${typeName(options)}`,
 		);
 	}
-	const { locale = run.state.locale, ...rest } = (options ?? {}) as Record<
-		string,
-		unknown
-	>;
+	const given = (options ?? {}) as Record<string, unknown>;
+	const locale = given.locale === undefined ? run.state.locale : given.locale;
 	if (typeof locale !== "string") {
 		return issue("type-error", '"locale" must be a string');
 	}
-	const settings = { ...defaults, ...rest };
-	const key = `${kind}|${locale}|${JSON.stringify(settings)}`;
+	// The key lists defaults then options in order, which fixes the merged settings, without building them on a hit.
+	const base = defaults(given);
+	let key = `${kind}|${locale}`;
+	for (const name in base) key += `|${name}=${JSON.stringify(base[name])}`;
+	key += optionsKey(given);
 	let formatter = formatterCache.get(key) as T | undefined;
 	if (!formatter) {
-		formatter = create(locale, settings);
+		const { locale: _locale, ...rest } = given;
+		formatter = create(locale, { ...base, ...rest });
 		if (formatterCache.size > 500) formatterCache.clear();
 		formatterCache.set(key, formatter);
+	}
+	if (cells) {
+		cells[kind] = {
+			locale: state.locale,
+			timeZone: state.timeZone,
+			formatter,
+		};
 	}
 	return formatter;
 };
@@ -373,10 +442,13 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		(_run, value, length, ellipsis = "…") => {
 			const text = toStringArgument(value, '"truncate"');
 			const max = integerArgument(length, '"truncate" length');
-			if (codePointLength(text) <= max) return text;
+			if (text.length <= max) return text;
+			const end = SURROGATE.test(text)
+				? codePointOffset(text, max)
+				: Math.max(0, max);
+			if (max >= 0 && end === text.length) return text;
 			return (
-				[...text].slice(0, Math.max(0, max)).join("").trimEnd() +
-				toStringArgument(ellipsis, '"truncate"')
+				text.slice(0, end).trimEnd() + toStringArgument(ellipsis, '"truncate"')
 			);
 		},
 		["length", "ellipsis"],
@@ -471,6 +543,21 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 	),
 	join: define(
 		(run, value, glue = "", lastGlue) => {
+			// An array with a string glue joins without copying, in the same order of checks.
+			if (
+				Array.isArray(value) &&
+				typeof glue === "string" &&
+				(lastGlue === undefined || lastGlue === null)
+			) {
+				let text = "";
+				for (let i = 0; i < value.length; i++) {
+					const item: unknown = value[i];
+					if (i > 0) text += glue;
+					text += typeof item === "string" ? item : toStr(item);
+				}
+				consume(run, value.length);
+				return checkLength(run, text);
+			}
 			const items = entriesOf(value, "join").values.map((item) => toStr(item));
 			consume(run, items.length);
 			const separator = toStringArgument(glue, '"join"');
@@ -539,7 +626,12 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		(run, value, by) => {
 			const items = [...listOf(value, "sort")];
 			consume(run, items.length);
-			if (by === undefined || by === null) return items.sort(compare);
+			if (by === undefined || by === null) {
+				// Strings compare by UTF-16 code units, as the default sort does, which skips calling `compare`.
+				return items.every((item) => typeof item === "string")
+					? items.sort()
+					: items.sort(compare);
+			}
 			const fn = functionArgument(by, "sort");
 			if (fn.length >= 2) {
 				return items.sort((a, b) => {
@@ -668,7 +760,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 				"number",
 				run,
 				options,
-				{},
+				() => ({}),
 				(locale, settings) => new Intl.NumberFormat(locale, settings),
 			);
 			if (value === null || value === undefined) return "";
@@ -679,25 +771,23 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 	),
 	formatDate: define(
 		(run, value, options) => {
-			const settings = (isPlainObject(options) ? options : {}) as Record<
-				string,
-				unknown
-			>;
-			const hasStyle = Object.keys(settings).some(
-				(key) => key !== "locale" && key !== "timeZone",
-			);
 			const formatter = cachedFormatter(
 				"date",
 				run,
 				options,
-				{
-					timeZone: run.state.timeZone,
-					...(hasStyle ? {} : { dateStyle: "medium" }),
+				(settings) => {
+					const hasStyle = Object.keys(settings).some(
+						(key) => key !== "locale" && key !== "timeZone",
+					);
+					return {
+						timeZone: run.state.timeZone,
+						...(hasStyle ? {} : { dateStyle: "medium" }),
+					};
 				},
 				(locale, resolved) => new Intl.DateTimeFormat(locale, resolved),
 			);
 			if (value === null || value === undefined) return "";
-			return formatter.format(toDate(value, '"formatDate"'));
+			return formatter.format(toTime(value, '"formatDate"'));
 		},
 		[],
 		true,

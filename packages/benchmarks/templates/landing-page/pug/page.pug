@@ -1,0 +1,16 @@
+extends layout
+
+include sections/hero
+include sections/features
+include sections/testimonials
+include sections/pricing
+include sections/faq
+include sections/cta
+
+block title
+	| #{page.title} · #{site.name}
+
+block content
+	//- Pug can't include by a dynamic path, so each section type is a mixin, called by name.
+	each section in page.sections
+		+#{section.type}(section)

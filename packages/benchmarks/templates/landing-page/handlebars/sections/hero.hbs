@@ -1,0 +1,12 @@
+<section class="hero">
+	<div>
+		<h1>{{heading}}</h1>
+		<p>{{text}}</p>
+		<div class="actions">
+			{{#each actions}}
+			<a class="button {{#if primary}}button--primary{{else}}button--secondary{{/if}}" href="{{url}}">{{label}}</a>
+			{{/each}}
+		</div>
+	</div>
+	<img src="{{image.src}}" alt="{{image.alt}}">
+</section>

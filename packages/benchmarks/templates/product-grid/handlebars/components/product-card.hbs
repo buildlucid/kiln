@@ -1,0 +1,30 @@
+{{!-- A product summary, rendered with the product as its context. The partial block holds the card's button. --}}
+<article class="card">
+	<a href="{{url}}">
+		<img src="{{image.src}}" alt="{{image.alt}}" loading="lazy">
+		<h2>{{name}}</h2>
+	</a>
+	{{#if badges.length}}
+	<ul class="badges">
+		{{#each badges}}
+		<li>{{this}}</li>
+		{{/each}}
+	</ul>
+	{{/if}}
+	<p class="price">
+		{{#if salePrice}}
+		<del>{{formatPrice price}}</del>
+		<ins>{{formatPrice salePrice}}</ins>
+		{{else}}
+		{{formatPrice price}}
+		{{/if}}
+	</p>
+	<p class="rating" aria-label="{{rating}} out of 5">
+		{{#each (range 1 5)}}<span class="star{{#if (lte this ../rating)}} star--filled{{/if}}">★</span>{{/each}}
+		<span>({{reviewCount}})</span>
+	</p>
+	{{#unless inStock}}
+	<p class="stock">Out of stock</p>
+	{{/unless}}
+	<div class="actions">{{> @partial-block}}</div>
+</article>

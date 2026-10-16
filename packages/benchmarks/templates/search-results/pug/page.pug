@@ -1,0 +1,15 @@
+main.search
+	form(action="/search" role="search")
+		input(type="search" name="q" value=query)
+	h1 #{formatNumber(total)} results for “#{query}”
+	p Showing #{results.length}
+	ol.results
+		each result in results
+			li.result(class=`result--${result.category.toLowerCase()}`)
+				p.category= result.category.toUpperCase()
+				h2: a(href=`${result.url}?q=${urlEncode(query)}`)= result.title
+				p= truncate(result.excerpt, 160)
+				p.meta By #{result.author ? result.author.name : "Anonymous"} · #{result.tags.toSorted().join(", ")}
+	nav.pagination
+		each number in [1, 2, 3, 4, 5]
+			a(href=`/search?q=${urlEncode(query)}&page=${number}` aria-current=number === 1 && "page")= number

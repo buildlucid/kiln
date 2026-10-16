@@ -1,0 +1,7 @@
+mixin faq(section)
+	section.faq
+		h2= section.heading
+		each item, index in section.items
+			details(open=index === 0)
+				summary= item.question
+				p= item.answer

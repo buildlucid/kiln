@@ -26,6 +26,14 @@ describe("renderBlock", () => {
 		);
 	});
 
+	test("templates the block includes render in full", async () => {
+		const kiln = create({
+			page: '<h1></h1>{% block list %}{% include "item" %}{% endblock %}',
+			item: "<li>{% block label %}item{% endblock %}</li>",
+		});
+		expect(await kiln.renderBlock("page", "list")).toBe("<li>item</li>");
+	});
+
 	test("uses the most derived definition, and parent() works", async () => {
 		const kiln = create({
 			base: layout,

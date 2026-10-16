@@ -1,0 +1,11 @@
+<main class="category">
+	<h1><%= it.category %></h1>
+	<p><%= it.products.length %> products</p>
+	<ul class="products">
+		<% it.products.forEach((product) => { %>
+		<li>
+			<%~ include("@components/product-card", { product }) %>
+		</li>
+		<% }) %>
+	</ul>
+</main>

@@ -1,0 +1,9 @@
+<section class="testimonials">
+	<h2><%= it.section.heading %></h2>
+	<% it.section.items.forEach((item) => { %>
+	<figure>
+		<blockquote><%= item.quote %></blockquote>
+		<figcaption><%= item.name %>, <%= item.role %></figcaption>
+	</figure>
+	<% }) %>
+</section>

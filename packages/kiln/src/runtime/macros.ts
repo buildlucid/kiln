@@ -9,7 +9,8 @@ import {
 	step,
 	withCaller,
 } from "./render.js";
-import { type CompiledMacro, Run, type Scope } from "./types.js";
+import { childScope } from "./scope.js";
+import { type CompiledMacro, Run } from "./types.js";
 
 /**
  * Calls a macro: binds arguments to parameters in a scope that holds only globals, renders the body and returns it as markup.
@@ -68,7 +69,7 @@ export const callMacro = (
 	}
 
 	const macroRun = new Run(state, macro.template, run.depth + 1, null, null);
-	const scope = Object.create(state.globals) as Scope;
+	const scope = childScope(state.globals);
 
 	const bind = (index: number): void | Promise<void> => {
 		for (let i = index; i < params.length; i++) {

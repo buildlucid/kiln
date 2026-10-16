@@ -1,0 +1,13 @@
+<main class="category">
+	<h1>{{ category }}</h1>
+	<p>{{ products|length }} products</p>
+	<ul class="products">
+		{% for product in products %}
+		<li>
+			{% component "components/product-card" with { product } %}
+			<button type="button" data-product="{{ product.id }}"{% if not product.inStock %} disabled{% endif %}>Add to basket</button>
+			{% endcomponent %}
+		</li>
+		{% endfor %}
+	</ul>
+</main>

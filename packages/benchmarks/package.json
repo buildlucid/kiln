@@ -1,0 +1,33 @@
+{
+	"name": "@lucidcms/kiln-benchmarks",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Compares Kiln's render speed with other JavaScript template engines.",
+	"type": "module",
+	"exports": {
+		"./results.json": "./results.json"
+	},
+	"devDependencies": {
+		"@lucidcms/kiln": "*",
+		"@types/node": "^24.19.2",
+		"ejs": "6.0.1",
+		"eta": "4.6.0",
+		"handlebars": "4.7.9",
+		"liquidjs": "10.29.0",
+		"nunjucks": "3.2.4",
+		"@types/nunjucks": "3.2.6",
+		"pug": "3.0.4",
+		"@types/pug": "2.0.10",
+		"tinybench": "6.2.0",
+		"twing": "7.3.1",
+		"typescript": "^7.0.2",
+		"vite-plus": "1.2.0"
+	},
+	"volta": {
+		"node": "24.22.0"
+	},
+	"engines": {
+		"node": "^24.0.0"
+	},
+	"license": "MIT"
+}

@@ -1,0 +1,11 @@
+<main class="category">
+	<h1><%= category %></h1>
+	<p><%= products.length %> products</p>
+	<ul class="products">
+		<% for (const product of products) { %>
+		<li>
+			<%- include("/components/product-card", { product }) %>
+		</li>
+		<% } %>
+	</ul>
+</main>

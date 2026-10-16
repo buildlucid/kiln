@@ -5,7 +5,7 @@
 
 <h2><code>memoryLoader</code></h2>
 
-<p>Holds templates in memory, as an object or a <code>Map</code>. It works everywhere, including Cloudflare Workers.</p>
+<p>Holds templates in memory, as an object or a <code>Map</code>. It works everywhere, including Cloudflare Workers. A template can be its source or a <a href="/docs/api/precompiling/">precompiled module</a>.</p>
 
 {% apply highlight("ts") %}
 {% verbatim %}
@@ -36,7 +36,7 @@ const kiln = createKiln({
 
 <h2>Your own loader</h2>
 
-<p>A loader is an object with a <code>load</code> method. It gets a resolved name, such as <code>pages/home.kiln</code>, and returns the source, or null if the template doesn't exist. It can be async.</p>
+<p>A loader is an object with a <code>load</code> method. It gets a resolved name, such as <code>pages/home.kiln</code>, and returns the source or a <a href="/docs/api/precompiling/">precompiled module</a>, or null if the template doesn't exist. It can be async.</p>
 
 {% apply highlight("ts") %}
 {% verbatim %}

@@ -1,0 +1,24 @@
+//- A product summary. The mixin's block holds the card's button.
+mixin productCard(product)
+	article.card
+		a(href=product.url)
+			img(src=product.image.src alt=product.image.alt loading="lazy")
+			h2= product.name
+		if product.badges.length > 0
+			ul.badges
+				each badge in product.badges
+					li= badge
+		p.price
+			if product.salePrice
+				del= formatPrice(product.price)
+				ins= formatPrice(product.salePrice)
+			else
+				= formatPrice(product.price)
+		p.rating(aria-label=`${product.rating} out of 5`)
+			each star in [1, 2, 3, 4, 5]
+				span.star(class={"star--filled": star <= product.rating}) ★
+			span (#{product.reviewCount})
+		unless product.inStock
+			p.stock Out of stock
+		.actions
+			block

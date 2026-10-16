@@ -4,6 +4,7 @@ import {
 	KilnRenderError,
 	KilnSyntaxError,
 	memoryLoader,
+	type PrecompiledTemplate,
 } from "../src/index.js";
 
 export type TestOptions = Omit<KilnOptions, "loader"> & {
@@ -15,15 +16,53 @@ export type TestOptions = Omit<KilnOptions, "loader"> & {
 
 export type KilnError = KilnRenderError | KilnSyntaxError;
 
+/** Whether `render` precompiles templates first. The test suite runs once each way; see `vite.config.ts`. */
+export const precompiling = process.env.KILN_PRECOMPILE === "1";
+
+/** Loads a module `precompile` wrote, as a bundler would. */
+export const loadModule = async (
+	code: string,
+): Promise<PrecompiledTemplate> => {
+	const url = `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
+	const module = (await import(/* @vite-ignore */ url)) as {
+		default: PrecompiledTemplate;
+	};
+	return module.default;
+};
+
+/**
+ * Precompiles every template. Templates with syntax errors stay as source, so their errors come from `render` as
+ * they would without precompiling.
+ */
+const precompileAll = async (
+	sources: Record<string, string>,
+	options: Omit<KilnOptions, "loader">,
+): Promise<Record<string, string | PrecompiledTemplate>> => {
+	const builder = createKiln({ ...options, loader: memoryLoader(sources) });
+	const templates: Record<string, string | PrecompiledTemplate> = {};
+	for (const [name, source] of Object.entries(sources)) {
+		try {
+			templates[name] = await loadModule(await builder.precompile(name));
+		} catch (error) {
+			if (!(error instanceof KilnSyntaxError)) throw error;
+			templates[name] = source;
+		}
+	}
+	return templates;
+};
+
 /** Renders `template` as `index.kiln`, with any other templates alongside it. */
-export const render = (
+export const render = async (
 	template: string,
 	options: TestOptions = {},
 ): Promise<string> => {
 	const { context, templates = {}, ...kilnOptions } = options;
+	const sources = { ...templates, index: template };
 	const kiln = createKiln({
 		...kilnOptions,
-		loader: memoryLoader({ ...templates, index: template }),
+		loader: memoryLoader(
+			precompiling ? await precompileAll(sources, kilnOptions) : sources,
+		),
 	});
 	return kiln.render("index", context);
 };

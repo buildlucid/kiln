@@ -1,0 +1,13 @@
+<main class="category">
+	<h1>{{category}}</h1>
+	<p>{{products.length}} products</p>
+	<ul class="products">
+		{{#each products}}
+		<li>
+			{{#> components/product-card}}
+			<button type="button" data-product="{{id}}"{{#unless inStock}} disabled{{/unless}}>Add to basket</button>
+			{{/components/product-card}}
+		</li>
+		{{/each}}
+	</ul>
+</main>

@@ -1,0 +1,22 @@
+<main class="search">
+	<form action="/search" role="search">
+		<input type="search" name="q" value="{{query}}">
+	</form>
+	<h1>{{formatNumber total}} results for “{{query}}”</h1>
+	<p>Showing {{results.length}}</p>
+	<ol class="results">
+		{{#each results}}
+		<li class="result result--{{lower category}}">
+			<p class="category">{{upper category}}</p>
+			<h2><a href="{{url}}?q={{urlEncode ../query}}">{{title}}</a></h2>
+			<p>{{truncate excerpt 160}}</p>
+			<p class="meta">By {{#if author}}{{author.name}}{{else}}Anonymous{{/if}} · {{join (sort tags) ", "}}</p>
+		</li>
+		{{/each}}
+	</ol>
+	<nav class="pagination">
+		{{#each (range 1 5)}}
+		<a href="/search?q={{urlEncode ../query}}&amp;page={{this}}"{{#if (eq this 1)}} aria-current="page"{{/if}}>{{this}}</a>
+		{{/each}}
+	</nav>
+</main>

@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>{% block title %}{{ site.name }}{% endblock %}</title>
+	<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+	{% include "partials/header.njk" %}
+	<main>
+		{% block content %}{% endblock %}
+	</main>
+	{% include "partials/footer.njk" %}
+</body>
+</html>

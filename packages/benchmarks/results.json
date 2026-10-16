@@ -1,0 +1,731 @@
+{
+	"date": "2026-10-16",
+	"commit": "7e2b9ec",
+	"environment": {
+		"node": "24.22.0",
+		"os": "Darwin 25.3.0 (arm64)",
+		"cpu": "Apple M4 Pro",
+		"cores": 12,
+		"memoryGb": 24
+	},
+	"settings": {
+		"benchTimeMs": 1000,
+		"warmupTimeMs": 250
+	},
+	"engines": [
+		{
+			"id": "kiln",
+			"name": "Kiln",
+			"package": "@lucidcms/kiln",
+			"version": "0.0.0",
+			"homepage": "https://github.com/buildlucid/kiln"
+		},
+		{
+			"id": "nunjucks",
+			"name": "Nunjucks",
+			"package": "nunjucks",
+			"version": "3.2.4",
+			"homepage": "https://mozilla.github.io/nunjucks/"
+		},
+		{
+			"id": "liquidjs",
+			"name": "LiquidJS",
+			"package": "liquidjs",
+			"version": "10.29.0",
+			"homepage": "https://liquidjs.com/"
+		},
+		{
+			"id": "twing",
+			"name": "Twing",
+			"package": "twing",
+			"version": "7.3.1",
+			"homepage": "https://gitlab.com/nightlycommit/twing"
+		},
+		{
+			"id": "handlebars",
+			"name": "Handlebars",
+			"package": "handlebars",
+			"version": "4.7.9",
+			"homepage": "https://handlebarsjs.com/"
+		},
+		{
+			"id": "ejs",
+			"name": "EJS",
+			"package": "ejs",
+			"version": "6.0.1",
+			"homepage": "https://ejs.co/"
+		},
+		{
+			"id": "eta",
+			"name": "Eta",
+			"package": "eta",
+			"version": "4.6.0",
+			"homepage": "https://eta.js.org/"
+		},
+		{
+			"id": "pug",
+			"name": "Pug",
+			"package": "pug",
+			"version": "3.0.4",
+			"homepage": "https://pugjs.org/"
+		}
+	],
+	"scenarios": [
+		{
+			"id": "blog-post",
+			"name": "Blog post",
+			"description": "A full article page: a layout with blocks, header and footer partials, trusted body HTML, related posts and twenty escaped comments.",
+			"features": [
+				"Layouts",
+				"Partials",
+				"Loops",
+				"Conditionals",
+				"Escaping",
+				"Dates"
+			],
+			"templates": "blog-post",
+			"async": false,
+			"cold": false,
+			"results": [
+				{
+					"engine": "kiln",
+					"opsPerSecond": 66550.97604164908,
+					"meanMs": 0.015026075641237445,
+					"p99Ms": 0.0183750000001055,
+					"rme": 0.12807895266257727,
+					"samples": 66551,
+					"supported": true,
+					"relative": 1
+				},
+				{
+					"engine": "pug",
+					"opsPerSecond": 53032.718555363084,
+					"meanMs": 0.01885628395527297,
+					"p99Ms": 0.02366699999993216,
+					"rme": 0.13095677347035012,
+					"samples": 53033,
+					"supported": true,
+					"relative": 0.7968736404733423
+				},
+				{
+					"engine": "eta",
+					"opsPerSecond": 49001.066676682356,
+					"meanMs": 0.02040771901146919,
+					"p99Ms": 0.025583999999980733,
+					"rme": 0.12866699855318925,
+					"samples": 49002,
+					"supported": true,
+					"relative": 0.7362937343851487
+				},
+				{
+					"engine": "handlebars",
+					"opsPerSecond": 26642.107409476004,
+					"meanMs": 0.03753456829185826,
+					"p99Ms": 0.04524999999996226,
+					"rme": 1.522341221827126,
+					"samples": 26643,
+					"supported": true,
+					"relative": 0.40032632117675904
+				},
+				{
+					"engine": "nunjucks",
+					"opsPerSecond": 23698.331090906966,
+					"meanMs": 0.04219706426431435,
+					"p99Ms": 0.05004102000007606,
+					"rme": 0.7046847021015238,
+					"samples": 23699,
+					"supported": true,
+					"relative": 0.35609291554305716
+				},
+				{
+					"engine": "ejs",
+					"opsPerSecond": 19877.126300913547,
+					"meanMs": 0.050309083157259016,
+					"p99Ms": 0.060800659999996454,
+					"rme": 0.14806507175423966,
+					"samples": 19878,
+					"supported": true,
+					"relative": 0.2986752033279572
+				},
+				{
+					"engine": "twing",
+					"opsPerSecond": 3720.788536425126,
+					"meanMs": 0.2687602346143498,
+					"p99Ms": 0.4005583999999999,
+					"rme": 0.37265231195018156,
+					"samples": 3721,
+					"supported": true,
+					"relative": 0.05590884999337311
+				},
+				{
+					"engine": "liquidjs",
+					"opsPerSecond": 1326.3743545224688,
+					"meanMs": 0.7539349630746046,
+					"p99Ms": 1.0886690800000316,
+					"rme": 0.503947230247266,
+					"samples": 1327,
+					"supported": true,
+					"relative": 0.01993020137965211
+				}
+			]
+		},
+		{
+			"id": "landing-page",
+			"name": "CMS landing page",
+			"description": "A page built from ten content sections, where each section's type picks the partial that renders it.",
+			"features": [
+				"Dynamic partials",
+				"Nested loops",
+				"Conditionals",
+				"Prices"
+			],
+			"templates": "landing-page",
+			"async": false,
+			"cold": false,
+			"results": [
+				{
+					"engine": "kiln",
+					"opsPerSecond": 194737.715098745,
+					"meanMs": 0.005135112114738193,
+					"p99Ms": 0.005999999999858119,
+					"rme": 0.10972450266300976,
+					"samples": 194738,
+					"supported": true,
+					"relative": 1
+				},
+				{
+					"engine": "pug",
+					"opsPerSecond": 193664.51022245252,
+					"meanMs": 0.005163568683035168,
+					"p99Ms": 0.006249999999990905,
+					"rme": 0.19051977319485858,
+					"samples": 193665,
+					"supported": true,
+					"relative": 0.9944889726381545
+				},
+				{
+					"engine": "eta",
+					"opsPerSecond": 153125.32548294848,
+					"meanMs": 0.006530598363438951,
+					"p99Ms": 0.008499999999912689,
+					"rme": 0.22166443485807072,
+					"samples": 153126,
+					"supported": true,
+					"relative": 0.7863157139607176
+				},
+				{
+					"engine": "handlebars",
+					"opsPerSecond": 33212.824901986176,
+					"meanMs": 0.030108851112517036,
+					"p99Ms": 0.03812500000003638,
+					"rme": 1.4278963088492147,
+					"samples": 33213,
+					"supported": true,
+					"relative": 0.17055157951886754
+				},
+				{
+					"engine": "nunjucks",
+					"opsPerSecond": 24591.849153596555,
+					"meanMs": 0.04066387987963687,
+					"p99Ms": 0.04929108999982191,
+					"rme": 0.15540630827576515,
+					"samples": 24592,
+					"supported": true,
+					"relative": 0.12628190251244784
+				},
+				{
+					"engine": "ejs",
+					"opsPerSecond": 17860.802423803398,
+					"meanMs": 0.055988525950395315,
+					"p99Ms": 0.06837500000015098,
+					"rme": 0.12475369007448033,
+					"samples": 17861,
+					"supported": true,
+					"relative": 0.0917172229054181
+				},
+				{
+					"engine": "twing",
+					"opsPerSecond": 4015.983405956561,
+					"meanMs": 0.2490050129482075,
+					"p99Ms": 0.8283875499998877,
+					"rme": 0.9273526554460608,
+					"samples": 4016,
+					"supported": true,
+					"relative": 0.020622525040515084
+				},
+				{
+					"engine": "liquidjs",
+					"opsPerSecond": 3858.977679673126,
+					"meanMs": 0.25913598963461865,
+					"p99Ms": 0.3720596399998249,
+					"rme": 0.2885903292397961,
+					"samples": 3859,
+					"supported": true,
+					"relative": 0.01981628303339375
+				}
+			]
+		},
+		{
+			"id": "product-grid",
+			"name": "Product grid",
+			"description": "A shop category page that renders a product card component 48 times, with sale prices, badges and star ratings.",
+			"features": [
+				"Components",
+				"Slots",
+				"Loops",
+				"Prices"
+			],
+			"templates": "product-grid",
+			"async": false,
+			"cold": false,
+			"results": [
+				{
+					"engine": "eta",
+					"opsPerSecond": 38085.95117381086,
+					"meanMs": 0.02625640082970102,
+					"p99Ms": 0.03295800000023519,
+					"rme": 0.16615050263957631,
+					"samples": 38086,
+					"supported": true,
+					"relative": 1
+				},
+				{
+					"engine": "kiln",
+					"opsPerSecond": 35434.41781251826,
+					"meanMs": 0.02822114942852879,
+					"p99Ms": 0.03494405999996145,
+					"rme": 0.11835324061732974,
+					"samples": 35435,
+					"supported": true,
+					"relative": 0.930380277252577
+				},
+				{
+					"engine": "pug",
+					"opsPerSecond": 25336.99759236363,
+					"meanMs": 0.039467975491357825,
+					"p99Ms": 0.04795800000010786,
+					"rme": 0.14716727325217302,
+					"samples": 25338,
+					"supported": true,
+					"relative": 0.6652583646062691
+				},
+				{
+					"engine": "nunjucks",
+					"opsPerSecond": 6634.911297870982,
+					"meanMs": 0.150717915448377,
+					"p99Ms": 0.16766616000016255,
+					"rme": 0.15405649027520119,
+					"samples": 6635,
+					"supported": true,
+					"relative": 0.1742088905064123
+				},
+				{
+					"engine": "handlebars",
+					"opsPerSecond": 6457.546183026963,
+					"meanMs": 0.15485758392691074,
+					"p99Ms": 0.6325214399999727,
+					"rme": 1.0303857775210548,
+					"samples": 6458,
+					"supported": true,
+					"relative": 0.1695519209578618
+				},
+				{
+					"engine": "ejs",
+					"opsPerSecond": 4611.805395647716,
+					"meanMs": 0.216834821552472,
+					"p99Ms": 0.2617132600000879,
+					"rme": 0.13542331925027395,
+					"samples": 4612,
+					"supported": true,
+					"relative": 0.12108941101670433
+				},
+				{
+					"engine": "twing",
+					"opsPerSecond": 809.7248312106138,
+					"meanMs": 1.2349874444444382,
+					"p99Ms": 1.9109832200001984,
+					"rme": 0.8659579410997615,
+					"samples": 810,
+					"supported": true,
+					"relative": 0.021260459730027877
+				},
+				{
+					"engine": "liquidjs",
+					"opsPerSecond": 760.0267629292617,
+					"meanMs": 1.3157431406044755,
+					"p99Ms": 1.6016248000000812,
+					"rme": 0.48549798035943736,
+					"samples": 761,
+					"supported": true,
+					"relative": 0.019955567328770848
+				}
+			]
+		},
+		{
+			"id": "data-table",
+			"name": "Data table",
+			"description": "An admin table with 500 rows and 6 columns. Mostly loop and output speed.",
+			"features": [
+				"Large loops",
+				"Loop variables",
+				"Escaping"
+			],
+			"templates": "data-table",
+			"async": false,
+			"cold": false,
+			"results": [
+				{
+					"engine": "kiln",
+					"opsPerSecond": 17199.1897977666,
+					"meanMs": 0.058142273662789325,
+					"p99Ms": 0.07629142999940079,
+					"rme": 0.33961052209486875,
+					"samples": 17200,
+					"supported": true,
+					"relative": 1
+				},
+				{
+					"engine": "eta",
+					"opsPerSecond": 10544.67871418369,
+					"meanMs": 0.09483456320531568,
+					"p99Ms": 0.13939796000027851,
+					"rme": 0.1503190470920152,
+					"samples": 10545,
+					"supported": true,
+					"relative": 0.6130915954862576
+				},
+				{
+					"engine": "pug",
+					"opsPerSecond": 7114.299077911591,
+					"meanMs": 0.1405619849613563,
+					"p99Ms": 0.2709247599997606,
+					"rme": 0.5608586942438754,
+					"samples": 7115,
+					"supported": true,
+					"relative": 0.4136415239068655
+				},
+				{
+					"engine": "handlebars",
+					"opsPerSecond": 2915.18752849018,
+					"meanMs": 0.34303110528121505,
+					"p99Ms": 0.4731892499994956,
+					"rme": 0.26484535090801714,
+					"samples": 2916,
+					"supported": true,
+					"relative": 0.1694956310598265
+				},
+				{
+					"engine": "nunjucks",
+					"opsPerSecond": 2414.9532923883226,
+					"meanMs": 0.41408668364390083,
+					"p99Ms": 0.5194829999999341,
+					"rme": 0.16235868078141485,
+					"samples": 2415,
+					"supported": true,
+					"relative": 0.14041087520889595
+				},
+				{
+					"engine": "ejs",
+					"opsPerSecond": 1694.4809703118935,
+					"meanMs": 0.5901512129793559,
+					"p99Ms": 0.7002750199998808,
+					"rme": 0.22727680969016942,
+					"samples": 1695,
+					"supported": true,
+					"relative": 0.09852097629226292
+				},
+				{
+					"engine": "twing",
+					"opsPerSecond": 241.38835160779126,
+					"meanMs": 4.142701971074412,
+					"p99Ms": 4.613200249999709,
+					"rme": 0.44800799480329573,
+					"samples": 242,
+					"supported": true,
+					"relative": 0.014034867598189813
+				},
+				{
+					"engine": "liquidjs",
+					"opsPerSecond": 215.16356776757345,
+					"meanMs": 4.647626967592543,
+					"p99Ms": 5.158118800000329,
+					"rme": 0.4197715804622743,
+					"samples": 216,
+					"supported": true,
+					"relative": 0.012510099039404372
+				}
+			]
+		},
+		{
+			"id": "search-results",
+			"name": "Search results",
+			"description": "25 search results that run text through filters: truncate, join, sort, case changes, defaults, URL encoding and number formatting.",
+			"features": [
+				"Filters",
+				"Defaults",
+				"URL encoding"
+			],
+			"templates": "search-results",
+			"async": false,
+			"cold": false,
+			"results": [
+				{
+					"engine": "kiln",
+					"opsPerSecond": 107260.79137774615,
+					"meanMs": 0.009323071246773163,
+					"p99Ms": 0.010975399999915442,
+					"rme": 0.13427441975806703,
+					"samples": 107261,
+					"supported": true,
+					"relative": 1
+				},
+				{
+					"engine": "eta",
+					"opsPerSecond": 74583.29593369017,
+					"meanMs": 0.013407827952375165,
+					"p99Ms": 0.015965969999424415,
+					"rme": 0.11723462200307784,
+					"samples": 74584,
+					"supported": true,
+					"relative": 0.6953453818089607
+				},
+				{
+					"engine": "pug",
+					"opsPerSecond": 65585.86397491474,
+					"meanMs": 0.015247188027933574,
+					"p99Ms": 0.019416999999521067,
+					"rme": 0.14642742218350416,
+					"samples": 65586,
+					"supported": true,
+					"relative": 0.6114616826193034
+				},
+				{
+					"engine": "handlebars",
+					"opsPerSecond": 34777.44185683578,
+					"meanMs": 0.028754271349703722,
+					"p99Ms": 0.035666229999633293,
+					"rme": 0.25549066159575506,
+					"samples": 34778,
+					"supported": true,
+					"relative": 0.32423256821179114
+				},
+				{
+					"engine": "nunjucks",
+					"opsPerSecond": 28158.755863589977,
+					"meanMs": 0.03551293263254669,
+					"p99Ms": 0.04212499999994179,
+					"rme": 0.13720850158881037,
+					"samples": 28159,
+					"supported": true,
+					"relative": 0.2625260871367409
+				},
+				{
+					"engine": "ejs",
+					"opsPerSecond": 23355.139946972136,
+					"meanMs": 0.042817127290630703,
+					"p99Ms": 0.050957999999809545,
+					"rme": 0.11827375351640837,
+					"samples": 23356,
+					"supported": true,
+					"relative": 0.21774163370397923
+				},
+				{
+					"engine": "liquidjs",
+					"opsPerSecond": 3416.2448903108348,
+					"meanMs": 0.2927190620427134,
+					"p99Ms": 0.380319719999934,
+					"rme": 0.18298342683538946,
+					"samples": 3417,
+					"supported": true,
+					"relative": 0.031849894508792685
+				},
+				{
+					"engine": "twing",
+					"opsPerSecond": 3075.444642357235,
+					"meanMs": 0.32515623472043065,
+					"p99Ms": 0.4362395000005108,
+					"rme": 0.20348224685741664,
+					"samples": 3076,
+					"supported": true,
+					"relative": 0.02867258951620331
+				}
+			]
+		},
+		{
+			"id": "async-data",
+			"name": "Async data",
+			"description": "A blog index that loads its own posts, categories and each post's author by calling async functions from the template.",
+			"features": [
+				"Async functions",
+				"Loops"
+			],
+			"templates": "async-data",
+			"async": true,
+			"cold": false,
+			"results": [
+				{
+					"engine": "kiln",
+					"opsPerSecond": 125358.75329396305,
+					"meanMs": 0.007977105497013246,
+					"p99Ms": 0.009374999999636202,
+					"rme": 0.12574003296853825,
+					"samples": 125359,
+					"supported": true,
+					"relative": 1
+				},
+				{
+					"engine": "eta",
+					"opsPerSecond": 115480.97436322599,
+					"meanMs": 0.008659435075899759,
+					"p99Ms": 0.010666999999557447,
+					"rme": 0.3019079054400149,
+					"samples": 115481,
+					"supported": true,
+					"relative": 0.9212039153933358
+				},
+				{
+					"engine": "nunjucks",
+					"opsPerSecond": 43136.66103211427,
+					"meanMs": 0.023182137329904196,
+					"p99Ms": 0.028874999999970896,
+					"rme": 0.1474875595679694,
+					"samples": 43137,
+					"supported": true,
+					"relative": 0.34410569584207584
+				},
+				{
+					"engine": "ejs",
+					"opsPerSecond": 32068.489982733234,
+					"meanMs": 0.031183258099724498,
+					"p99Ms": 0.037708319999946976,
+					"rme": 0.09837121136685614,
+					"samples": 32069,
+					"supported": true,
+					"relative": 0.2558137277221755
+				},
+				{
+					"engine": "twing",
+					"opsPerSecond": 2543.2820441953736,
+					"meanMs": 0.39319272602200644,
+					"p99Ms": 2.158717689999594,
+					"rme": 2.763367241757584,
+					"samples": 2544,
+					"supported": true,
+					"relative": 0.020288029175206
+				},
+				{
+					"engine": "liquidjs",
+					"opsPerSecond": 2326.9612304989228,
+					"meanMs": 0.4297450197679445,
+					"p99Ms": 0.7662134200001488,
+					"rme": 0.5011179406705981,
+					"samples": 2327,
+					"supported": true,
+					"relative": 0.018562415223149664
+				},
+				{
+					"engine": "handlebars",
+					"supported": false
+				},
+				{
+					"engine": "pug",
+					"supported": false
+				}
+			]
+		},
+		{
+			"id": "first-render",
+			"name": "First render",
+			"description": "The blog post page from a cold start: create the environment, compile every template and render once. This is what a serverless cold start or a template edit in a CMS costs.",
+			"features": [
+				"Parsing",
+				"Compiling"
+			],
+			"templates": "blog-post",
+			"async": false,
+			"cold": true,
+			"results": [
+				{
+					"engine": "eta",
+					"opsPerSecond": 18763.224984993354,
+					"meanMs": 0.0532957421125521,
+					"p99Ms": 0.06347354000007722,
+					"rme": 0.15673881328182523,
+					"samples": 18764,
+					"supported": true,
+					"relative": 1
+				},
+				{
+					"engine": "kiln",
+					"opsPerSecond": 15255.585215893923,
+					"meanMs": 0.06554976330623863,
+					"p99Ms": 0.08343125000037625,
+					"rme": 0.2914359419837327,
+					"samples": 15256,
+					"supported": true,
+					"relative": 0.8130577354423449
+				},
+				{
+					"engine": "ejs",
+					"opsPerSecond": 8272.390275201962,
+					"meanMs": 0.1208840452073069,
+					"p99Ms": 0.14494628000029453,
+					"rme": 0.1595216779610165,
+					"samples": 8273,
+					"supported": true,
+					"relative": 0.44088317876154764
+				},
+				{
+					"engine": "nunjucks",
+					"opsPerSecond": 3441.714509781619,
+					"meanMs": 0.29055286170829175,
+					"p99Ms": 0.42977478000020714,
+					"rme": 0.26212034726919364,
+					"samples": 3442,
+					"supported": true,
+					"relative": 0.18342872893834983
+				},
+				{
+					"engine": "handlebars",
+					"opsPerSecond": 1498.7428756722825,
+					"meanMs": 0.6672258572381442,
+					"p99Ms": 1.0518628400001944,
+					"rme": 0.5481237953282903,
+					"samples": 1499,
+					"supported": true,
+					"relative": 0.0798766137948547
+				},
+				{
+					"engine": "twing",
+					"opsPerSecond": 1494.9630654425612,
+					"meanMs": 0.6689128468227175,
+					"p99Ms": 2.4648805000006164,
+					"rme": 2.463841614008255,
+					"samples": 1495,
+					"supported": true,
+					"relative": 0.07967516600361708
+				},
+				{
+					"engine": "liquidjs",
+					"opsPerSecond": 730.3476513400303,
+					"meanMs": 1.3692109479166747,
+					"p99Ms": 2.2509862099998283,
+					"rme": 71.48177430577734,
+					"samples": 864,
+					"supported": true,
+					"relative": 0.03892442007832637
+				},
+				{
+					"engine": "pug",
+					"opsPerSecond": 505.2834201908507,
+					"meanMs": 1.979087300395271,
+					"p99Ms": 2.2959374999994906,
+					"rme": 0.37997648060633055,
+					"samples": 506,
+					"supported": true,
+					"relative": 0.026929454856239876
+				}
+			]
+		}
+	]
+}

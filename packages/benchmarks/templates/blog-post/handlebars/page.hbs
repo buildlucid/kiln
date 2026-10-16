@@ -1,0 +1,53 @@
+{{#> layout}}
+
+{{#*inline "title"}}{{post.title}} · {{site.name}}{{/inline}}
+
+{{#*inline "content"}}
+<article class="post">
+	<header>
+		<h1>{{post.title}}</h1>
+		<p class="meta">
+			By <a href="{{post.author.url}}">{{post.author.name}}</a>
+			on <time datetime="{{post.publishedAt}}">{{formatDate post.publishedAt}}</time>
+			· {{post.readingTime}} min read
+		</p>
+	</header>
+	<div class="body">{{{post.body}}}</div>
+	<ul class="tags">
+		{{#each post.tags}}
+		<li><a href="/tags/{{this}}/">#{{this}}</a></li>
+		{{/each}}
+	</ul>
+	<aside class="author">
+		<h2>About {{post.author.name}}</h2>
+		<p>{{post.author.bio}}</p>
+	</aside>
+</article>
+
+<section class="related">
+	<h2>Related posts</h2>
+	<ul>
+		{{#each related}}
+		<li>
+			<a href="{{url}}">{{title}}</a>
+			<time datetime="{{publishedAt}}">{{formatDate publishedAt}}</time>
+			<p>{{excerpt}}</p>
+		</li>
+		{{/each}}
+	</ul>
+</section>
+
+<section class="comments">
+	<h2>{{comments.length}} comments</h2>
+	{{#each comments}}
+	<article class="comment" id="comment-{{inc @index}}">
+		<header><strong>{{author}}</strong> <time>{{formatDate postedAt}}</time></header>
+		<p>{{body}}</p>
+	</article>
+	{{else}}
+	<p>No comments yet.</p>
+	{{/each}}
+</section>
+{{/inline}}
+
+{{/layout}}

@@ -1,0 +1,26 @@
+{% extends "layout.twig" %}
+
+{% block title %}Blog · {{ site.name }}{% endblock %}
+
+{% block content %}
+{% set posts = latestPosts(10) %}
+<h1>Latest posts</h1>
+<ul class="posts">
+	{% for post in posts %}
+	{% set postAuthor = author(post.authorId) %}
+	<li>
+		<a href="{{ post.url }}">{{ post.title }}</a>
+		<p>By <a href="{{ postAuthor.url }}">{{ postAuthor.name }}</a> on <time datetime="{{ post.publishedAt }}">{{ post.publishedAt|date("j M Y") }}</time></p>
+		<p>{{ post.excerpt }}</p>
+	</li>
+	{% endfor %}
+</ul>
+<aside class="categories">
+	<h2>Categories</h2>
+	<ul>
+		{% for category in categories() %}
+		<li><a href="/categories/{{ category|lower }}/">{{ category }}</a></li>
+		{% endfor %}
+	</ul>
+</aside>
+{% endblock %}

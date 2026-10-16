@@ -1,0 +1,38 @@
+extends layout
+
+block title
+	| #{post.title} · #{site.name}
+
+block content
+	article.post
+		header
+			h1= post.title
+			p.meta
+				| By #[a(href=post.author.url)= post.author.name]
+				| on #[time(datetime=post.publishedAt)= formatDate(post.publishedAt)]
+				| · #{post.readingTime} min read
+		.body!= post.body
+		ul.tags
+			each tag in post.tags
+				li: a(href=`/tags/${tag}/`) ##{tag}
+		aside.author
+			h2 About #{post.author.name}
+			p= post.author.bio
+
+	section.related
+		h2 Related posts
+		ul
+			each item in related
+				li
+					a(href=item.url)= item.title
+					time(datetime=item.publishedAt)= formatDate(item.publishedAt)
+					p= item.excerpt
+
+	section.comments
+		h2 #{comments.length} comments
+		each comment, index in comments
+			article.comment(id=`comment-${index + 1}`)
+				header #[strong= comment.author] #[time= formatDate(comment.postedAt)]
+				p= comment.body
+		else
+			p No comments yet.

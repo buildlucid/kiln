@@ -1,0 +1,5 @@
+footer.site-footer
+	ul
+		each link in site.footer
+			li: a(href=link.url)= link.title
+	p © #{site.year} #{site.name}

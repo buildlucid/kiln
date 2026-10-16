@@ -1,0 +1,9 @@
+mixin features(section)
+	section.features
+		h2= section.heading
+		ul.grid
+			each item in section.items
+				li
+					svg.icon(aria-hidden="true"): use(href=`#icon-${item.icon}`)
+					h3= item.title
+					p= item.text

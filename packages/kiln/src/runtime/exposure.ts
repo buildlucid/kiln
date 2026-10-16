@@ -1,4 +1,4 @@
-/** Names that can never be read, whatever the object. */
+/** Names that can never be read, whatever the object. `hashKeys` compares them directly, so change both together. */
 export const BLOCKED_NAMES = new Set(["constructor", "prototype", "__proto__"]);
 
 /**

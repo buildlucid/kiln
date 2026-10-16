@@ -1,0 +1,101 @@
+{% extends "layouts/docs" %}
+
+{% set environment = benchmarks.environment %}
+
+{% block content %}
+<p>We render the same pages with Kiln and {{ benchmarks.engines|length - 1 }} other JavaScript template engines, and time how long each engine takes to render each page. Each page is something a real site renders, from a blog post to an admin table. Together they cover the template features sites use most. We didn't pick them because Kiln does well on them.</p>
+
+<p>Shorter bars are faster, and the fastest engine is listed first. The last run was on {{ benchmarks.date|formatDate(dateStyle: "long", locale: "en-GB") }}, with Node {{ environment.node }} on {{ environment.cpu }}. Read <a href="#how-the-benchmark-works">how the benchmark works</a> before you compare engines.</p>
+
+{% for scenario in benchmarks.scenarios %}
+<h2>{{ scenario.name }}</h2>
+{% set slowest = max(scenario.results|filter(result => result.supported)|map(result => result.meanMs)) %}
+
+<p>{{ scenario.description }}</p>
+
+<p class="text-sm text-muted">Uses: {{ scenario.features|join(", ") }}</p>
+
+<table>
+	<thead>
+		<tr>
+			<th>Engine</th>
+			<th class="w-full">Time per render</th>
+			<th class="hidden text-right whitespace-nowrap sm:table-cell">Renders per second</th>
+		</tr>
+	</thead>
+	<tbody>
+		{% for result in scenario.results %}
+		{% set engine = benchmarks.engines|find(item => item.id == result.engine) %}
+		{% set isKiln = engine.id == "kiln" %}
+		<tr{{ attrs({ class: isKiln ? "text-fg" }) }}>
+			<td>
+				<span{{ attrs({ class: isKiln ? "font-medium" }) }}>{{ engine.name }}</span>
+				<span class="ml-1 text-[13px] text-muted">{{ engine.version }}</span>
+			</td>
+			{% if result.supported %}
+			<td>
+				<div class="flex items-center gap-3">
+					<div class="h-2 min-w-16 flex-1 rounded-full bg-raised" aria-hidden="true">
+						<div class="h-2 rounded-full {{ isKiln ? "bg-ember" : "bg-muted/50" }}" style="width: {{ (result.meanMs / slowest * 100)|round(1) }}%"></div>
+					</div>
+					<span class="w-[4.5rem] text-right whitespace-nowrap tabular-nums">{{ result.meanMs|formatNumber(maximumSignificantDigits: 3) }} ms</span>
+				</div>
+			</td>
+			<td class="hidden text-right whitespace-nowrap tabular-nums sm:table-cell">{{ result.opsPerSecond|formatNumber(maximumFractionDigits: 0) }}</td>
+			{% else %}
+			<td class="text-muted">Can't wait for async data</td>
+			<td class="hidden text-right text-muted sm:table-cell">–</td>
+			{% endif %}
+		</tr>
+		{% endfor %}
+	</tbody>
+</table>
+{% endfor %}
+
+<h2>How the benchmark works</h2>
+
+<ul>
+	<li><strong>Same HTML.</strong> Before timing anything, every engine renders every page and the benchmark checks the HTML matches Kiln's. Only whitespace and the way quotes are escaped may differ. An engine can't win by doing less work.</li>
+	<li><strong>Idiomatic templates.</strong> Each engine's templates use its own way of doing things: its layouts, partials, components or macros, and its built-in filters. Where an engine has no built-in for something, such as formatting a price, it gets a small helper with the same output, as its users would add.</li>
+	<li><strong>Production set-up.</strong> Templates are compiled once and cached, output is HTML-escaped, and templates load from memory, so no time goes on reading files. Engines with a synchronous API use it, except in the async data page.</li>
+	<li><strong>Separate processes.</strong> Each engine runs in its own Node process, so one engine can't slow another down. Each page is rendered for {{ benchmarks.settings.warmupTimeMs }} ms to warm up, then timed for {{ benchmarks.settings.benchTimeMs|formatNumber }} ms with <a href="https://github.com/tinylibs/tinybench">tinybench</a>. Time per render is the mean of every timed render. Renders per second is 1,000 divided by that time in milliseconds.</li>
+	<li><strong>Async data.</strong> Handlebars and Pug have no way for a template to wait for a promise, so they sit out that page. The async functions resolve straight away, so the page measures the cost of waiting, not of fetching data.</li>
+	<li><strong>Precompiled Kiln.</strong> Kiln renders <a href="/docs/api/precompiling/">precompiled templates</a>, as its docs recommend for the templates in your codebase. The benchmark precompiles them before timing starts, as a site's build would.</li>
+	<li><strong>First render.</strong> This page times creating an environment, compiling every template and rendering once. A serverless cold start, or editing a template in a CMS, costs about this much. Kiln compiles from source here, as it does for a template edited in a CMS.</li>
+</ul>
+
+<p>The templates for every engine are in <a href="{{ site.repository }}/tree/master/packages/benchmarks/templates">packages/benchmarks/templates</a>. If you know a faster way to write one of them in its engine, please open a pull request.</p>
+
+<h2>Reading the results</h2>
+
+<ul>
+	<li>Numbers depend on the machine. Compare engines within one run, not with numbers from another computer.</li>
+	<li>Nunjucks, Handlebars, EJS, Eta and Pug turn templates into JavaScript and run it with <code>new Function</code>. That makes compiled templates fast. But Cloudflare Workers blocks <code>new Function</code>, so on Workers those engines need a build step that compiles templates ahead of time. Kiln generates JavaScript only when you precompile at build time, so the same templates run on Workers. LiquidJS and Twing don't generate code.</li>
+	<li>Kiln runs with its defaults, including <a href="/docs/language/strict-mode/">strict mode</a>, which checks every variable and property a template reads.</li>
+</ul>
+
+<h2>Run it yourself</h2>
+
+<p>From the root of the repository:</p>
+
+{% apply highlight("sh") %}
+{% verbatim %}
+npm install
+npm run bench
+{% endverbatim %}
+{% endapply %}
+
+<p>This builds Kiln, checks every engine's output, runs the benchmark and writes <code>packages/benchmarks/results.json</code>, which this page reads. A full run takes about two minutes.</p>
+
+<table>
+	<thead><tr><th>Last run</th><th>Details</th></tr></thead>
+	<tbody>
+		<tr><td>Date</td><td>{{ benchmarks.date|formatDate(dateStyle: "long", locale: "en-GB") }}</td></tr>
+		<tr><td>Kiln commit</td><td>{{ benchmarks.commit ?? "Unknown" }}</td></tr>
+		<tr><td>Node</td><td>{{ environment.node }}</td></tr>
+		<tr><td>CPU</td><td>{{ environment.cpu }}, {{ environment.cores }} cores</td></tr>
+		<tr><td>Memory</td><td>{{ environment.memoryGb }} GB</td></tr>
+		<tr><td>Operating system</td><td>{{ environment.os }}</td></tr>
+	</tbody>
+</table>
+{% endblock %}

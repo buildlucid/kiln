@@ -1,0 +1,27 @@
+{% extends "layout.njk" %}
+
+{% block title %}Blog · {{ site.name }}{% endblock %}
+
+{% block content %}
+{# `await` is an async filter that waits for the promise a data function returns. A loop whose body uses an async filter must be an asyncEach. #}
+{% set posts = latestPosts(10) | await %}
+<h1>Latest posts</h1>
+<ul class="posts">
+	{% asyncEach post in posts %}
+	{% set postAuthor = author(post.authorId) | await %}
+	<li>
+		<a href="{{ post.url }}">{{ post.title }}</a>
+		<p>By <a href="{{ postAuthor.url }}">{{ postAuthor.name }}</a> on <time datetime="{{ post.publishedAt }}">{{ post.publishedAt | formatDate }}</time></p>
+		<p>{{ post.excerpt }}</p>
+	</li>
+	{% endeach %}
+</ul>
+<aside class="categories">
+	<h2>Categories</h2>
+	<ul>
+		{% for category in categories() | await %}
+		<li><a href="/categories/{{ category | lower }}/">{{ category }}</a></li>
+		{% endfor %}
+	</ul>
+</aside>
+{% endblock %}

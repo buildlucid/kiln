@@ -1,0 +1,30 @@
+{# Embedded with a product; the page overrides the actions block with the card's button. #}
+<article class="card">
+	<a href="{{ product.url }}">
+		<img src="{{ product.image.src }}" alt="{{ product.image.alt }}" loading="lazy">
+		<h2>{{ product.name }}</h2>
+	</a>
+	{% if product.badges|length > 0 %}
+	<ul class="badges">
+		{% for badge in product.badges %}
+		<li>{{ badge }}</li>
+		{% endfor %}
+	</ul>
+	{% endif %}
+	<p class="price">
+		{% if product.salePrice %}
+		<del>£{{ product.price|number_format(2) }}</del>
+		<ins>£{{ product.salePrice|number_format(2) }}</ins>
+		{% else %}
+		£{{ product.price|number_format(2) }}
+		{% endif %}
+	</p>
+	<p class="rating" aria-label="{{ product.rating }} out of 5">
+		{% for star in 1..5 %}<span class="star{% if star <= product.rating %} star--filled{% endif %}">★</span>{% endfor %}
+		<span>({{ product.reviewCount }})</span>
+	</p>
+	{% if not product.inStock %}
+	<p class="stock">Out of stock</p>
+	{% endif %}
+	<div class="actions">{% block actions %}{% endblock %}</div>
+</article>

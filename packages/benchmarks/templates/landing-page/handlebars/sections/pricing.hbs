@@ -1,0 +1,22 @@
+<section class="pricing">
+	<h2>{{heading}}</h2>
+	<div class="plans">
+		{{#each plans}}
+		<div class="plan{{#if featured}} plan--featured{{/if}}">
+			<h3>{{name}}</h3>
+			<p class="price">
+				{{#if (eq price 0)}}
+				Free
+				{{else}}
+				{{formatPrice price}}<span>/month</span>
+				{{/if}}
+			</p>
+			<ul>
+				{{#each features}}
+				<li>{{this}}</li>
+				{{/each}}
+			</ul>
+		</div>
+		{{/each}}
+	</div>
+</section>
