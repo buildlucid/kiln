@@ -1838,7 +1838,7 @@ class Compiler {
 		const body = this.#body(node.body);
 		const { outlet, span } = node;
 		const once = node.once ? `${this.#template.name}:${span.start}` : null;
-		return (run, scope, out) => {
+		return (run, scope) => {
 			step(run, span);
 			const state = run.state;
 			const first = once === null ? undefined : state.once?.get(once);
@@ -2449,7 +2449,7 @@ class Compiler {
 				run,
 				span,
 				() => method.apply(target, built),
-				`Method "${name}"`,
+				`Method "${String(name)}"`,
 			);
 		};
 
@@ -2611,14 +2611,11 @@ class Compiler {
 			const strategyArg = args[0]
 				? this.#expr(args[0].value)
 				: constant("html");
-			const known = strategyArg.constant?.value;
-			if (
-				known !== undefined &&
-				!ESCAPE_STRATEGIES.includes(known as EscapeStrategy)
-			) {
+			const known = strategyArg.constant;
+			if (known && !ESCAPE_STRATEGIES.includes(known.value as EscapeStrategy)) {
 				this.#error(
 					"unknown-strategy",
-					`Unknown escaping strategy "${String(known)}"`,
+					`Unknown escaping strategy "${String(known.value)}"`,
 					span,
 				);
 			}

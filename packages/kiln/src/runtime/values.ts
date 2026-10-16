@@ -233,6 +233,7 @@ export const toStr = (value: unknown): string => {
 				}
 				return value.toISOString();
 			}
+			// oxlint-disable-next-line typescript/no-base-to-string -- `exposesToString` checked the class has its own `toString`
 			if (exposesToString(value)) return String(value);
 			return issue(
 				"not-printable",

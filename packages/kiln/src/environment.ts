@@ -756,10 +756,9 @@ export const memoryLoader = (
  * const kiln = createKiln({ loader, cache: memoryCache() });
  * ```
  */
-export const memoryCache = ({
-	max = 1000,
-}: { max?: number } = {}): KilnCache => {
+export const memoryCache = ({ max = 1000 }: { max?: number } = {}) => {
 	const entries = new Map<string, { value: string; expires: number }>();
+	// `satisfies` keeps the synchronous types, so callers can use the store without awaiting.
 	return {
 		get: ({ key }) => {
 			const entry = entries.get(key);
@@ -778,5 +777,5 @@ export const memoryCache = ({
 			const oldest = entries.keys().next();
 			if (entries.size > max && !oldest.done) entries.delete(oldest.value);
 		},
-	};
+	} satisfies KilnCache;
 };

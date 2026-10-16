@@ -50,6 +50,7 @@ describe("async calls", () => {
 	test("thenables from host functions are awaited", async () => {
 		const query = {
 			// A query-builder-style thenable that is not a promise.
+			// oxlint-disable-next-line unicorn/no-thenable -- the thenable is what this test checks
 			then: (resolve: (value: string) => void) => resolve("rows"),
 		};
 		expect(

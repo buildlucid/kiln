@@ -62,13 +62,17 @@ const codePointOffset = (text: string, count: number): number => {
 	return index;
 };
 
+/** Splits text into code points, which is how string filters count characters. */
+// oxlint-disable-next-line typescript/no-misused-spread -- code points are the documented unit, not graphemes
+const codePoints = (text: string): string[] => [...text];
+
 const trimCharacters = (
 	text: string,
 	characters: string,
 	side: string,
 ): string => {
 	const set = new Set(characters);
-	const chars = [...text];
+	const chars = codePoints(text);
 	let start = 0;
 	let end = chars.length;
 	if (side !== "end")
@@ -425,7 +429,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		(run, value, separator, limit) => {
 			const text = toStringArgument(value, '"split"');
 			const glue = toStringArgument(separator, '"split"');
-			const parts = glue === "" ? [...text] : text.split(glue);
+			const parts = glue === "" ? codePoints(text) : text.split(glue);
 			consume(run, parts.length);
 			if (limit === undefined || limit === null) return parts;
 			return parts.slice(
@@ -512,7 +516,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 	}),
 	last: define((_run, value) => {
 		const target = unwrap(value);
-		if (typeof target === "string") return [...target].pop() ?? null;
+		if (typeof target === "string") return codePoints(target).pop() ?? null;
 		const items = listOf(target, "last");
 		return items[items.length - 1] ?? null;
 	}),
@@ -525,7 +529,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 					: integerArgument(end, '"slice" end');
 			const target = unwrap(value);
 			if (typeof target === "string")
-				return [...target].slice(from, to).join("");
+				return codePoints(target).slice(from, to).join("");
 			if (isHashLike(target)) {
 				return issue(
 					"type-error",
@@ -614,7 +618,8 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 	}),
 	reverse: define((run, value) => {
 		const target = unwrap(value);
-		if (typeof target === "string") return [...target].reverse().join("");
+		if (typeof target === "string")
+			return codePoints(target).reverse().join("");
 		const items = listOf(target, "reverse");
 		consume(run, items.length);
 		return [...items].reverse();

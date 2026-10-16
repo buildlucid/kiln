@@ -601,6 +601,7 @@ export const importsFor = (
 		state.importsCache.set(template, imports);
 		return imports;
 	};
+	// oxlint-disable-next-line typescript/await-thenable -- only some are promises, and `Promise.all` passes the rest through
 	if (loaded.some(isPromise)) return Promise.all(loaded).then(finish);
 	return finish(loaded as (CompiledTemplate | null)[]);
 };

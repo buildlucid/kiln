@@ -76,6 +76,7 @@ export const evalAll = (
 	if (count === 0) return () => [];
 	if (!list.some((item) => item.async)) {
 		return (run, scope) => {
+			// oxlint-disable-next-line unicorn/no-new-array -- preallocates a known length on the hot path
 			const values = new Array<unknown>(count);
 			for (let i = 0; i < count; i++) {
 				values[i] = (evs[i] as Compiled["ev"])(run, scope);
@@ -84,6 +85,7 @@ export const evalAll = (
 		};
 	}
 	return (run, scope) => {
+		// oxlint-disable-next-line unicorn/no-new-array -- preallocates a known length on the hot path
 		const values = new Array<unknown>(count);
 		let pending = false;
 		try {

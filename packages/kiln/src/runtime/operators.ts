@@ -39,6 +39,7 @@ export const buildRange = (
 			`Range of ${length} items is larger than the step limit`,
 		);
 	}
+	// oxlint-disable-next-line unicorn/no-new-array -- preallocates a known length on the hot path
 	const result = new Array<number>(length);
 	for (let i = 0; i < length; i++) result[i] = from + i * step;
 	return result;
