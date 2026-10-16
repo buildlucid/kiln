@@ -151,10 +151,7 @@ const queryString = (value: unknown, prefix: string | null): string[] => {
 	return parts;
 };
 
-const formatterCache = new Map<
-	string,
-	Intl.NumberFormat | Intl.DateTimeFormat
->();
+const formatterCache = new Map<string, Formatter>();
 
 /** Keys of frozen options hashes, which the compiler builds once for literal named arguments. */
 const optionsKeys = new WeakMap<object, string>();
@@ -171,7 +168,7 @@ const optionsKey = (options: Record<string, unknown>): string => {
 	return key;
 };
 
-type Formatter = Intl.NumberFormat | Intl.DateTimeFormat;
+type Formatter = Intl.NumberFormat | Intl.DateTimeFormat | Intl.PluralRules;
 
 /** Formatters that calls without options last resolved to. */
 const NO_OPTIONS: FormatterCells = {};
@@ -185,7 +182,7 @@ const NO_OPTIONS: FormatterCells = {};
  * building the cache key.
  */
 const cachedFormatter = <T extends Formatter>(
-	kind: "number" | "date",
+	kind: "number" | "date" | "plural",
 	run: Run,
 	options: unknown,
 	defaults: (options: Record<string, unknown>) => Record<string, unknown>,
@@ -767,6 +764,38 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 			return formatter.format(toNumber(value, "formatNumber"));
 		},
 		[],
+		true,
+	),
+	plural: define(
+		(run, value, one, other, zero, two, few, many, options) => {
+			const rules = cachedFormatter(
+				"plural",
+				run,
+				options,
+				() => ({}),
+				(locale, settings) => new Intl.PluralRules(locale, settings),
+			);
+			if (value === null || value === undefined) return "";
+			const count = toNumber(value, "plural");
+			if (other === null || other === undefined) {
+				return issue("invalid-argument", '"plural" needs an "other" form');
+			}
+			const forms = { zero, one, two, few, many, other };
+			const form = toStringArgument(
+				forms[rules.select(count)] ?? other,
+				'"plural"',
+			);
+			if (!form.includes("#")) return form;
+			const formatter = cachedFormatter(
+				"number",
+				run,
+				options,
+				() => ({}),
+				(locale, settings) => new Intl.NumberFormat(locale, settings),
+			);
+			return form.replaceAll("#", formatter.format(count));
+		},
+		["one", "other", "zero", "two", "few", "many"],
 		true,
 	),
 	formatDate: define(

@@ -43,7 +43,7 @@ export const FORMATTERS: unique symbol = Symbol("kiln.formatters");
 /** Formatters an options hash last resolved to, with the render settings each was for. */
 export type FormatterCells = Partial<
 	Record<
-		"number" | "date",
+		"number" | "date" | "plural",
 		{ locale: string; timeZone: string; formatter: object }
 	>
 >;

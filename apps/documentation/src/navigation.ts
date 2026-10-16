@@ -145,7 +145,8 @@ export const navigation = [
 			{
 				title: "Number and date filters",
 				url: "/docs/filters/numbers-and-dates/",
-				description: "Round numbers and format numbers and dates with Intl.",
+				description:
+					"Round numbers, pick plurals and format numbers and dates with Intl.",
 			},
 			{
 				title: "Functions",

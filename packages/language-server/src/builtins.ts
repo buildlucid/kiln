@@ -256,6 +256,11 @@ export const FILTERS: Record<string, BuiltinDoc> = {
 		description:
 			"Formats a number with `Intl.NumberFormat`. Pass its options, and `locale`, as named arguments.",
 	},
+	plural: {
+		signature: "plural(one, other, ...forms)",
+		description:
+			'Picks the form that fits a number, using `Intl.PluralRules`. `#` in the form becomes the number. Pass `type: "ordinal"` for 1st, 2nd and so on.',
+	},
 	formatDate: {
 		signature: "formatDate(...options)",
 		description:

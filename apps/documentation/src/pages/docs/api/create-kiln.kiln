@@ -36,7 +36,7 @@ const html = await kiln.render("pages/home", { route: { path: "/" } });
 			<tr><td><code>globals</code></td><td><code>{}</code></td><td>Variables every template can read</td></tr>
 			<tr><td><code>strict</code></td><td><code>true</code></td><td>Whether missing variables and properties are errors. See <a href="/docs/language/strict-mode/">Strict mode</a></td></tr>
 			<tr><td><code>autoescape</code></td><td><code>"html"</code></td><td>The escaping strategy for output, or <code>false</code> to turn it off</td></tr>
-			<tr><td><code>locale</code></td><td><code>"en"</code></td><td>The locale for <code>formatNumber</code> and <code>formatDate</code></td></tr>
+			<tr><td><code>locale</code></td><td><code>"en"</code></td><td>The locale for <code>formatNumber</code>, <code>plural</code> and <code>formatDate</code></td></tr>
 			<tr><td><code>timeZone</code></td><td><code>"UTC"</code></td><td>The time zone for <code>formatDate</code></td></tr>
 			<tr><td><code>debug</code></td><td><code>false</code></td><td>Turns on the <code>dump</code> function</td></tr>
 			<tr><td><code>limits</code></td><td>See <a href="/docs/api/safety/#limits">Limits</a></td><td>Caps on output size, steps and nesting</td></tr>
