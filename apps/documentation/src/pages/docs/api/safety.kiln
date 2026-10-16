@@ -37,7 +37,7 @@ const kiln = createKiln({
 		{% endverbatim %}
 	{% endapply %}
 
-	<p>Built-in filters and functions count the items they process, so one call to <code>sort</code>, <code>merge</code> or <code>max</code> can't do unlimited work. <code>in</code> counts the items it searches, and reading a generator or other iterable counts each item it gives. Spreads count the items they copy, and <code>json</code> and <code>urlEncode</code> count every item they convert.</p>
+	<p>Built-in filters and functions count the items they process, so one call to <code>sort</code>, <code>merge</code> or <code>max</code> can't do unlimited work. <code>in</code> counts the items it searches, and reading a generator or other iterable counts each item it gives. Spreads count the items they copy, and <code>json</code>, <code>urlEncode</code> and <code>attrs</code> count every item they convert.</p>
 
 	<p>Pass an <code>AbortSignal</code> as the <code>signal</code> render option to stop a render from outside, for example when the visitor disconnects. On Cloudflare Workers, the platform's CPU limit is a final backstop.</p>
 

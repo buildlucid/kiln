@@ -396,6 +396,24 @@ describe("island", () => {
 			});
 		});
 
+		test("errors the stream when the render is aborted while an island waits", async () => {
+			const { slow, resolve } = waiting();
+			const controller = new AbortController();
+			const stream = await renderStream(
+				'<p>Page</p>{% island "components/stock" with { id: "a" } %}…{% endisland %}',
+				{
+					templates: slowTemplates,
+					functions: { slow },
+					islands: streamIslands({ script: false }),
+					signal: controller.signal,
+				},
+			);
+			const parts = readParts(stream);
+			controller.abort();
+			resolve("a", "In stock");
+			await expect(parts).rejects.toMatchObject({ code: "aborted" });
+		});
+
 		test("counts islands towards maxOutputLength", async () => {
 			const stream = await renderStream(
 				'{% island "components/stock" with { id: 1 } %}{% endisland %}',

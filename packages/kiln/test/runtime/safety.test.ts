@@ -210,6 +210,30 @@ describe("class instances", () => {
 		);
 	});
 
+	test("printing calls the exposed toString, never Symbol.toPrimitive", async () => {
+		class Card {
+			static [expose] = ["toString"];
+			toString() {
+				return "public";
+			}
+			[Symbol.toPrimitive]() {
+				return "private";
+			}
+		}
+		class Odd {
+			static [expose] = ["toString"];
+			toString() {
+				return 1;
+			}
+		}
+		expect(
+			await render('{{ c }}|{{ c ~ "" }}', { context: { c: new Card() } }),
+		).toBe("public|public");
+		expect(await errorCode("{{ o }}", { context: { o: new Odd() } })).toBe(
+			"not-printable",
+		);
+	});
+
 	class Fields {
 		static [expose] = ["id"];
 		id = 1;

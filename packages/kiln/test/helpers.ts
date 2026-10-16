@@ -15,6 +15,8 @@ export type TestOptions = Omit<KilnOptions, "loader"> & {
 	templates?: Record<string, string>;
 	/** The `islands` render option, to defer or stream `island` tags. */
 	islands?: IslandMode;
+	/** The `signal` render option, to abort the render. */
+	signal?: AbortSignal;
 };
 
 export type KilnError = KilnRenderError | KilnSyntaxError;
@@ -60,6 +62,7 @@ const environment = async (template: string, options: TestOptions) => {
 		templates = {},
 		context: _context,
 		islands: _islands,
+		signal: _signal,
 		...kilnOptions
 	} = options;
 	const sources = { ...templates, index: template };
@@ -78,6 +81,7 @@ export const render = async (
 ): Promise<string> =>
 	(await environment(template, options)).render("index", options.context, {
 		islands: options.islands,
+		signal: options.signal,
 	});
 
 /** Streams `template` as `index.kiln`, as `render` renders it. */
@@ -88,7 +92,7 @@ export const renderStream = async (
 	(await environment(template, options)).renderStream(
 		"index",
 		options.context,
-		{ islands: options.islands },
+		{ islands: options.islands, signal: options.signal },
 	);
 
 /** Reads a stream to its end, and returns each part it sent as text. */

@@ -13,6 +13,13 @@ import type { RenderState, Run } from "./types.js";
  * them, and so a streamed render can send output as soon as it is final: everything before the first open outlet.
  */
 
+/**
+ * Stands for the outlet's indentation in added content, which is rendered before the outlet may be reached. The
+ * outlet puts its own indentation in place when it closes, so content lines up the same whichever runs first, and a
+ * cached section's additions line up wherever they are replayed. A Unicode noncharacter, meant for uses like this.
+ */
+export const OUTLET_INDENT = "\uFDD0";
+
 /** Where an outlet stands in the render's output, and the indentation its content takes. */
 export type OutletMark = {
 	readonly offset: number;
@@ -89,10 +96,10 @@ const contentFor = (
 		}
 		content += addition.html;
 	}
-	if (mark.inline && content.startsWith(mark.indent)) {
-		content = content.slice(mark.indent.length);
+	if (mark.inline && content.startsWith(OUTLET_INDENT)) {
+		content = content.slice(OUTLET_INDENT.length);
 	}
-	return content;
+	return content.replaceAll(OUTLET_INDENT, mark.indent);
 };
 
 /**

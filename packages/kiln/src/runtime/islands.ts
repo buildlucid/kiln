@@ -285,6 +285,10 @@ export const streamIsland = (
 		)
 		.then(
 			() => {
+				// The signal may have been aborted while the island's last call was pending.
+				if (state.signal?.aborted) {
+					throw fail(run, span, "aborted", "Render was aborted");
+				}
 				closeOutlets(state);
 				return `<template>${takeOutput(state, out.s)}</template><kiln-island fill="${n}"></kiln-island>`;
 			},

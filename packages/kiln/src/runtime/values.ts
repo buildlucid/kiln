@@ -267,8 +267,15 @@ export const toStr = (value: unknown): string => {
 				}
 				return value.toISOString();
 			}
-			// oxlint-disable-next-line typescript/no-base-to-string -- `exposesToString` checked the class has its own `toString`
-			if (exposesToString(value)) return String(value);
+			if (exposesToString(value)) {
+				// Called directly, since `String` would call an unexposed `Symbol.toPrimitive` first.
+				const text: unknown = (value as { toString(): unknown }).toString();
+				if (typeof text === "string") return text;
+				return issue(
+					"not-printable",
+					`"toString" of a ${typeName(value)} must return a string, but returned a ${typeName(text)}`,
+				);
+			}
 			return issue(
 				"not-printable",
 				`Cannot print ${typeName(value) === "array" ? "an array" : `a ${typeName(value)}`}. Use a filter such as "join" or "json", or a loop`,

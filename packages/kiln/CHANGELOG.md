@@ -28,6 +28,14 @@ All notable changes to `@lucidkiln/core` are listed here.
 - Deeply nested string interpolation reports `too-deep` instead of overflowing the stack.
 - An abort while the last async call is pending stops the render, instead of returning its output.
 - `length` counts a surrogate without its partner as one character, as `split` does.
+- Many long values printed together stop at `maxOutputLength`, instead of failing with a JavaScript `RangeError`.
+- `attrs` counts its items against `maxSteps` and checks its result against `maxOutputLength`.
+- Printing a class instance calls its exposed `toString` directly, never an unexposed `Symbol.toPrimitive`, and refuses a result that isn't a string.
+- `parent()` inside a loop can read `loop` in the layout's block.
+- Precompiled templates stop calling functions after one aborts the render, as templates rendered from source do.
+- A streamed island that finishes after the render was aborted errors the stream, instead of closing it successfully.
+- `cache` saves a copy for each indentation its section is placed at.
+- Content added to an outlet lines up the same whether `add to` runs before or after the outlet.
 
 ## 1.0.0 - 2026-10-16
 

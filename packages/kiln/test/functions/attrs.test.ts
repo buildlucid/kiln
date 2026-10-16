@@ -30,6 +30,22 @@ describe("attrs", () => {
 		);
 	});
 
+	test("counts its items and output against the limits", async () => {
+		expect(
+			await errorCode(
+				'{% set s = "x" %}{% for i in 1..8 %}{% set s = attrs({ a: s, b: s }) %}{% endfor %}',
+				{ limits: { maxOutputLength: 128 } },
+			),
+		).toBe("limit-output");
+		const list = Array.from({ length: 1000 }, (_, i) => i);
+		expect(
+			await errorCode("{{ attrs({ class: list }) }}", {
+				context: { list },
+				limits: { maxSteps: 100 },
+			}),
+		).toBe("limit-steps");
+	});
+
 	test("renders nothing for null", async () => {
 		expect(await render("<p{{ attrs(null) }}>")).toBe("<p>");
 	});

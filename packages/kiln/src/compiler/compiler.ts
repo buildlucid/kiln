@@ -36,7 +36,11 @@ import {
 	operatorFunction,
 	rangeOperator,
 } from "../runtime/operators.js";
-import { closeOutlets, recordAddition } from "../runtime/outlets.js";
+import {
+	closeOutlets,
+	OUTLET_INDENT,
+	recordAddition,
+} from "../runtime/outlets.js";
 import {
 	after,
 	all,
@@ -347,13 +351,15 @@ const printParts = (list: Part[]): Stmt => {
 			} else value = (evs[i] as Ev)(run, scope);
 			if (typeof value === "string" && html[i]) {
 				text += escapeHtml(value);
-				continue;
+			} else {
+				try {
+					text += (emits[i] as (value: unknown) => string)(value);
+				} catch (error) {
+					throw locate(run, at, error);
+				}
 			}
-			try {
-				text += (emits[i] as (value: unknown) => string)(value);
-			} catch (error) {
-				throw locate(run, at, error);
-			}
+			// Values can be long, so stop at the output limit before they make a string too long for JavaScript.
+			if (text.length > run.state.maxSize) write(run, out, text, at);
 		}
 		write(run, out, text, span);
 	};
@@ -456,7 +462,8 @@ export const containsNode = (
 
 /**
  * What a loop body does, found in one walk. `readsLoop`: it may read `loop`, so loops only build the `loop` hash when
- * needed. Blocks count too, because a child template's block can read the loop it is placed in. `keepsScope`: it has
+ * needed. Blocks, `block()` and `parent()` count too, because another template's block can read the loop it is
+ * placed in. `keepsScope`: it has
  * `set` or arrow functions, which can keep or change an iteration's scope.
  */
 const scanLoopBody = (
@@ -470,7 +477,9 @@ const scanLoopBody = (
 			record.type === "Block" ||
 			(record.type === "Call" &&
 				(record.callee as { type?: string; name?: string }).type === "Name" &&
-				(record.callee as { name?: string }).name === "block")
+				["block", "parent"].includes(
+					(record.callee as { name?: string }).name ?? "",
+				))
 		) {
 			readsLoop = true;
 		} else if (
@@ -1696,13 +1705,17 @@ class Compiler {
 			);
 		};
 		// The template, locale and time zone are part of every key, since the output depends on them. So is how islands
-		// render, when they are deferred. Streamed islands render in place inside the section.
-		const fullKey = (run: Run, value: unknown) => {
+		// render, when they are deferred. Streamed islands render in place inside the section. So is the indentation the
+		// section is placed at, which its lines are saved with.
+		const fullKey = (run: Run, out: Out, value: unknown) => {
 			const parts = Array.isArray(value)
 				? value.map((item) => part(run, item))
 				: [part(run, value)];
 			const { locale, timeZone, islands } = run.state;
-			const key = `${templateName}|${locale}|${timeZone}|${JSON.stringify(parts)}`;
+			let key = `${templateName}|${locale}|${timeZone}|${JSON.stringify(parts)}`;
+			if (out.indent !== "") {
+				key += `|indent|${JSON.stringify([out.indent, out.inline])}`;
+			}
 			return islands?.mode === "defer"
 				? `${key}|islands|${JSON.stringify([islands.url, islands.script])}`
 				: key;
@@ -1727,7 +1740,7 @@ class Compiler {
 			keyValue: unknown,
 			secondsValue: unknown,
 		): void | Promise<void> => {
-			const name = fullKey(run, keyValue);
+			const name = fullKey(run, out, keyValue);
 			const time = lifetime(run, secondsValue);
 			const state = run.state;
 			const store = state.env.cache;
@@ -1897,11 +1910,7 @@ class Compiler {
 				recordAddition(run, span, { outlet, html: first, once });
 				return;
 			}
-			const capture: Out = {
-				s: "",
-				indent: state.outlets?.get(outlet)?.indent ?? "",
-				inline: false,
-			};
+			const capture: Out = { s: "", indent: OUTLET_INDENT, inline: false };
 			return after(body(run, childScope(scope), capture), () =>
 				recordAddition(run, span, { outlet, html: capture.s, once }),
 			);

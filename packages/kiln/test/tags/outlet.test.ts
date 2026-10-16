@@ -60,6 +60,14 @@ describe("outlet", () => {
 		).toBe("[ab]");
 	});
 
+	test("content lines up the same whether it is added before or after the outlet", async () => {
+		const add = lines('{% add to "head" %}', "<a>", "  <b>", "{% endadd %}");
+		const page = lines("<head>", '	{% outlet "head" %}', "</head>");
+		const expected = lines("<head>", "	<a>", "	  <b>", "</head>");
+		expect(await render(lines(add, page))).toBe(expected);
+		expect(await render(lines(page, add))).toBe(`${expected}\n`);
+	});
+
 	test("outputs nothing when nothing was added", async () => {
 		expect(
 			await render(lines("<head>", '	{% outlet "head" %}', "</head>")),

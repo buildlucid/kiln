@@ -2,7 +2,7 @@ import { issue } from "../errors.js";
 import { escapeHtml } from "../runtime/escape.js";
 import { Markup } from "../runtime/markup.js";
 import { buildRange } from "../runtime/operators.js";
-import { consume } from "../runtime/render.js";
+import { checkLength, consume } from "../runtime/render.js";
 import type { CallableEntry, Run } from "../runtime/types.js";
 import {
 	compare,
@@ -49,10 +49,11 @@ const extremes = (
 	return best;
 };
 
-/** Turns one `attrs` value into its attribute text, or null to leave the attribute out. */
-const attributeValue = (value: unknown): string | null => {
+/** Turns one `attrs` value into its attribute text, or null to leave the attribute out. Lists are charged per item. */
+const attributeValue = (run: Run, value: unknown): string | null => {
 	if (value === null || value === undefined || value === false) return null;
 	if (Array.isArray(value)) {
+		consume(run, value.length);
 		const parts = value
 			.filter(
 				(item) =>
@@ -113,6 +114,7 @@ export const builtinFunctions: Record<string, BuiltinEntry> = {
 				);
 			}
 			const { values, keys } = entriesOf(run, target, "attrs");
+			consume(run, keys.length);
 			let html = "";
 			keys.forEach((key, index) => {
 				const name = String(key);
@@ -124,8 +126,8 @@ export const builtinFunctions: Record<string, BuiltinEntry> = {
 					html += ` ${name}`;
 					return;
 				}
-				const text = attributeValue(value);
-				if (text !== null) html += ` ${name}="${text}"`;
+				const text = attributeValue(run, value);
+				if (text !== null) html = checkLength(run, `${html} ${name}="${text}"`);
 			});
 			return new Markup(html, "html");
 		},

@@ -518,7 +518,7 @@ class Generator {
 		const fn = this.#fn;
 		groups = groups.map((lines) => this.#forgetLines(this.#setFlags(lines)));
 		// Steps are counted in a local, and `state.steps` kept up to date wherever other code may read or count them.
-		const start = this.#start();
+		const start = this.#start(span);
 		const end = ["state.steps = steps;", `write(run, out, s, ${span});`];
 		const wrap = (lines: string[]) =>
 			indent(lines).map((line) => `\t\t\t${line}`);
@@ -607,8 +607,11 @@ class Generator {
 		);
 	}
 
-	/** Declarations at the start of a generated function: steps are counted in a local, see `#function`. */
-	#start(): string[] {
+	/**
+	 * Declarations at the start of a generated function: steps are counted in a local, see `#function`. Checks the
+	 * abort signal too, since a function may continue a run after a wait.
+	 */
+	#start(span: string): string[] {
 		const fn = this.#fn;
 		const declared = [
 			...Array.from({ length: fn.temps }, (_, i) => `t${i}`),
@@ -621,6 +624,7 @@ class Generator {
 			"const maxSteps = state.maxSteps;",
 			"let steps = state.steps;",
 			"const signal = state.signal;",
+			`signal !== undefined && signal.aborted && aborted(run, ${span});`,
 			"const ind = out.indent;",
 			'let s = "";',
 			`let ${["q", ...declared].join(", ")};`,
@@ -748,7 +752,8 @@ class Generator {
 
 	/**
 	 * Writes the text so far, runs something that writes to `out` and may return a promise, and waits for it. `top`
-	 * is set when the wait ends a top-level statement.
+	 * is set when the wait ends a top-level statement. A wait that continues in a new function is checked for an abort
+	 * by `#start`, and one in a generator after it resumes.
 	 */
 	#wait(span: string, call: string, top: boolean): string[] {
 		this.#fn.waits = true;
@@ -761,6 +766,7 @@ class Generator {
 			`${result} = ${call};`,
 			`${WAIT}${result}`,
 			"steps = state.steps;",
+			`signal !== undefined && signal.aborted && aborted(run, ${span});`,
 		];
 	}
 
@@ -882,7 +888,13 @@ class Generator {
 				: strategy === false
 					? `typeof ${value} === "string" ? ${value} : print(run, ${span}, ${value}, "none")`
 					: `print(run, ${span}, ${value}, ${JSON.stringify(strategy)})`;
-		return [step, ...code, `s += ${print};`];
+		// Values can be long, so stop at the output limit before they make a string too long for JavaScript.
+		return [
+			step,
+			...code,
+			`s += ${print};`,
+			`if (s.length > state.maxSize) write(run, out, s, ${span});`,
+		];
 	}
 
 	/**
@@ -1173,7 +1185,7 @@ class Generator {
 							),
 						),
 					);
-			const start = this.#start();
+			const start = this.#start(loop.span);
 			const end = ["state.steps = steps;", `write(run, out, s, ${loop.span});`];
 			this.#declarations.push(
 				`function ${name}(${params}) {`,
@@ -1322,6 +1334,8 @@ class Generator {
 			"\t}",
 			"}",
 			"steps = state.steps;",
+			// Your function may have aborted the render, as the next step would notice in a template rendered from source.
+			`signal !== undefined && signal.aborted && aborted(run, ${span});`,
 		];
 	}
 

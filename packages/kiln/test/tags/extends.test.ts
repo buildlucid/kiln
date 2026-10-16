@@ -238,6 +238,15 @@ describe("parent()", () => {
 		);
 		expect(await render(page, { templates })).toBe("xx");
 	});
+
+	test("can read the loop it is called in", async () => {
+		const templates = { base: "{% block b %}{{ loop.index }}{% endblock %}" };
+		const page = lines(
+			'{% extends "base" %}',
+			"{% block b %}{% for i in [1, 2] %}{{ parent() }}{% endfor %}{% endblock %}",
+		);
+		expect(await render(page, { templates })).toBe("12");
+	});
 });
 
 describe("block()", () => {

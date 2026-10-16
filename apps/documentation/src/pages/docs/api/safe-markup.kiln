@@ -68,7 +68,7 @@ class Post {
 	<ul>
 		<li>Listed getters and fields can be read. Listed methods can be called.</li>
 		<li><code>expose</code> is read from the class and its parent classes. In a base class meant to be extended, type the list as <code>readonly string[]</code> rather than <code>as const</code>.</li>
-		<li>List <code>toString</code> to let templates print the object.</li>
+		<li>List <code>toString</code> to let templates print the object. It must return a string. Kiln calls it directly, never <code>Symbol.toPrimitive</code> or <code>valueOf</code>.</li>
 		<li>Dates, sets and maps work without opting in.</li>
 	</ul>
 

@@ -67,6 +67,13 @@ describe("maxOutputLength", () => {
 		).toBe("limit-output");
 	});
 
+	test("stops many long values printed together", async () => {
+		const text = "x".repeat(1_000_000);
+		expect(
+			await errorCode("{{ text }}".repeat(600), { context: { text } }),
+		).toBe("limit-output");
+	});
+
 	test("stops strings that could never be printed", async () => {
 		const template =
 			'{% set s = "x" %}{% for i in 1..40 %}{% set s = s ~ s %}{% endfor %}';
@@ -165,6 +172,22 @@ describe("abort signal", () => {
 				.renderStream("index", {}, { signal: streaming.signal })
 				.then(readParts),
 		).rejects.toMatchObject({ code: "aborted" });
+	});
+
+	test("an abort from a function stops the calls after it", async () => {
+		const controller = new AbortController();
+		const done = vi.fn(() => "d");
+		const cancel = async () => {
+			controller.abort();
+			return "c";
+		};
+		expect(
+			await errorCode("{{ cancel() }}{{ done() }}", {
+				functions: { cancel, done },
+				signal: controller.signal,
+			}),
+		).toBe("aborted");
+		expect(done).not.toHaveBeenCalled();
 	});
 
 	test("errors from limits are render errors", async () => {
