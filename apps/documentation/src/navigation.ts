@@ -124,6 +124,11 @@ export const navigation = [
 					"Let components add styles and scripts to the page's head.",
 			},
 			{
+				title: "flush",
+				url: "/docs/tags/flush/",
+				description: "Close outlets so a streamed page can be sent so far.",
+			},
+			{
 				title: "apply",
 				url: "/docs/tags/apply/",
 				description: "Run a section of output through filters.",
@@ -183,6 +188,11 @@ export const navigation = [
 				title: "Rendering",
 				url: "/docs/api/rendering/",
 				description: "Render pages, single blocks and request data.",
+			},
+			{
+				title: "Streaming",
+				url: "/docs/api/streaming/",
+				description: "Send the page in parts while it renders.",
 			},
 			{
 				title: "Loaders",

@@ -413,6 +413,10 @@ class Parser {
 					span: { start: open.start, end: close.end },
 				});
 			}
+			case "flush": {
+				const close = this.#expectTagEnd();
+				return { type: "Flush", span: { start: open.start, end: close.end } };
+			}
 			case "add":
 				return this.#parseAdd(open);
 			case "apply":

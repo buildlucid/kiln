@@ -1,0 +1,89 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+	<p><code>renderStream</code> sends a page in parts while it renders. The browser can start loading styles and showing the top of the page while slower data is still loading.</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+const stream = await kiln.renderStream("pages/post", { post }, {
+	signal: request.signal,
+});
+
+return new Response(stream, {
+	headers: { "content-type": "text/html; charset=utf-8" },
+});
+		{% endverbatim %}
+	{% endapply %}
+
+	<ul>
+		<li><code>renderStream</code> takes the same arguments as <a href="/docs/api/rendering/"><code>render</code></a>, and the parts join up to the same HTML.</li>
+		<li>It returns a promise for a <code>ReadableStream</code> of UTF-8 bytes. Workers, Deno, Bun and Node's <code>Response</code> accept it as it is.</li>
+		<li>Kiln sends what's ready each time the render has to wait for one of your async functions, filters or tests, your loader or your cache store. A template that never waits is sent in one part.</li>
+		<li>Precompiled templates stream the same way.</li>
+	</ul>
+
+	<p>With Node's <code>http</code> module, turn the stream into a Node stream:</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { Readable } from "node:stream";
+
+const stream = await kiln.renderStream("pages/home", context);
+response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+Readable.fromWeb(stream).pipe(response);
+		{% endverbatim %}
+	{% endapply %}
+
+	<h2>Errors and status codes</h2>
+
+	<p>The promise resolves once the first part of the page is ready. If the render fails before then, the promise rejects with the same error <code>render</code> would give, so you can still send an error page with the right status.</p>
+
+	<p>Once part of the page has been sent, its status and headers have gone too. A later error ends the stream with that error, and the browser keeps the part it already has. Your server reports the error as it would for any failed stream.</p>
+
+	<p>So load whatever decides the status at the top of the page. A page's top-level tags run before its layout outputs anything, so a missing page still rejects the promise:</p>
+
+	{% apply highlight("kiln") %}
+		{% verbatim %}
+{% extends "layouts/base" %}
+{% set page = document("page", slug: route.path) ?? notFound() %}
+
+{% block content %}
+	<h1>{{ page.title }}</h1>
+	{% set related = documents("page", tag: page.tag) %}
+	…
+{% endblock %}
+		{% endverbatim %}
+	{% endapply %}
+
+	<h2>Outlets</h2>
+
+	<p>Content can be added to an <a href="/docs/tags/outlet/">outlet</a> until the render ends, so Kiln holds back the page from the first outlet onwards. A layout with an outlet in its <code>&lt;head&gt;</code> would send almost nothing early.</p>
+
+	<p><a href="/docs/tags/flush/"><code>flush</code></a> fixes this. It closes the outlets above it, so everything up to it can be sent. Put it after the head:</p>
+
+	{% apply highlight("kiln") %}
+		{% verbatim %}
+<html>
+	<head>
+		<title>{{ title }}</title>
+		{% outlet "head" %}
+	</head>
+	{% flush %}
+	<body>
+		{% block content %}{% endblock %}
+		{% outlet "scripts" %}
+	</body>
+</html>
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>Here the head is sent as soon as the render first waits, and the body follows as it renders, up to the <code>scripts</code> outlet. That last part is sent when the render ends.</p>
+
+	<h2>Stopping a render</h2>
+
+	<p>If the visitor leaves and the stream is cancelled, Kiln stops sending, but the render runs on until it finishes. Pass the request's <code>signal</code> so the render stops as well.</p>
+
+	<h2>Limits</h2>
+
+	<p><code>maxOutputLength</code> counts the whole page, as it does for <code>render</code>. See <a href="/docs/api/safety/">Safety and limits</a>.</p>
+{% endblock %}

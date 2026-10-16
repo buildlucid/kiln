@@ -13,9 +13,10 @@ import { type Diagnostic, type KilnIssue, KilnRenderError } from "./errors.js";
 import { resolveTemplateName } from "./names.js";
 import type { EscapeStrategy } from "./parser/ast.js";
 import { ESCAPE_STRATEGIES } from "./parser/ast.js";
-import { fillOutlets } from "./runtime/outlets.js";
+import { closeOutlets, takeOutput } from "./runtime/outlets.js";
 import { addSlotFlags, isPromise, renderTemplate } from "./runtime/render.js";
 import { childScope } from "./runtime/scope.js";
+import { RenderStream } from "./runtime/stream.js";
 import {
 	type AbortSignalLike,
 	type CallableEntry,
@@ -23,6 +24,7 @@ import {
 	type EnvironmentCore,
 	type KilnCache,
 	emptyOut,
+	type Out,
 	type RenderInfo,
 	RenderState,
 	type Scope,
@@ -173,6 +175,14 @@ export type Kiln<State = undefined> = {
 		block: TemplateBlock<Name>,
 		...args: RenderArguments<TemplateContext<Name>, State>
 	): Promise<string>;
+	/**
+	 * Renders a template as a stream of UTF-8 bytes, sending each part as soon as it is final. Resolves once the first
+	 * part is ready, or rejects as `render` would when the render fails before then. A later failure errors the stream.
+	 */
+	renderStream<Name extends TemplateName>(
+		name: Name,
+		...args: RenderArguments<TemplateContext<Name>, State>
+	): Promise<ReadableStream<Uint8Array>>;
 	/** Parses and checks a template without rendering it. Pass `source` to check unsaved text. */
 	check(name: string, source?: string): Promise<Diagnostic[]>;
 	/** Reports what a template uses: variables, props, functions, filters, tests, templates, blocks and macros. */
@@ -410,6 +420,88 @@ class Environment<State> implements EnvironmentCore {
 		options: BaseRenderOptions & { state?: State } = {},
 		block?: string,
 	): Promise<string> {
+		let render = this.#prepare(name, context, options);
+		if (isPromise(render)) render = await render;
+		const result = this.#run(render, block);
+		if (result !== undefined) await result;
+		const { state, out } = render;
+		closeOutlets(state);
+		const output = takeOutput(state, out.s);
+		if (output.length > state.maxSize) throw tooLong(render);
+		return output;
+	}
+
+	/**
+	 * Renders a template as a stream, sending its output as it becomes final. Resolves once the first part is ready,
+	 * or rejects when the render fails before then. A later failure errors the stream.
+	 */
+	async renderStream(
+		name: string,
+		context: Record<string, unknown> = {},
+		options: BaseRenderOptions & { state?: State } = {},
+	): Promise<ReadableStream<Uint8Array>> {
+		let render = this.#prepare(name, context, options);
+		if (isPromise(render)) render = await render;
+		const { state, out } = render;
+		const encoder = new TextEncoder();
+		let controller!: ReadableStreamDefaultController<Uint8Array>;
+		let cancelled = false;
+		const stream = new ReadableStream<Uint8Array>({
+			start: (c) => {
+				controller = c;
+			},
+			cancel: () => {
+				cancelled = true;
+			},
+		});
+
+		return new Promise((resolve, reject) => {
+			let opened = false;
+			let failed = false;
+			let length = 0;
+			const open = () => {
+				if (opened) return;
+				opened = true;
+				resolve(stream);
+			};
+			const failWith = (error: unknown) => {
+				if (failed) return;
+				failed = true;
+				output.stop();
+				if (!opened) reject(error);
+				else if (!cancelled) controller.error(error);
+			};
+			const send = (text: string) => {
+				if (failed) return;
+				length += text.length;
+				if (length > state.maxSize) return failWith(tooLong(render));
+				if (!cancelled) controller.enqueue(encoder.encode(text));
+				open();
+			};
+			const output = new RenderStream(state, out, send);
+			state.stream = output;
+			const finish = () => {
+				output.end();
+				if (failed) return;
+				open();
+				if (!cancelled) controller.close();
+			};
+			try {
+				const result = this.#run(render);
+				if (result === undefined) finish();
+				else result.then(finish, failWith);
+			} catch (error) {
+				failWith(error);
+			}
+		});
+	}
+
+	/** Finds the template and makes the state, scope and output for one render. */
+	#prepare(
+		name: string,
+		context: Record<string, unknown>,
+		options: BaseRenderOptions & { state?: State },
+	): Prepared | Promise<Prepared> {
 		let resolved = this.#names.get(name);
 		if (resolved === undefined) {
 			try {
@@ -422,8 +514,22 @@ class Environment<State> implements EnvironmentCore {
 			if (this.#names.size >= 1000) this.#names.clear();
 			this.#names.set(name, resolved);
 		}
-		let template = this.load(resolved);
-		if (isPromise(template)) template = await template;
+		const template = this.load(resolved);
+		if (isPromise(template)) {
+			const path = resolved;
+			return template.then((loaded) =>
+				this.#prepared(path, loaded, context, options),
+			);
+		}
+		return this.#prepared(resolved, template, context, options);
+	}
+
+	#prepared(
+		resolved: string,
+		template: CompiledTemplate | null,
+		context: Record<string, unknown>,
+		options: BaseRenderOptions & { state?: State },
+	): Prepared {
 		if (!template) {
 			throw new KilnRenderError(
 				"missing-template",
@@ -458,31 +564,43 @@ class Environment<State> implements EnvironmentCore {
 
 		const out = emptyOut();
 		state.root = out;
-		const result = renderTemplate(
-			state,
+		return { resolved, template, state, scope, passed, out };
+	}
+
+	#run(render: Prepared, block?: string): void | Promise<void> {
+		const { template } = render;
+		return renderTemplate(
+			render.state,
 			template,
-			scope,
-			out,
+			render.scope,
+			render.out,
 			0,
 			null,
-			passed,
+			render.passed,
 			null,
 			null,
 			template.parentSpan,
 			block,
 		);
-		if (result !== undefined) await result;
-		const output = fillOutlets(state, out.s);
-		if (output.length > state.maxSize) {
-			throw new KilnRenderError(
-				"limit-output",
-				`Render stopped after ${state.maxSize} characters of output`,
-				resolved,
-			);
-		}
-		return output;
 	}
 }
+
+/** One render, ready to run. */
+type Prepared = {
+	resolved: string;
+	template: CompiledTemplate;
+	state: RenderState;
+	scope: Scope;
+	passed: readonly string[];
+	out: Out;
+};
+
+const tooLong = ({ resolved, state }: Prepared) =>
+	new KilnRenderError(
+		"limit-output",
+		`Render stopped after ${state.maxSize} characters of output`,
+		resolved,
+	);
 
 /**
  * Creates a Kiln environment: the loader, functions, filters, tests, globals and options every render uses.
@@ -535,9 +653,15 @@ const createApi = <State>(env: Environment<State>): Kiln<State> => {
 		}
 		return env.render(name, context, renderOptions ?? {}, block);
 	};
+	const renderStream = (
+		name: string,
+		context?: Record<string, unknown>,
+		renderOptions?: Options,
+	) => env.renderStream(name, context, renderOptions ?? {});
 	return {
 		render: render as Kiln<State>["render"],
 		renderBlock: renderBlock as Kiln<State>["renderBlock"],
+		renderStream: renderStream as Kiln<State>["renderStream"],
 		check: async (name, source) => {
 			const template = await env.compileFor(name, source);
 			if (!template) {

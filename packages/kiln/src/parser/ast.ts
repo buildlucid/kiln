@@ -204,6 +204,8 @@ export type Statement =
 	| { type: "With"; value: Expression; body: Statement[]; span: Span }
 	/** A place other templates add content to with `add to`, filled when the render ends. */
 	| ({ type: "Outlet"; name: string; span: Span } & Placement)
+	/** Closes the outlets reached so far, so a streamed render can send its output up to here. */
+	| { type: "Flush"; span: Span }
 	/** Content for the outlet named `outlet`. `once` adds it only the first time the tag runs in a render. */
 	| {
 			type: "Add";

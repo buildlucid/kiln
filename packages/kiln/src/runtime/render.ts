@@ -77,7 +77,7 @@ export const locate = (
 	return fail(run, span, "invalid-argument", errorMessage(error));
 };
 
-/** Wraps a value or promise so any error is located at `span`. */
+/** Wraps a value or promise so any error is located at `span`. A promise also tells a streamed render it is waiting. */
 export const locating = <T>(
 	run: Run,
 	span: Span,
@@ -97,6 +97,7 @@ export const locating = <T>(
 			value = Promise.resolve(value);
 		}
 		if (value instanceof Promise) {
+			run.state.stream?.wait();
 			return value.catch((error: unknown) => {
 				throw locate(run, span, error, host);
 			}) as T;
@@ -363,6 +364,7 @@ const loadResolved = (
 		throw locate(run, span, error, LOADER);
 	}
 	if (loaded instanceof Promise) {
+		run.state.stream?.wait();
 		const path = resolved;
 		return loaded.then(
 			(template) => checkLoaded(run, span, path, template, ignoreMissing),

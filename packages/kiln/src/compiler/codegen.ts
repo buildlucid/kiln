@@ -1252,6 +1252,9 @@ class Generator {
 			"state.steps = steps;",
 			`${target} = callHost(run, ${span}, ${fn}, [${values.join(", ")}]);`,
 			`if (${target} instanceof Promise) {`,
+			// The text so far goes out first, so a streamed render can send it while this waits.
+			`\twrite(run, out, s, ${span});`,
+			'\ts = "";',
 			"\ttry {",
 			`\t\t${target} = yield ${target};`,
 			"\t} catch (error) {",

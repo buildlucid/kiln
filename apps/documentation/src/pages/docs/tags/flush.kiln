@@ -1,0 +1,42 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+	<p><code>flush</code> closes the <a href="/docs/tags/outlet/">outlets</a> above it. When you <a href="/docs/api/streaming/">stream</a> a page, everything up to <code>flush</code> can then be sent, instead of waiting for the render to end.</p>
+
+	{% apply example %}
+		{% verbatim %}
+<html>
+	<head>
+		{% outlet "head" %}
+		{% add to "head" %}
+			<title>Home</title>
+		{% endadd %}
+	</head>
+	{% flush %}
+	<body>
+		<h1>Home</h1>
+	</body>
+</html>
+		{% endverbatim %}
+	{% endapply %}
+
+	<p><code>flush</code> outputs nothing. It closes outlets with <code>render</code> too, so a template gives the same HTML and the same errors whether you render or stream it.</p>
+
+	<h2>Closed outlets</h2>
+
+	<ul>
+		<li>Each outlet above <code>flush</code> gets the content added to it so far, and is then closed.</li>
+		<li>Adding content to a closed outlet is an <code>outlet-closed</code> error, because that part of the page may already have been sent.</li>
+		<li>An <code>add to … once</code> tag that already added its content is fine, because it adds nothing new.</li>
+		<li>Outlets below <code>flush</code> stay open.</li>
+	</ul>
+
+	<p>Put <code>flush</code> after the last tag that adds to the outlets above it. Components lower in the page can add to an outlet that comes after it instead, such as one before <code>&lt;/body&gt;</code>.</p>
+
+	<h2>Rules</h2>
+
+	<ul>
+		<li><code>flush</code> can be used any number of times.</li>
+		<li>It can't be inside <code>cache</code>, <code>set</code>, <code>apply</code>, <code>add to</code> or a macro, because their content isn't part of the page yet.</li>
+	</ul>
+{% endblock %}

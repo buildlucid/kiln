@@ -23,7 +23,7 @@ import { escapeHtml, escapeWith } from "../runtime/escape.js";
 import { callMacro } from "../runtime/macros.js";
 import { Markup } from "../runtime/markup.js";
 import { operatorFunction, rangeOperator } from "../runtime/operators.js";
-import { recordAddition } from "../runtime/outlets.js";
+import { closeOutlets, recordAddition } from "../runtime/outlets.js";
 import {
 	after,
 	checkLength,
@@ -992,6 +992,8 @@ class Compiler {
 				return this.#cache(node);
 			case "Outlet":
 				return this.#outlet(node);
+			case "Flush":
+				return this.#flush(node);
 			case "Add":
 				return this.#add(node);
 			case "Apply":
@@ -1584,27 +1586,31 @@ class Compiler {
 				});
 			};
 			if (!store) return fresh();
-			return after(store.get({ key: name }), (value) => {
+			const found = store.get({ key: name });
+			if (isPromise(found)) state.stream?.wait();
+			return after(found, (value) => {
 				const saved = typeof value === "string" ? unpackSaved(value) : null;
 				if (saved) {
 					write(run, out, saved.html, span);
 					for (const addition of saved.additions) {
-						recordAddition(state, addition);
+						recordAddition(run, span, addition);
 					}
 					return;
 				}
 				const start = out.s.length;
 				const from = state.additions?.length ?? 0;
-				return after(fresh(), () =>
-					store.set({
+				return after(fresh(), () => {
+					const saving = store.set({
 						key: name,
 						value: packSaved(
 							out.s.slice(start),
 							state.additions?.slice(from) ?? [],
 						),
 						seconds: time,
-					}),
-				);
+					});
+					if (isPromise(saving)) state.stream?.wait();
+					return saving;
+				});
 			});
 		};
 
@@ -1652,7 +1658,30 @@ class Compiler {
 				offset: out.s.length,
 				indent: indent === undefined ? out.indent : out.indent + indent,
 				inline: indent === undefined,
+				content: null,
 			});
+		};
+	}
+
+	/**
+	 * `flush`: closes the outlets reached so far, so a streamed render can send its output up to here. It closes them
+	 * in `render` too, so a template behaves the same either way.
+	 */
+	#flush(node: Extract<Statement, { type: "Flush" }>): Stmt {
+		const { span } = node;
+		return (run, _scope, out) => {
+			step(run, span);
+			const state = run.state;
+			if (out !== state.root || state.caching > 0) {
+				throw fail(
+					run,
+					span,
+					"misplaced-flush",
+					`"flush" can't be inside "cache", "set", "apply", "add to" or a macro`,
+				);
+			}
+			closeOutlets(state);
+			state.stream?.flush();
 		};
 	}
 
@@ -1670,7 +1699,7 @@ class Compiler {
 			const state = run.state;
 			const first = once === null ? undefined : state.once?.get(once);
 			if (first !== undefined) {
-				recordAddition(state, { outlet, html: first, once });
+				recordAddition(run, span, { outlet, html: first, once });
 				return;
 			}
 			const capture: Out = {
@@ -1679,7 +1708,7 @@ class Compiler {
 				inline: false,
 			};
 			return after(body(run, childScope(scope), capture), () =>
-				recordAddition(state, { outlet, html: capture.s, once }),
+				recordAddition(run, span, { outlet, html: capture.s, once }),
 			);
 		};
 	}

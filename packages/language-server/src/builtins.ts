@@ -91,6 +91,11 @@ export const TAGS: Record<string, TagDoc> = {
 		description:
 			"Adds content to an outlet, such as a component's styles. `once` adds it only the first time.",
 	},
+	flush: {
+		snippet: "flush %}",
+		description:
+			"Closes the outlets above it, so a streamed page can be sent up to here.",
+	},
 	apply: {
 		snippet: block("apply", " ${1:filter}"),
 		description: "Runs a section of output through filters.",

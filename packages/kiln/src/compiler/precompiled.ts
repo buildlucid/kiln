@@ -269,7 +269,8 @@ const runtime = {
 	assign,
 	/**
 	 * Calls one of your functions or filters as the closures do. Errors it throws are located here, and a promise it
-	 * returns is located where generated code waits for it, with `hostError`. A thenable becomes a promise.
+	 * returns is located where generated code waits for it, with `hostError`. A thenable becomes a promise, and a
+	 * promise tells a streamed render it is waiting.
 	 */
 	callHost: (
 		run: Run,
@@ -283,12 +284,16 @@ const runtime = {
 		} catch (error) {
 			throw locate(run, span, error, host.label);
 		}
+		if (value instanceof Promise) {
+			run.state.stream?.wait();
+			return value;
+		}
 		if (
-			!(value instanceof Promise) &&
 			typeof value === "object" &&
 			value !== null &&
 			typeof (value as { then?: unknown }).then === "function"
 		) {
+			run.state.stream?.wait();
 			return Promise.resolve(value);
 		}
 		return value;

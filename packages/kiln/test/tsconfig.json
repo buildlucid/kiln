@@ -6,5 +6,5 @@
 		"types": ["node"]
 	},
 	"include": ["./**/*.ts", "../src/**/*.ts"],
-	"exclude": ["../src/node/node-modules.d.ts", "./types"]
+	"exclude": ["../src/node/node-modules.d.ts", "../src/web.d.ts", "./types"]
 }

@@ -16,6 +16,7 @@ const html = await kiln.render("pages/post", {
 		<li><code>render</code> always returns a promise, but only waits when a template calls something async.</li>
 		<li>If anything goes wrong, the promise rejects and no partial output is returned. See <a href="/docs/api/errors/">Errors and checks</a>.</li>
 		<li>Generate <a href="/docs/api/types/">TypeScript types</a> to have your editor check template names and data.</li>
+		<li>To send the page while it renders, use <a href="/docs/api/streaming/"><code>renderStream</code></a>.</li>
 	</ul>
 
 	<h2>Render options</h2>

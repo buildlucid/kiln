@@ -51,20 +51,40 @@ const precompileAll = async (
 	return templates;
 };
 
-/** Renders `template` as `index.kiln`, with any other templates alongside it. */
-export const render = async (
-	template: string,
-	options: TestOptions = {},
-): Promise<string> => {
-	const { context, templates = {}, ...kilnOptions } = options;
+/** An environment holding `template` as `index.kiln`, with any other templates alongside it. */
+const environment = async (template: string, options: TestOptions) => {
+	const { templates = {}, context: _context, ...kilnOptions } = options;
 	const sources = { ...templates, index: template };
-	const kiln = createKiln({
+	return createKiln({
 		...kilnOptions,
 		loader: memoryLoader(
 			precompiling ? await precompileAll(sources, kilnOptions) : sources,
 		),
 	});
-	return kiln.render("index", context);
+};
+
+/** Renders `template` as `index.kiln`, with any other templates alongside it. */
+export const render = async (
+	template: string,
+	options: TestOptions = {},
+): Promise<string> =>
+	(await environment(template, options)).render("index", options.context);
+
+/** Streams `template` as `index.kiln`, as `render` renders it. */
+export const renderStream = async (
+	template: string,
+	options: TestOptions = {},
+): Promise<ReadableStream<Uint8Array>> =>
+	(await environment(template, options)).renderStream("index", options.context);
+
+/** Reads a stream to its end, and returns each part it sent as text. */
+export const readParts = async (
+	stream: ReadableStream<Uint8Array>,
+): Promise<string[]> => {
+	const decoder = new TextDecoder();
+	const parts: string[] = [];
+	for await (const chunk of stream) parts.push(decoder.decode(chunk));
+	return parts;
 };
 
 /** Renders a template that should fail, and returns its error. Fails the test if the render succeeds. */

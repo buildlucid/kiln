@@ -1,7 +1,7 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-	<p>When something goes wrong, <code>render</code> rejects with an error that says which template failed, where, and often how to fix it. Kiln never returns half a page.</p>
+	<p>When something goes wrong, <code>render</code> rejects with an error that says which template failed, where, and often how to fix it. <code>render</code> never returns half a page. <a href="/docs/api/streaming/#errors-and-status-codes">Streaming</a> works differently once part of the page is sent.</p>
 
 	{% apply highlight("text") %}
 		{% verbatim %}

@@ -3,6 +3,7 @@ import type { EscapeStrategy, TemplateNode } from "../parser/ast.js";
 import type { Source, Span } from "../source.js";
 import type { Addition, OutletMark } from "./outlets.js";
 import { childScope, type Scope } from "./scope.js";
+import type { RenderStream } from "./stream.js";
 
 /** The part of `AbortSignal` Kiln reads. A real `AbortSignal` fits. */
 export type AbortSignalLike = { readonly aborted: boolean };
@@ -212,6 +213,11 @@ export class RenderState {
 	root: Out | null = null;
 	/** Outlets reached so far, by name, in the order reached. See `outlets.ts`. */
 	outlets: Map<string, OutletMark> | null = null;
+	/** How much of `root` has been taken as final output, and how many outlets' content with it. See `takeOutput`. */
+	taken = 0;
+	takenOutlets = 0;
+	/** Sends output while the render waits, for `renderStream`. */
+	stream: RenderStream | null = null;
 	/** Every `add to` that ran, in order. */
 	additions: Addition[] | null = null;
 	/** The first content of each `once` tag that added. */

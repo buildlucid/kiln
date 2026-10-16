@@ -64,5 +64,6 @@
 		<li>Outlet names are plain strings, in both tags.</li>
 		<li>An outlet can't be inside <code>cache</code>, <code>set</code>, <code>apply</code> or a macro, because its content is only known when the render ends.</li>
 		<li>Content added inside <a href="/docs/tags/cache/"><code>cache</code></a> is saved with the section, and added again when the saved copy is used.</li>
+		<li><a href="/docs/tags/flush/"><code>flush</code></a> closes the outlets above it. Adding content to a closed outlet is an error.</li>
 	</ul>
 {% endblock %}
