@@ -1,6 +1,6 @@
 {
 	"name": "@lucidkiln/core",
-	"version": "0.0.0",
+	"version": "1.0.0",
 	"private": true,
 	"description": "A fast, safe, async-aware template language for building websites. Runs on Node and Cloudflare Workers.",
 	"homepage": "https://kilnlang.com",
@@ -35,7 +35,8 @@
 		"dev": "vp pack --watch"
 	},
 	"files": [
-		"dist"
+		"dist",
+		"CHANGELOG.md"
 	],
 	"keywords": [
 		"template",

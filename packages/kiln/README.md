@@ -29,6 +29,7 @@ Then follow the [quick start](https://kilnlang.com/docs/quick-start/) to render 
 - [Compared with other template languages](https://kilnlang.com/docs/comparison/)
 - [Benchmarks](https://kilnlang.com/docs/benchmarks/)
 - [Editor support](https://kilnlang.com/docs/tooling/editors/)
+- [Changelog](https://github.com/buildlucid/kiln/blob/master/packages/kiln/CHANGELOG.md)
 
 ## Licence
 
