@@ -35,7 +35,8 @@ const tsMember = (member: PropType): string => {
 	if ("named" in member) return `Named<${JSON.stringify(member.named)}>`;
 	if ("list" in member) {
 		const inner = tsType(member.list);
-		return inner.includes(" | ")
+		// `|` and `readonly` bind more loosely than `[]`, so unions and nested lists need brackets.
+		return inner.includes(" | ") || inner.startsWith("readonly ")
 			? `readonly (${inner})[]`
 			: `readonly ${inner}[]`;
 	}

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { render } from "../helpers.js";
+import { errorCode, render } from "../helpers.js";
 
 describe("replace", () => {
 	test("replaces every occurrence of a string", async () => {
@@ -28,6 +28,16 @@ describe("replace", () => {
 				'{{ "a.b"|replace("[.]", "x") }}|{{ "1+1"|replace("+", " plus ") }}',
 			),
 		).toBe("a.b|1 plus 1");
+	});
+
+	test("checks the length of the result against maxOutputLength", async () => {
+		const limits = { maxOutputLength: 4 };
+		expect(await render('{{ "aaaa"|replace("aa", "a") }}', { limits })).toBe(
+			"aa",
+		);
+		expect(await errorCode('{{ "aa"|replace("a", "abc") }}', { limits })).toBe(
+			"limit-output",
+		);
 	});
 
 	test("an empty search changes nothing", async () => {

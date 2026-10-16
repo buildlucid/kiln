@@ -47,7 +47,7 @@ try {
 			<tr><td><code>template</code>, <code>line</code>, <code>column</code></td><td>Where the error happened</td></tr>
 			<tr><td><code>frame</code></td><td>The lines of source around the error, with a marker</td></tr>
 			<tr><td><code>templateStack</code></td><td>The templates involved, from the page down to the one that failed</td></tr>
-			<tr><td><code>cause</code></td><td>The original error, when one of your functions threw</td></tr>
+			<tr><td><code>cause</code></td><td>The original error, when your code threw: one of your functions, a getter in your data or your cache store</td></tr>
 		</tbody>
 	</table>
 

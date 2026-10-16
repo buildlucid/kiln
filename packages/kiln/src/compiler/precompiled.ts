@@ -17,6 +17,7 @@ import {
 	markCaller,
 	startPlace,
 	step,
+	unhold,
 	write,
 } from "../runtime/render.js";
 import { childScope, lookup, type Scope } from "../runtime/scope.js";
@@ -49,6 +50,7 @@ import {
 	emitter,
 	type GeneratedRuns,
 	loopItems,
+	readingLabel,
 	readMember,
 	SHORT,
 	undefinedVariable,
@@ -185,7 +187,7 @@ const resume = (
 ): void | Promise<void> => {
 	if (result.done) return;
 	return (result.value as Promise<unknown>).then(
-		(resolved) => resume(iterator, iterator.next(resolved)),
+		(resolved) => resume(iterator, iterator.next(unhold(resolved))),
 		(error: unknown) =>
 			resume(
 				iterator,
@@ -298,6 +300,19 @@ const runtime = {
 		}
 		return value;
 	},
+	/** Whether the version of a block that `placeBlock` places may set a variable. */
+	blockSets: (run: Run, name: string): boolean =>
+		run.blocks.get(name)?.[0]?.def.sets ?? false,
+	/**
+	 * Locates an error thrown in generated code at the last property it read inline, where a getter in your data can
+	 * throw. Every other error is located already.
+	 */
+	readError: (
+		run: Run,
+		at: readonly [Span, string] | null,
+		error: unknown,
+	): unknown =>
+		at === null ? error : locate(run, at[0], error, readingLabel(at[1])),
 	/** Locates the rejection of a promise one of your functions or filters returned. */
 	hostError: (run: Run, span: Span, host: HostCall, error: unknown) =>
 		locate(run, span, error, host.label),

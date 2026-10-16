@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { render } from "../helpers.js";
+import { errorCode, render } from "../helpers.js";
 
 describe("urlEncode", () => {
 	test("encodes a string as a URL component", async () => {
@@ -28,5 +28,34 @@ describe("edge cases", () => {
 
 	test("an empty hash gives an empty string", async () => {
 		expect(await render("[{{ {}|urlEncode }}]")).toBe("[]");
+	});
+});
+
+describe("limits", () => {
+	// Each list holds the one before it twice, so it encodes to 2^10 parts.
+	const nested = `{% set x = [1] %}${"{% set x = [x, x] %}".repeat(10)}`;
+
+	test("counts every item it encodes against maxSteps", async () => {
+		expect(
+			await errorCode(`${nested}{% set q = { a: x }|urlEncode %}`, {
+				limits: { maxSteps: 1000 },
+			}),
+		).toBe("limit-steps");
+	});
+
+	test("stops building text longer than maxOutputLength", async () => {
+		expect(
+			await errorCode(`${nested}{% set q = { a: x }|urlEncode %}`, {
+				limits: { maxOutputLength: 100 },
+			}),
+		).toBe("limit-output");
+	});
+
+	test("refuses a value that contains itself", async () => {
+		const loop: Record<string, unknown> = {};
+		loop.self = loop;
+		expect(await errorCode("{{ loop|urlEncode }}", { context: { loop } })).toBe(
+			"invalid-argument",
+		);
 	});
 });

@@ -41,6 +41,16 @@ describe("json", () => {
 			"invalid-argument",
 		);
 	});
+
+	test("counts every item it converts against maxSteps", async () => {
+		// Each list holds the one before it twice, so it converts to 2^14 numbers.
+		const nested = "{% set x = [x, x] %}".repeat(14);
+		expect(
+			await errorCode(`{% set x = 1 %}${nested}{{ x|json }}`, {
+				limits: { maxSteps: 1000 },
+			}),
+		).toBe("limit-steps");
+	});
 });
 
 describe("special values", () => {

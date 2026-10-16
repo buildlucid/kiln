@@ -80,9 +80,9 @@ export const functionArgument = (
 	value: unknown,
 	what: string,
 ): ((...args: unknown[]) => unknown) => {
-	if (typeof value === "function" && templateFunctions.has(value)) {
-		return value as (...args: unknown[]) => unknown;
-	}
+	const fn =
+		typeof value === "function" ? templateFunctions.get(value) : undefined;
+	if (fn) return fn;
 	return issue(
 		"type-error",
 		`"${what}" needs an arrow function such as "item => item.title", but got a ${typeName(value)}`,
@@ -215,62 +215,68 @@ export const readProperty = (item: unknown, name: string | number): unknown => {
 /**
  * Converts a value into plain JSON data, following the safety model: hashes by own keys, class instances by exposed members only.
  *
- * `onCycle` decides what a repeated object becomes.
+ * `onCycle` decides what a repeated object becomes. `charge` is called with the number of items in each list or hash
+ * before they are copied, so a value that shares one object in many places can't make unlimited work.
  */
 export const toPlainData = (
 	value: unknown,
 	onCycle: () => unknown,
-	seen = new Set<object>(),
+	charge: (count: number) => void = () => {},
 ): unknown => {
-	if (value === null || value === undefined) return null;
-	switch (typeof value) {
-		case "string":
-		case "boolean":
-			return value;
-		case "number":
-			return Number.isFinite(value) ? value : null;
-		case "bigint":
-			return value.toString();
-		case "function":
-		case "symbol":
-			return undefined;
-	}
-	if (value instanceof Markup) return value.value;
-	if (value instanceof Date) {
-		return Number.isNaN(value.getTime()) ? null : value.toISOString();
-	}
-	const object = value as object;
-	if (seen.has(object)) return onCycle();
-	seen.add(object);
-	try {
-		if (Array.isArray(object)) {
-			return object.map((item) => toPlainData(item, onCycle, seen) ?? null);
+	const seen = new Set<object>();
+	const convert = (value: unknown): unknown => {
+		if (value === null || value === undefined) return null;
+		switch (typeof value) {
+			case "string":
+			case "boolean":
+				return value;
+			case "number":
+				return Number.isFinite(value) ? value : null;
+			case "bigint":
+				return value.toString();
+			case "function":
+			case "symbol":
+				return undefined;
 		}
-		if (object instanceof Set) {
-			return [...object].map(
-				(item) => toPlainData(item, onCycle, seen) ?? null,
-			);
+		if (value instanceof Markup) return value.value;
+		if (value instanceof Date) {
+			return Number.isNaN(value.getTime()) ? null : value.toISOString();
 		}
-		const result: Record<string, unknown> = {};
-		const names =
-			object instanceof Map
-				? [...object.keys()].filter(
-						(key): key is string => typeof key === "string",
-					)
-				: readableNames(object);
-		for (const name of names) {
-			const item = toPlainData(getAttr(object, name), onCycle, seen);
-			if (item !== undefined && item !== MISSING) {
-				Object.defineProperty(result, name, {
-					value: item,
-					enumerable: true,
-					writable: true,
-					configurable: true,
-				});
+		const object = value as object;
+		if (seen.has(object)) return onCycle();
+		seen.add(object);
+		try {
+			if (Array.isArray(object)) {
+				charge(object.length);
+				return object.map((item) => convert(item) ?? null);
 			}
+			if (object instanceof Set) {
+				charge(object.size);
+				return [...object].map((item) => convert(item) ?? null);
+			}
+			const result: Record<string, unknown> = {};
+			const names =
+				object instanceof Map
+					? [...object.keys()].filter(
+							(key): key is string => typeof key === "string",
+						)
+					: readableNames(object);
+			charge(names.length);
+			for (const name of names) {
+				const item = convert(getAttr(object, name));
+				if (item !== undefined && item !== MISSING) {
+					Object.defineProperty(result, name, {
+						value: item,
+						enumerable: true,
+						writable: true,
+						configurable: true,
+					});
+				}
+			}
+			return result;
+		} finally {
+			seen.delete(object);
 		}
-		return result;
-	} finally {
-		seen.delete(object);
-	}
+	};
+	return convert(value);
 };

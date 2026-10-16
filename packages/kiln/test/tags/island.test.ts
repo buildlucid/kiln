@@ -190,6 +190,14 @@ describe("island", () => {
 		).toBe("type-error");
 	});
 
+	test("counts every item in its props against maxSteps", async () => {
+		const nested = "{% set x = [x, x] %}".repeat(14);
+		const template = `{% set x = 1 %}${nested}{% island "components/stock" with { id: x } %}{% endisland %}`;
+		expect(
+			await errorCode(template, { templates, limits: { maxSteps: 1000 } }),
+		).toBe("limit-steps");
+	});
+
 	test("fails for a missing template when deferred", async () => {
 		expect(
 			await errorCode('{% island "components/nope" %}{% endisland %}', {

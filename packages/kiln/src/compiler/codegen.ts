@@ -10,7 +10,7 @@ import {
 import type { EnvironmentCore } from "../runtime/types.js";
 import { BLOCKED_NAMES } from "../runtime/values.js";
 import type { Span } from "../source.js";
-import { emitter, placeArguments } from "./compiler.js";
+import { emitter, placeArguments, setsVariables } from "./compiler.js";
 import { PRECOMPILED_VERSION } from "./precompiled.js";
 
 /**
@@ -68,8 +68,8 @@ type FunctionState = {
 	/** Temporaries it declares. */
 	temps: number;
 	/**
-	 * Variables from outside generated code, each looked up once. Only `props` changes variables in generated code,
-	 * and it forgets the lookups it may have changed.
+	 * Variables from outside generated code, each looked up once. Code that may change a variable, such as `set`, a
+	 * block or a component's fills, forgets the lookups it may have changed.
 	 */
 	variables: Map<string, Cached>;
 	/** Plain-object flags of variables that property reads use. Only these are set; see `PLAIN`. */
@@ -78,6 +78,11 @@ type FunctionState = {
 	waits: boolean;
 	/** It may wait somewhere other than at the end of a top-level statement, such as in a loop, so it is a generator. */
 	waitsInside: boolean;
+	/**
+	 * It reads properties inline, where a getter in your data may throw. Each read puts its place in `at`, so the
+	 * function can locate the error; see `#guard`.
+	 */
+	reads: boolean;
 };
 
 const newFunction = (): FunctionState => ({
@@ -86,6 +91,7 @@ const newFunction = (): FunctionState => ({
 	plainUsed: new Set(),
 	waits: false,
 	waitsInside: false,
+	reads: false,
 });
 
 /**
@@ -104,6 +110,12 @@ const WAIT_LINE = /^(\t*)\u0000wait (t\d+)$/;
  */
 // oxlint-disable-next-line no-control-regex -- matches the marker, see `WAIT`
 const PLAIN = /\u0001(f\d+):([\w$]+)\u0001/g;
+
+/**
+ * Stands for forgetting every variable lookup, until the function's lookups are all known: in a loop, a lookup made
+ * later in the pass is cached by the next pass too. `#function` writes it out.
+ */
+const FORGET_ALL = "\u0002forget";
 
 const setPlain = (flag: string, value: string) =>
 	`\u0001${flag}:${value}\u0001`;
@@ -161,6 +173,8 @@ const HELPERS = [
 	"placeBlock",
 	"checkPassed",
 	"missingProp",
+	"readError",
+	"blockSets",
 ];
 
 /** Fields of the `loop` hash, as JavaScript over the loop's index and length. */
@@ -501,7 +515,7 @@ class Generator {
 	 */
 	#function(groups: string[][], span: string, nested: boolean): string {
 		const fn = this.#fn;
-		groups = groups.map((lines) => this.#setFlags(lines));
+		groups = groups.map((lines) => this.#forgetLines(this.#setFlags(lines)));
 		// Steps are counted in a local, and `state.steps` kept up to date wherever other code may read or count them.
 		const start = this.#start();
 		const end = ["state.steps = steps;", `write(run, out, s, ${span});`];
@@ -509,7 +523,7 @@ class Generator {
 			indent(lines).map((line) => `\t\t\t${line}`);
 
 		if (!fn.waits) {
-			const body = wrap([...start, ...groups.flat(), ...end]);
+			const body = wrap([...start, ...this.#guard([...groups.flat(), ...end])]);
 			return `(run, scope, out) => {\n${body.join("\n")}\n\t\t\t}`;
 		}
 
@@ -535,9 +549,11 @@ class Generator {
 					`function ${base}_${index}(run, scope, out) {`,
 					...indent([
 						...start,
-						...body,
-						...end,
-						...(last ? [] : [`return ${next};`]),
+						...this.#guard([
+							...body,
+							...end,
+							...(last ? [] : [`return ${next};`]),
+						]),
 					]),
 					"}",
 				);
@@ -545,7 +561,10 @@ class Generator {
 			return `${base}_0`;
 		}
 
-		const body = wrap([...start, ...groups.flat(), ...end]).map((line) =>
+		const body = wrap([
+			...start,
+			...this.#guard([...groups.flat(), ...end]),
+		]).map((line) =>
 			line.replace(
 				WAIT_LINE,
 				(_, tabs: string, result: string) =>
@@ -563,6 +582,18 @@ class Generator {
 			return `(run, scope, out) => drive(${generator}(run, scope, out))`;
 		}
 		return `(run, scope, out) => drive((function* () {\n${body.join("\n")}\n\t\t\t})())`;
+	}
+
+	/** Wraps a function's statements so an error a getter in your data throws is located at the read; see `reads`. */
+	#guard(lines: string[]): string[] {
+		if (!this.#fn.reads) return lines;
+		return [
+			"try {",
+			...indent(lines),
+			"} catch (error) {",
+			"\tthrow readError(run, at, error);",
+			"}",
+		];
 	}
 
 	/** Sets the plain-object flags the current function's property reads use. See `PLAIN`. */
@@ -592,6 +623,7 @@ class Generator {
 			"const ind = out.indent;",
 			'let s = "";',
 			`let ${["q", ...declared].join(", ")};`,
+			...(fn.reads ? ["let at = null;"] : []),
 		];
 	}
 
@@ -1061,13 +1093,16 @@ class Generator {
 		];
 	}
 
-	/** The start of a loop pass: counts a step, unless continuing one, and binds the loop's variables. */
-	#pass(loop: LoopNames, counts: boolean): string[] {
+	/**
+	 * The start of a loop pass: counts a step and makes the pass's scope, unless continuing one, which is passed its
+	 * scope, and binds the loop's variables.
+	 */
+	#pass(loop: LoopNames, starts: boolean): string[] {
 		const { span, values, index, value, key, keys, hasKeys } = loop;
 		const proto = `q${loop.id}`;
 		return [
-			...(counts ? [this.#loopStep(span)] : []),
-			...(loop.scope
+			...(starts ? [this.#loopStep(span)] : []),
+			...(loop.scope && starts
 				? [
 						`const ${loop.scope} = childScope(${loop.outer});`,
 						...loop.sets.flatMap((name) => this.#forget(name)),
@@ -1120,14 +1155,16 @@ class Generator {
 			}
 			const name = `L${this.#generators++}`;
 			const params = `run, scope, out, ${loop.values}, ${loop.length}, ${loop.index}${loop.hasKeys ? `, ${loop.keys}` : ""}`;
+			// A pass continues in the scope it started, so variables it set before waiting are still there.
+			const passScope = loop.scope ? `, ${loop.scope}` : "";
 			const call = (part: number, index: string) =>
-				`${name}${part === 0 ? "" : `_${part}`}(run, scope, out, ${loop.values}, ${loop.length}, ${index}${loop.hasKeys ? `, ${loop.keys}` : ""})`;
+				`${name}${part === 0 ? "" : `_${part}`}(run, scope, out, ${loop.values}, ${loop.length}, ${index}${loop.hasKeys ? `, ${loop.keys}` : ""}${part === 0 ? "" : passScope})`;
 			// Each wait continues the pass in the function for the segments after it.
 			const continued = (from: number) =>
 				segments
 					.slice(from)
 					.flatMap((lines, offset) =>
-						lines.map((line) =>
+						this.#forgetLines(lines).map((line) =>
 							line.replace(
 								WAIT_LINE,
 								(_, tabs: string, result: string) =>
@@ -1141,27 +1178,31 @@ class Generator {
 				`function ${name}(${params}) {`,
 				...indent([
 					...start,
-					`for (; ${loop.index} < ${loop.length}; ${loop.index}++) {`,
-					...indent(this.#pass(loop, true)),
-					...indent(continued(0)),
-					`\tif (s.length > ${FLUSH_AT}) {`,
-					`\t\twrite(run, out, s, ${loop.span});`,
-					'\t\ts = "";',
-					"\t}",
-					"}",
-					...end,
+					...this.#guard([
+						`for (; ${loop.index} < ${loop.length}; ${loop.index}++) {`,
+						...indent(this.#pass(loop, true)),
+						...indent(continued(0)),
+						`\tif (s.length > ${FLUSH_AT}) {`,
+						`\t\twrite(run, out, s, ${loop.span});`,
+						'\t\ts = "";',
+						"\t}",
+						"}",
+						...end,
+					]),
 				]),
 				"}",
 			);
 			for (let part = 1; part < segments.length; part++) {
 				this.#declarations.push(
-					`function ${name}_${part}(${params}) {`,
+					`function ${name}_${part}(${params}${passScope}) {`,
 					...indent([
 						...start,
-						...this.#pass(loop, false),
-						...continued(part),
-						...end,
-						`return ${call(0, `${loop.index} + 1`)};`,
+						...this.#guard([
+							...this.#pass(loop, false),
+							...continued(part),
+							...end,
+							`return ${call(0, `${loop.index} + 1`)};`,
+						]),
 					]),
 					"}",
 				);
@@ -1189,6 +1230,23 @@ class Generator {
 			`assign(run, ${context.scope}, ${JSON.stringify(statement.name)}, ${value}, ${span});`,
 			...this.#forget(statement.name),
 		];
+	}
+
+	/** Forgets every variable lookup, after code that may set any variable, so later lookups start again. */
+	#forgetAll(): string[] {
+		return [FORGET_ALL];
+	}
+
+	/** Writes out `FORGET_ALL`, once the current function's lookups are all known. */
+	#forgetLines(lines: string[]): string[] {
+		const forget = [...this.#fn.variables.values()]
+			.map(({ value }) => `${value} = undefined;`)
+			.join(" ");
+		return lines.map((line) =>
+			line.endsWith(FORGET_ALL)
+				? line.slice(0, -FORGET_ALL.length) + forget
+				: line,
+		);
 	}
 
 	/** Forgets lookups of a variable that `set` may have changed. */
@@ -1451,6 +1509,10 @@ class Generator {
 				),
 				context.top,
 			),
+			// Fills render in this scope, and may set variables in it.
+			...(fills.some((fill) => setsVariables(fill.body))
+				? this.#forgetAll()
+				: []),
 		];
 	}
 
@@ -1504,14 +1566,20 @@ class Generator {
 		if (context.inLoop) return unsupported();
 		this.#pending.push([statement.body, context.strategy]);
 		const span = this.#span(statement.span);
-		return this.#wait(
-			span,
-			this.#place(
-				statement.indent,
-				`placeBlock(run, ${span}, ${JSON.stringify(statement.name)}, ${context.scope}, out)`,
+		return [
+			...this.#wait(
+				span,
+				this.#place(
+					statement.indent,
+					`placeBlock(run, ${span}, ${JSON.stringify(statement.name)}, ${context.scope}, out)`,
+				),
+				context.top,
 			),
-			context.top,
-		);
+			// The block placed, perhaps a child template's version, may set any variable.
+			`if (blockSets(run, ${JSON.stringify(statement.name)})) {`,
+			...indent(this.#forgetAll()),
+			"}",
+		];
 	}
 
 	// Expressions
@@ -1628,9 +1696,14 @@ class Generator {
 		const { object, property, optional } = node;
 		const flags = `${optional}, ${guard}`;
 		if (property.type !== "Literal") {
+			const value = this.#temp();
 			const target = this.#expr(object, context, guard);
 			const key = this.#expr(property, context, false);
-			return `readMember(run, ${span}, ${target}, ${key}, ${flags})`;
+			// A chain that stops at a `?.` leaves the key unevaluated.
+			const stops = optional
+				? `${value} === SHORT || ${value} === MISSING || ${value} === null || ${value} === undefined`
+				: `${value} === SHORT`;
+			return `(${value} = ${target}, ${stops} ? SHORT : readMember(run, ${span}, ${value}, ${key}, ${flags}))`;
 		}
 		const key = property.value;
 		// `loop.index` and the rest read the loop's counter.
@@ -1655,8 +1728,14 @@ class Generator {
 		const item = this.#temp();
 		const read = access(key);
 		const known = this.#plainObject(object, context, guard, value);
+		const site = this.#constant(
+			`read:${span}:${key}`,
+			"P",
+			`[${span}, ${JSON.stringify(key)}]`,
+		);
+		this.#fn.reads = true;
 		return [
-			`(${known.target}, ${known.plain}`,
+			`(at = ${site}, ${known.target}, ${known.plain}`,
 			`&& (${item} = ${value}${read}) !== undefined && typeof ${item} !== "function"`,
 			`&& (${item} !== objectPrototype${read} || hasOwn(${value}, ${JSON.stringify(key)}))`,
 			`? ${item} : readMember(run, ${span}, ${known.slow}, ${JSON.stringify(key)}, ${flags}))`,

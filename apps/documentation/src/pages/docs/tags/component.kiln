@@ -34,7 +34,7 @@
 		<li><code>&#123;% slot %}</code> outputs the caller's content. Content outside any <code>fill</code> goes into this default slot.</li>
 		<li><code>&#123;% fill "name" %}</code> in the caller provides content for a named slot, and <code>&#123;% slot "name" %}</code> in the component outputs it.</li>
 		<li>Content inside <code>slot</code> is a fallback, shown when the caller didn't fill that slot.</li>
-		<li><code>slots</code> is a hash that says which slots were filled, such as <code>slots.footer</code>.</li>
+		<li><code>slots</code> is a hash that says which slots were filled, such as <code>slots.footer</code>. It includes slots declared by a layout the component extends.</li>
 	</ul>
 
 	{% apply highlight("kiln") %}

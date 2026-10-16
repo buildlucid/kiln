@@ -57,6 +57,18 @@ describe("renderStream", () => {
 		expect(await next(reader)).toBeNull();
 	});
 
+	test("never splits a character between parts", async () => {
+		const { slow, resolve } = waiting();
+		const stream = await renderStream("{{ high|raw }}{{ slow()|raw }}", {
+			functions: { slow },
+			context: { high: "\ud83d" },
+		});
+		const reader = stream.getReader();
+		resolve("\ude00!");
+		expect(await next(reader)).toBe("😀!");
+		expect(await next(reader)).toBeNull();
+	});
+
 	test("rejects when the render fails before anything is sent", async () => {
 		const failing = renderStream("{% set page = load() %}<h1>{{ page }}</h1>", {
 			functions: {

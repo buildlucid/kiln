@@ -7,6 +7,7 @@ import {
 	importsFor,
 	isPromise,
 	step,
+	unhold,
 	withCaller,
 } from "./render.js";
 import { childScope } from "./scope.js";
@@ -84,7 +85,7 @@ export const callMacro = (
 				value = param.default.ev(macroRun, scope);
 				if (isPromise(value)) {
 					return value.then((resolved) => {
-						scope[param.name] = resolved ?? null;
+						scope[param.name] = unhold(resolved) ?? null;
 						return bind(i + 1);
 					});
 				}

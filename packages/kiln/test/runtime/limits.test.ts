@@ -20,6 +20,20 @@ describe("maxSteps", () => {
 		);
 	});
 
+	test("charges spreads for the items they copy", async () => {
+		const doubling = "{% set list = [...list, ...list] %}".repeat(18);
+		expect(
+			await errorCode(`{% set list = [1] %}${doubling}`, {
+				limits: { maxSteps: 1000 },
+			}),
+		).toBe("limit-steps");
+		const growing =
+			"{% set hash = {} %}{% for i in 1..200 %}{% set hash = { ...hash, (i): i } %}{% endfor %}";
+		expect(await errorCode(growing, { limits: { maxSteps: 5000 } })).toBe(
+			"limit-steps",
+		);
+	});
+
 	test("stops endless iterables from the host", async () => {
 		function* endless() {
 			for (let i = 0; ; i++) yield i;
@@ -134,6 +148,9 @@ describe("deep nesting", () => {
 		expect(await errorCode(`{{ a${".a".repeat(5_000)} ?? 1 }}`)).toBe(
 			"too-deep",
 		);
+		expect(await errorCode(`{{ a${" ?? a".repeat(20_000)} }}`)).toBe(
+			"too-deep",
+		);
 	});
 
 	test("many elseif branches are fine", async () => {
@@ -142,6 +159,17 @@ describe("deep nesting", () => {
 				`{% if false %}${"{% elseif false %}".repeat(5_000)}{% else %}e{% endif %}`,
 			),
 		).toBe("e");
+	});
+
+	test("deeply nested prop types are reported", async () => {
+		expect(
+			await errorCode(
+				`{% props p: ${"(".repeat(20_000)}string${")".repeat(20_000)} %}`,
+			),
+		).toBe("too-deep");
+		expect(await errorCode(`{% props p: string${"[]".repeat(20_000)} %}`)).toBe(
+			"too-deep",
+		);
 	});
 
 	test("deeply nested literals are reported", async () => {

@@ -8,6 +8,7 @@ export default defineConfig({
 	worker: {
 		name: "kiln-docs",
 		compatibilityDate: "2026-10-15",
+		domains: ["kilnlang.com"],
 		assets: {
 			htmlHandling: "auto-trailing-slash",
 			notFoundHandling: "404-page",

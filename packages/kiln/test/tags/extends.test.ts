@@ -135,6 +135,12 @@ describe("block", () => {
 		).toBe("<title>NEWS</title>");
 	});
 
+	test("a block inside if can set a variable read after it", async () => {
+		const template =
+			"{% set x = 1 %}{{ x }}{% if true %}{% block b %}{% set x = 2 %}{% endblock %}{% endif %}{{ x }}";
+		expect(await render(template)).toBe("12");
+	});
+
 	test("nested blocks can be overridden on their own", async () => {
 		const templates = {
 			base: "{% block outer %}<{% block inner %}old{% endblock %}>{% endblock %}",

@@ -1,7 +1,14 @@
 import type { Span } from "../source.js";
 import { Markup } from "./markup.js";
 import { closeOutlets, takeOutput } from "./outlets.js";
-import { addSlotFlags, fail, markCaller, renderTemplate } from "./render.js";
+import {
+	addSlotFlags,
+	consume,
+	fail,
+	locating,
+	markCaller,
+	renderTemplate,
+} from "./render.js";
 import { childScope } from "./scope.js";
 import {
 	type CompiledTemplate,
@@ -128,12 +135,17 @@ export const islandProps = (
 			"type-error",
 			`"island" props must be JSON values: null, booleans, numbers, strings, lists and hashes, but ${path === "" ? "they are" : `"${path}" is`} ${problem}`,
 		);
+	// Each list and hash is charged before it is copied, so props that share one object in many places can't make
+	// unlimited work.
+	const charge = (count: number) =>
+		locating(run, span, () => consume(run, count));
 	const copyHash = (
 		hash: Record<string, unknown> | Map<unknown, unknown>,
 		path: string,
 	): Record<string, JsonValue> => {
 		const result: Record<string, JsonValue> = {};
-		const entries = hash instanceof Map ? hash : Object.entries(hash);
+		const entries = hash instanceof Map ? [...hash] : Object.entries(hash);
+		charge(entries.length);
 		for (const [key, item] of entries) {
 			if (typeof key !== "string") {
 				throw invalid(path, "a hash with a key that isn't a string");
@@ -164,6 +176,7 @@ export const islandProps = (
 		}
 		if (seen.has(item)) throw invalid(path, "a value that contains itself");
 		seen.add(item);
+		if (Array.isArray(item)) charge(item.length);
 		const result = Array.isArray(item)
 			? item.map((entry, index) => copy(entry, `${path}[${index}]`))
 			: copyHash(item, path);

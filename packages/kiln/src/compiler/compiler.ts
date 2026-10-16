@@ -35,6 +35,7 @@ import { operatorFunction, rangeOperator } from "../runtime/operators.js";
 import { closeOutlets, recordAddition } from "../runtime/outlets.js";
 import {
 	after,
+	all,
 	checkLength,
 	consume,
 	embed,
@@ -52,6 +53,7 @@ import {
 	silence,
 	startPlace,
 	step,
+	unhold,
 	withCaller,
 	write,
 } from "../runtime/render.js";
@@ -96,6 +98,7 @@ import {
 	toStr,
 	truthy,
 	typeName,
+	valueLabel,
 } from "../runtime/values.js";
 import { Source, type Span } from "../source.js";
 import { suggest } from "../suggest.js";
@@ -265,6 +268,7 @@ const printParts = (list: Part[]): Stmt => {
 	const roots: (string | null)[] = [];
 	const names: (string | null)[][] = [];
 	const steps: PathStep["read"][][] = [];
+	const stepSpans: Span[][] = [];
 	const choices: [string, string][] = [];
 	for (const part of parts) {
 		const output = part.text === null ? part : null;
@@ -286,6 +290,7 @@ const printParts = (list: Part[]): Stmt => {
 		roots.push(root);
 		names.push(path ? path.steps.map((access) => access.name) : NO_NAMES);
 		steps.push(path ? path.steps.map((access) => access.read) : NO_READS);
+		stepSpans.push(path ? path.steps.map((access) => access.span) : NO_SPANS);
 		choices.push(choice ?? NO_CHOICE);
 	}
 	const tests = parts.map((part) =>
@@ -329,6 +334,7 @@ const printParts = (list: Part[]): Stmt => {
 						value,
 						names[i] as (string | null)[],
 						steps[i] as PathStep["read"][],
+						stepSpans[i] as Span[],
 					);
 				}
 			} else value = (evs[i] as Ev)(run, scope);
@@ -348,6 +354,7 @@ const printParts = (list: Part[]): Stmt => {
 
 const NO_NAMES: (string | null)[] = [];
 const NO_READS: PathStep["read"][] = [];
+const NO_SPANS: Span[] = [];
 const NO_CHOICE: [string, string] = ["", ""];
 
 /** Emits both branches of a choice when compiling, or returns null when emitting one fails, so it fails at render. */
@@ -372,25 +379,32 @@ const readKeys = (
 	target: unknown,
 	names: readonly (string | null)[],
 	reads: readonly PathStep["read"][],
+	spans: readonly Span[],
 ): unknown => {
 	let value = target;
-	for (let i = 0; i < names.length; i++) {
-		const name = names[i] as string | null;
-		if (name !== null && typeof value === "object" && value !== null) {
-			const proto = Object.getPrototypeOf(value);
-			if (proto === Object.prototype || proto === null) {
-				const item = (value as Record<string, unknown>)[name];
-				if (
-					item !== undefined &&
-					typeof item !== "function" &&
-					Object.hasOwn(value, name)
-				) {
-					value = item;
-					continue;
+	let i = 0;
+	try {
+		for (; i < names.length; i++) {
+			const name = names[i] as string | null;
+			if (name !== null && typeof value === "object" && value !== null) {
+				const proto = Object.getPrototypeOf(value);
+				if (proto === Object.prototype || proto === null) {
+					const item = (value as Record<string, unknown>)[name];
+					if (
+						item !== undefined &&
+						typeof item !== "function" &&
+						Object.hasOwn(value, name)
+					) {
+						value = item;
+						continue;
+					}
 				}
 			}
+			value = (reads[i] as PathStep["read"])(run, value);
 		}
-		value = (reads[i] as PathStep["read"])(run, value);
+	} catch (error) {
+		// A getter in your data threw. Errors from the full reads are located already.
+		throw locate(run, spans[i] as Span, error, readingLabel(names[i] ?? ""));
 	}
 	return value;
 };
@@ -398,8 +412,15 @@ const readKeys = (
 const isBlank = (statement: Statement) =>
 	statement.type === "Text" && statement.value.trim() === "";
 
+/** Whether statements may set a variable, at any depth. */
+export const setsVariables = (statements: readonly Statement[]): boolean =>
+	containsNode(
+		statements,
+		(record) => record.type === "Set" || record.type === "SetBlock",
+	);
+
 /** Checks whether any node under `node` matches. */
-const containsNode = (
+export const containsNode = (
 	node: unknown,
 	matches: (record: Record<string, unknown>) => boolean,
 ): boolean => {
@@ -1040,7 +1061,7 @@ class Compiler {
 			step(run, span);
 			const value = ev(run, scope);
 			if (isPromise(value)) {
-				return value.then((resolved) => print(run, out, resolved));
+				return value.then((resolved) => print(run, out, unhold(resolved)));
 			}
 			print(run, out, value);
 		};
@@ -1065,7 +1086,7 @@ class Compiler {
 				const value = branch.test(run, scope);
 				if (isPromise(value)) {
 					return value.then((resolved) =>
-						truthy(resolved)
+						truthy(unhold(resolved))
 							? branch.body(run, scope, out)
 							: from(i + 1, run, scope, out),
 					);
@@ -1139,7 +1160,9 @@ class Compiler {
 			step(run, span);
 			const value = ev(run, scope);
 			if (isPromise(value)) {
-				return value.then((resolved) => start(run, scope, out, resolved));
+				return value.then((resolved) =>
+					start(run, scope, out, unhold(resolved)),
+				);
 			}
 			return start(run, scope, out, value);
 		};
@@ -1152,7 +1175,7 @@ class Compiler {
 			const result = ev(run, scope);
 			if (isPromise(result)) {
 				return result.then((resolved) => {
-					assign(run, scope, name, resolved, span);
+					assign(run, scope, name, unhold(resolved), span);
 				});
 			}
 			assign(run, scope, name, result, span);
@@ -1230,7 +1253,7 @@ class Compiler {
 					const value = prop.default.ev(run, scope);
 					if (isPromise(value)) {
 						return value.then((resolved) => {
-							scope[prop.name] = resolved ?? null;
+							scope[prop.name] = unhold(resolved) ?? null;
 							return fill(run, scope, i + 1);
 						});
 					}
@@ -1305,10 +1328,7 @@ class Compiler {
 		const def: BlockDef = {
 			body: this.#body(node.body),
 			strategy: this.#strategy,
-			sets: containsNode(
-				node.body,
-				(record) => record.type === "Set" || record.type === "SetBlock",
-			),
+			sets: setsVariables(node.body),
 		};
 		this.#blockName = saved;
 		this.#template.blocks.set(node.name, def);
@@ -1707,8 +1727,12 @@ class Compiler {
 				});
 			};
 			if (!store) return fresh();
-			const found = store.get({ key: name });
-			if (isPromise(found)) state.stream?.wait();
+			const found = locating(
+				run,
+				span,
+				() => store.get({ key: name }),
+				"The cache store",
+			);
 			return after(found, (value) => {
 				const saved = typeof value === "string" ? unpackSaved(value) : null;
 				if (saved) {
@@ -1738,22 +1762,22 @@ class Compiler {
 				return after(fresh(), () => {
 					const manifest =
 						state.islands?.mode === "defer" ? state.islands.manifest : null;
-					const saving = store.set({
-						key: name,
-						value: packSaved({
-							html: out.s.slice(start),
-							additions: state.additions?.slice(from) ?? [],
-							islands: manifest
-								? (state.deferred?.slice(deferredFrom) ?? []).flatMap(
-										(id) => manifest[id] ?? [],
-									)
-								: [],
-							islandScript: !hadScript && state.islandScript,
-						}),
-						seconds: time,
+					const value = packSaved({
+						html: out.s.slice(start),
+						additions: state.additions?.slice(from) ?? [],
+						islands: manifest
+							? (state.deferred?.slice(deferredFrom) ?? []).flatMap(
+									(id) => manifest[id] ?? [],
+								)
+							: [],
+						islandScript: !hadScript && state.islandScript,
 					});
-					if (isPromise(saving)) state.stream?.wait();
-					return saving;
+					return locating(
+						run,
+						span,
+						() => store.set({ key: name, value, seconds: time }),
+						"The cache store",
+					);
 				});
 			});
 		};
@@ -1761,9 +1785,15 @@ class Compiler {
 		return (run, scope, out) => {
 			step(run, span);
 			const keyValue = key.ev(run, scope);
-			const secondsValue = seconds ? seconds.ev(run, scope) : null;
+			let secondsValue: unknown = null;
+			try {
+				if (seconds) secondsValue = seconds.ev(run, scope);
+			} catch (error) {
+				silence(keyValue);
+				throw error;
+			}
 			if (isPromise(keyValue) || isPromise(secondsValue)) {
-				return Promise.all([keyValue, secondsValue]).then(([k, t]) =>
+				return all([keyValue, secondsValue]).then(([k, t]) =>
 					render(run, scope, out, k, t),
 				);
 			}
@@ -2221,14 +2251,27 @@ class Compiler {
 
 		const property = node.property;
 		if (property.type !== "Literal") {
-			return map2(object, this.#expr(property), (target, key, run) =>
-				read(run, target, key),
+			// The key waits for the object, as a chain that stops at a `?.` leaves it unevaluated.
+			const key = this.#expr(property);
+			const keyEv = key.ev;
+			const stops = chainStops(optional);
+			return map1(
+				object,
+				key.async
+					? (target, run, scope) =>
+							stops(target)
+								? SHORT
+								: after(keyEv(run, scope), (name) => read(run, target, name))
+					: (target, run, scope) =>
+							stops(target) ? SHORT : read(run, target, keyEv(run, scope)),
+				key.async,
 			);
 		}
 		const key = property.value;
 		const access: PathStep = {
 			name: typeof key === "string" && !BLOCKED_NAMES.has(key) ? key : null,
 			read: (run, target) => read(run, target, key),
+			span,
 		};
 		if (object.async)
 			return map1(object, (target, run) => access.read(run, target));
@@ -2245,7 +2288,7 @@ class Compiler {
 		const ev = body.ev;
 		return {
 			ev: (run, scope) => {
-				const fn = (...args: unknown[]) => {
+				const call = (...args: unknown[]) => {
 					step(run, span);
 					const inner = childScope(scope);
 					for (let i = 0; i < params.length; i++) {
@@ -2253,9 +2296,15 @@ class Compiler {
 					}
 					return ev(run, inner);
 				};
+				// Your functions get the value itself, never a held one.
+				const fn = (...args: unknown[]) => {
+					const result = call(...args);
+					return result instanceof Promise ? result.then(unhold) : result;
+				};
 				// Lets filters such as `sort` tell a key selector from a comparator.
+				Object.defineProperty(call, "length", { value: params.length });
 				Object.defineProperty(fn, "length", { value: params.length });
-				templateFunctions.add(fn);
+				templateFunctions.set(fn, call);
 				return fn;
 			},
 			async: false,
@@ -2416,7 +2465,7 @@ class Compiler {
 		const args = this.#arguments(node.args);
 		const span = node.span;
 		const optional = callee.optional;
-		const values = evalAll([object, key]);
+		const stops = chainStops(optional);
 
 		const invoke = (
 			run: Run,
@@ -2431,7 +2480,7 @@ class Compiler {
 					run,
 					span,
 					"null-access",
-					`Cannot call "${String(name)}" on null`,
+					`Cannot call ${valueLabel(name)} on null`,
 				);
 			}
 			const method =
@@ -2441,7 +2490,7 @@ class Compiler {
 					run,
 					span,
 					"method-not-exposed",
-					`"${String(name)}" is not a method that ${typeName(target)} exposes`,
+					`${valueLabel(name)} is not a method that ${typeName(target)} exposes`,
 				);
 			}
 			const built = buildArguments(run, span, args.shapes, list);
@@ -2453,14 +2502,19 @@ class Compiler {
 			);
 		};
 
+		// The name and arguments wait for the object, as a chain that stops at a `?.` leaves them unevaluated.
 		return {
 			ev: (run, scope) =>
-				after(values(run, scope), ([target, name]) => {
-					step(run, span);
-					return after(args.values(run, scope), (list) =>
-						invoke(run, target, name, list),
-					);
-				}),
+				after(object.ev(run, scope), (target) =>
+					stops(target)
+						? SHORT
+						: after(key.ev(run, scope), (name) => {
+								step(run, span);
+								return after(args.values(run, scope), (list) =>
+									invoke(run, target, name, list),
+								);
+							}),
+				),
 			async: true,
 		};
 	}
@@ -2625,7 +2679,7 @@ class Compiler {
 						run,
 						span,
 						"unknown-strategy",
-						`Unknown escaping strategy "${String(target)}"`,
+						`Unknown escaping strategy ${valueLabel(target)}`,
 					);
 				}
 				const chosen = target as EscapeStrategy;
@@ -2730,7 +2784,7 @@ class Compiler {
 							run,
 							span,
 							"unknown-block",
-							`Block "${String(value)}" does not exist`,
+							`Block ${valueLabel(value)} does not exist`,
 						);
 					}
 					return renderBlockEntry(run, span, entry, scope);
@@ -2798,7 +2852,7 @@ export const readMember = (
 				run,
 				span,
 				"null-access",
-				`Cannot read "${String(key)}" of null`,
+				`Cannot read ${valueLabel(key)} of null`,
 				'Use "?." to allow null.',
 			);
 		}
@@ -2816,7 +2870,7 @@ export const readMember = (
 	try {
 		value = getAttr(target, key);
 	} catch (error) {
-		throw locate(run, span, error, "A lookup method");
+		throw locate(run, span, error, readingLabel(key));
 	}
 	if (value === MISSING) {
 		if (guard) return MISSING;
@@ -2834,12 +2888,17 @@ const pathRead = (root: Compiled, steps: PathStep[]): Compiled => {
 	const ev = root.ev;
 	const names = steps.map((access) => access.name);
 	const reads = steps.map((access) => access.read);
+	const spans = steps.map((access) => access.span);
 	return {
-		ev: (run, scope) => readKeys(run, ev(run, scope), names, reads),
+		ev: (run, scope) => readKeys(run, ev(run, scope), names, reads, spans),
 		async: false,
 		path: { root, steps },
 	};
 };
+
+/** Names a property read for an error that one of your getters or lookup methods threw. */
+export const readingLabel = (key: string | number): string =>
+	`Reading "${key}"`;
 
 /** `set`: assigns where the variable already exists, or declares it in the current scope. */
 export const assign = (
@@ -2931,9 +2990,24 @@ const missingProperty = (
 	);
 };
 
+/** Whether a chain stops before a member: at an earlier `?.` that stopped, or at this one when its object is null. */
+const chainStops =
+	(optional: boolean) =>
+	(target: unknown): boolean =>
+		target === SHORT ||
+		(optional &&
+			(target === null || target === undefined || target === MISSING));
+
+/** The items a spread copies, charged against `maxSteps` before they are copied. */
 const spreadItems = (run: Run, span: Span, value: unknown): unknown[] => {
-	if (Array.isArray(value)) return value;
-	if (value instanceof Set) return [...value];
+	if (Array.isArray(value)) {
+		locating(run, span, () => consume(run, value.length));
+		return value;
+	}
+	if (value instanceof Set) {
+		locating(run, span, () => consume(run, value.size));
+		return [...value];
+	}
 	if (value === null || value === undefined) return [];
 	throw fail(
 		run,
@@ -2943,6 +3017,7 @@ const spreadItems = (run: Run, span: Span, value: unknown): unknown[] => {
 	);
 };
 
+/** Copies a spread hash's entries, charged against `maxSteps` first. */
 const copyHash = (
 	run: Run,
 	span: Span,
@@ -2951,10 +3026,13 @@ const copyHash = (
 ) => {
 	if (value === null || value === undefined) return;
 	if (isPlainObject(value)) {
-		for (const key of hashKeys(value)) setOwn(target, key, value[key]);
+		const keys = hashKeys(value);
+		locating(run, span, () => consume(run, keys.length));
+		for (const key of keys) setOwn(target, key, value[key]);
 		return;
 	}
 	if (value instanceof Map) {
+		locating(run, span, () => consume(run, value.size));
 		for (const [key, item] of value) {
 			if (typeof key === "string") setOwn(target, key, item);
 		}

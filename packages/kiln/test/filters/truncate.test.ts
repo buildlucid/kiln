@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { render } from "../helpers.js";
+import { errorCode, render } from "../helpers.js";
 
 describe("truncate", () => {
 	test("shortens a string and adds an ellipsis", async () => {
@@ -28,6 +28,15 @@ describe("edge cases", () => {
 		expect(
 			await render('{{ "abc"|truncate(3) }}|{{ "abc"|truncate(0) }}'),
 		).toBe("abc|…");
+	});
+
+	test("an ending that makes the result too long stops at maxOutputLength", async () => {
+		const growing = "{% set s = s|truncate((s|length) // 2, s) %}".repeat(4);
+		expect(
+			await errorCode(`{% set s = "abcdef" %}${growing}`, {
+				limits: { maxOutputLength: 20 },
+			}),
+		).toBe("limit-output");
 	});
 
 	test("a lone surrogate counts as one code point", async () => {

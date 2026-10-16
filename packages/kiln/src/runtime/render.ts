@@ -26,12 +26,50 @@ import { hashKeys, isPlainObject, setOwn, typeName } from "./values.js";
 export const isPromise = (value: unknown): value is Promise<unknown> =>
 	value instanceof Promise;
 
+/** A value with a `then` member, carried through a promise by `hold`. */
+class Held {
+	constructor(readonly value: unknown) {}
+}
+
+/**
+ * Wraps a value that has a `then` member, so a promise can resolve to it. A promise resolving to such a value would
+ * call its `then`, which templates may not call. Whatever waits for the promise takes the value back out with `unhold`.
+ *
+ * Return a value from a callback that runs after a promise, such as one passed to `then`, through `hold`.
+ */
+export const hold = (value: unknown): unknown =>
+	((typeof value === "object" && value !== null) ||
+		typeof value === "function") &&
+	"then" in value &&
+	!(value instanceof Promise)
+		? new Held(value)
+		: value;
+
+/** Takes a value back out of `hold`. Use on every value a promise resolves to. */
+export const unhold = (value: unknown): unknown =>
+	value instanceof Held ? value.value : value;
+
 /** Calls `next` with the value, after waiting for it only if it is a promise. */
 export const after = <T, R>(
 	value: T | Promise<T>,
 	next: (resolved: T) => R | Promise<R>,
 ): R | Promise<R> =>
-	value instanceof Promise ? value.then(next) : next(value as T);
+	value instanceof Promise
+		? (value.then((resolved) =>
+				hold(next(unhold(resolved) as T)),
+			) as Promise<R>)
+		: next(value as T);
+
+/**
+ * Waits for every promise in a list. Unlike `Promise.all`, never calls `then` on the other values; see `hold`.
+ */
+export const all = (values: readonly unknown[]): Promise<unknown[]> =>
+	Promise.all(
+		values.map((value) => (value instanceof Promise ? value : hold(value))),
+	).then((list) => {
+		for (let i = 0; i < list.length; i++) list[i] = unhold(list[i]);
+		return list;
+	});
 
 /** Stops a promise's rejection from being reported as unhandled, when a sibling failed first. */
 export const silence = (value: unknown): void => {
@@ -592,9 +630,23 @@ export const importsFor = (
 	const cached = state.importsCache?.get(template);
 	if (cached) return cached;
 
-	const loaded = template.imports.map(({ name, span }) =>
-		loadTemplate(new Run(state, template, run.depth, null, null), name, span),
-	);
+	const loaded: (CompiledTemplate | null | Promise<CompiledTemplate | null>)[] =
+		[];
+	try {
+		for (const { name, span } of template.imports) {
+			loaded.push(
+				loadTemplate(
+					new Run(state, template, run.depth, null, null),
+					name,
+					span,
+				),
+			);
+		}
+	} catch (error) {
+		// Earlier imports may still be loading. Stop their rejections being reported as unhandled.
+		for (const value of loaded) silence(value);
+		throw error;
+	}
 	const finish = (list: (CompiledTemplate | null)[]) => {
 		const imports = list as CompiledTemplate[];
 		state.importsCache ??= new Map();
@@ -664,6 +716,11 @@ export const renderTemplate = (
 			"limit-depth",
 			`Render stopped after nesting ${state.maxDepth} templates, macros or layouts deep`,
 		);
+	}
+
+	// Which layout a template extends is only known now, so the layout's slots join the `slots` hash here.
+	if (inherited && template.slotNames.length > 0) {
+		addLayoutSlotFlags(scope, template, slots);
 	}
 
 	const run = new Run(state, template, depth, slots, passed);
@@ -813,5 +870,24 @@ export const addSlotFlags = (
 	const flags: Record<string, boolean> = {};
 	for (const name of template.slotNames) setOwn(flags, name, false);
 	if (slots) for (const name of slots.keys()) setOwn(flags, name, true);
+	scope.slots = flags;
+};
+
+/** Adds the slots a layout declares to the `slots` hash of the template that extends it. */
+const addLayoutSlotFlags = (
+	scope: Scope,
+	template: CompiledTemplate,
+	slots: Map<string, SlotFill> | null,
+): void => {
+	const current = Object.hasOwn(scope, "slots") ? scope.slots : undefined;
+	const flags: Record<string, boolean> = {};
+	if (isPlainObject(current)) {
+		for (const name of hashKeys(current))
+			setOwn(flags, name, current[name] === true);
+	}
+	for (const name of template.slotNames) {
+		if (!Object.hasOwn(flags, name))
+			setOwn(flags, name, slots?.has(name) ?? false);
+	}
 	scope.slots = flags;
 };

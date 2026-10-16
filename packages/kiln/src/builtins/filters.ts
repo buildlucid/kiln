@@ -1,7 +1,15 @@
 import { issue } from "../errors.js";
 import { escapeHtml, escapeUrl } from "../runtime/escape.js";
 import { Markup } from "../runtime/markup.js";
-import { checkLength, consume, isPromise, silence } from "../runtime/render.js";
+import {
+	all,
+	checkLength,
+	consume,
+	hold,
+	isPromise,
+	silence,
+	unhold,
+} from "../runtime/render.js";
 import type { CallableEntry, Run } from "../runtime/types.js";
 import {
 	compare,
@@ -14,6 +22,7 @@ import {
 	toNumber,
 	toStr,
 	toStringArgument,
+	valueLabel,
 	truthy,
 	typeName,
 	unwrap,
@@ -133,26 +142,52 @@ const roundNumber = (
 	}
 };
 
-const queryString = (value: unknown, prefix: string | null): string[] => {
+/**
+ * Builds `urlEncode`'s query string from a hash. Each list and hash is charged against `maxSteps` before it is read,
+ * and the text stops at `maxOutputLength`, so a value that shares one object in many places can't make unlimited work.
+ */
+const queryString = (run: Run, hash: object): string => {
 	const parts: string[] = [];
-	const { values, keys } = entriesOf(value, "urlEncode");
-	for (let i = 0; i < values.length; i++) {
-		const item = values[i];
-		if (item === null || item === undefined) continue;
-		const key =
-			prefix === null ? String(keys[i]) : `${prefix}[${String(keys[i])}]`;
-		if (
-			Array.isArray(item) ||
-			isPlainObject(item) ||
-			item instanceof Map ||
-			item instanceof Set
-		) {
-			parts.push(...queryString(item, key));
-		} else {
-			parts.push(`${escapeUrl(key)}=${escapeUrl(toStr(item))}`);
+	const seen = new Set<object>();
+	let length = 0;
+	const add = (value: object, prefix: string | null) => {
+		const { values, keys } = entriesOf(value, "urlEncode");
+		consume(run, values.length);
+		seen.add(value);
+		for (let i = 0; i < values.length; i++) {
+			const item = values[i];
+			if (item === null || item === undefined) continue;
+			const key =
+				prefix === null ? String(keys[i]) : `${prefix}[${String(keys[i])}]`;
+			if (
+				Array.isArray(item) ||
+				isPlainObject(item) ||
+				item instanceof Map ||
+				item instanceof Set
+			) {
+				if (seen.has(item)) {
+					issue(
+						"invalid-argument",
+						'"urlEncode" cannot encode a value that contains itself',
+					);
+				}
+				add(item, key);
+				continue;
+			}
+			const part = `${escapeUrl(key)}=${escapeUrl(toStr(item))}`;
+			length += part.length + 1;
+			if (length > run.state.maxSize + 1) {
+				issue(
+					"limit-output",
+					`"urlEncode" would build a string longer than the output limit of ${run.state.maxSize}`,
+				);
+			}
+			parts.push(part);
 		}
-	}
-	return parts;
+		seen.delete(value);
+	};
+	add(hash, null);
+	return parts.join("&");
 };
 
 const formatterCache = new Map<string, Formatter>();
@@ -160,13 +195,28 @@ const formatterCache = new Map<string, Formatter>();
 /** Keys of frozen options hashes, which the compiler builds once for literal named arguments. */
 const optionsKeys = new WeakMap<object, string>();
 
+/**
+ * The part of a formatter's cache key its options make. Option values must be strings, markup, numbers, booleans or
+ * null: `JSON.stringify` and `Intl` would call methods such as `toJSON` and `toString` on anything else.
+ */
 const optionsKey = (options: Record<string, unknown>): string => {
 	const frozen = Object.isFrozen(options);
 	let key = frozen ? optionsKeys.get(options) : undefined;
 	if (key !== undefined) return key;
 	key = "";
 	for (const name of hashKeys(options)) {
-		if (name !== "locale") key += `|${name}=${JSON.stringify(options[name])}`;
+		if (name === "locale") continue;
+		const value = unwrap(options[name]);
+		if (
+			(typeof value === "object" && value !== null) ||
+			typeof value === "function"
+		) {
+			return issue(
+				"type-error",
+				`Formatting option "${name}" must be a string, number or boolean, but got ${valueLabel(value)}`,
+			);
+		}
+		key += `|${name}=${JSON.stringify(value)}`;
 	}
 	if (frozen) optionsKeys.set(options, key);
 	return key;
@@ -225,8 +275,11 @@ const cachedFormatter = <T extends Formatter>(
 	key += optionsKey(given);
 	let formatter = formatterCache.get(key) as T | undefined;
 	if (!formatter) {
-		const { locale: _locale, ...rest } = given;
-		formatter = create(locale, { ...base, ...rest });
+		const settings = { ...base };
+		for (const name of hashKeys(given)) {
+			if (name !== "locale") setOwn(settings, name, unwrap(given[name]));
+		}
+		formatter = create(locale, settings);
 		if (formatterCache.size > 500) formatterCache.clear();
 		formatterCache.set(key, formatter);
 	}
@@ -265,8 +318,8 @@ const mapEntries = (
 		throw error;
 	}
 	if (results.some(isPromise)) {
-		return Promise.all(results).then((resolved) =>
-			gather(resolved, values, keys, isHash),
+		return all(results).then((resolved) =>
+			hold(gather(resolved, values, keys, isHash)),
 		);
 	}
 	return gather(results, values, keys, isHash);
@@ -383,7 +436,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 			if (side !== "both" && side !== "start" && side !== "end") {
 				return issue(
 					"invalid-argument",
-					`"trim" side must be "both", "start" or "end", but got "${String(side)}"`,
+					`"trim" side must be "both", "start" or "end", but got ${valueLabel(side)}`,
 				);
 			}
 			if (characters === undefined || characters === null) {
@@ -415,7 +468,10 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 			if (needle === "") return text;
 			const parts = text.split(needle);
 			const glue = toStringArgument(replacement, '"replace"');
-			if ((parts.length - 1) * glue.length + text.length > run.state.maxSize) {
+			// Each match swaps the needle for the replacement.
+			const length =
+				text.length + (parts.length - 1) * (glue.length - needle.length);
+			if (length > run.state.maxSize) {
 				return issue(
 					"limit-output",
 					`"replace" would build a string longer than the output limit of ${run.state.maxSize}`,
@@ -440,7 +496,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		["separator", "limit"],
 	),
 	truncate: define(
-		(_run, value, length, ellipsis = "…") => {
+		(run, value, length, ellipsis = "…") => {
 			const text = toStringArgument(value, '"truncate"');
 			const max = integerArgument(length, '"truncate" length');
 			if (text.length <= max) return text;
@@ -448,8 +504,10 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 				? codePointOffset(text, max)
 				: Math.max(0, max);
 			if (max >= 0 && end === text.length) return text;
-			return (
-				text.slice(0, end).trimEnd() + toStringArgument(ellipsis, '"truncate"')
+			// The ending can be any string, even the text itself, so the result can be longer than the text.
+			return checkLength(
+				run,
+				text.slice(0, end).trimEnd() + toStringArgument(ellipsis, '"truncate"'),
 			);
 		},
 		["length", "ellipsis"],
@@ -464,10 +522,10 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 				: escapeHtml(toStr(value));
 		return new Markup(html.replace(/\r\n|\n|\r/g, "<br>$&"), "html");
 	}),
-	urlEncode: define((_run, value) => {
+	urlEncode: define((run, value) => {
 		const target = unwrap(value);
 		if (isPlainObject(target) || target instanceof Map) {
-			return queryString(target, null).join("&");
+			return queryString(run, target);
 		}
 		return escapeUrl(toStr(target));
 	}),
@@ -481,11 +539,14 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 			) {
 				return issue("type-error", '"json" indent must be a number or string');
 			}
-			const data = toPlainData(value, () =>
-				issue(
-					"invalid-argument",
-					'"json" cannot serialise a value that contains itself',
-				),
+			const data = toPlainData(
+				value,
+				() =>
+					issue(
+						"invalid-argument",
+						'"json" cannot serialise a value that contains itself',
+					),
+				(count) => consume(run, count),
 			);
 			return checkLength(
 				run,
@@ -683,7 +744,9 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 				for (let i = index; i < values.length; i++) {
 					const result = fn(current, values[i], keys[i]);
 					if (isPromise(result)) {
-						return result.then((resolved) => from(i + 1, resolved));
+						return result.then((resolved) =>
+							hold(from(i + 1, unhold(resolved))),
+						);
 					}
 					current = result;
 				}
@@ -702,7 +765,9 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 					const result = fn(values[i], keys[i]);
 					if (isPromise(result)) {
 						return result.then((resolved) =>
-							truthy(resolved) ? (values[i] ?? null) : from(i + 1),
+							hold(
+								truthy(unhold(resolved)) ? (values[i] ?? null) : from(i + 1),
+							),
 						);
 					}
 					if (truthy(result)) return values[i] ?? null;
@@ -752,7 +817,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 			roundNumber(
 				toNumber(value, "round"),
 				integerArgument(precision, '"round" precision'),
-				String(method),
+				toStringArgument(method, '"round" method'),
 			),
 		["precision", "method"],
 	),

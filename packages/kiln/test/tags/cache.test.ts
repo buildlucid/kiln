@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vite-plus/test";
 import { type KilnCache, memoryCache } from "../../src/index.js";
-import { errorCode, lines, render } from "../helpers.js";
+import { errorCode, lines, render, renderError, settle } from "../helpers.js";
 
 /** A store that records what it saves. */
 const recording = () => {
@@ -77,6 +77,46 @@ describe("cache", () => {
 		const template = '{% cache "a" %}{{ n }}{% endcache %}';
 		expect(await render(template, { cache, context: { n: 1 } })).toBe("1");
 		expect(await render(template, { cache, context: { n: 2 } })).toBe("1");
+	});
+
+	test("a failing time leaves no unhandled rejection from its key", async () => {
+		const functions = {
+			key: () => Promise.reject(new Error("key")),
+			time: () => {
+				throw new Error("time");
+			},
+		};
+		const template = "{% cache key() for time() %}x{% endcache %}";
+		expect(await errorCode(template, { cache: memoryCache(), functions })).toBe(
+			"host-error",
+		);
+		await settle();
+	});
+
+	test.each([
+		["get", "sync"],
+		["get", "async"],
+		["set", "sync"],
+		["set", "async"],
+	])("a failing store's %s (%s) is a located error", async (method, kind) => {
+		const cause = new Error("down");
+		const fail = () => {
+			if (kind === "async") return Promise.reject(cause);
+			throw cause;
+		};
+		const cache: KilnCache = {
+			get: method === "get" ? fail : () => null,
+			set: method === "set" ? fail : () => {},
+		};
+		const error = await renderError('{% cache "a" %}x{% endcache %}', {
+			cache,
+		});
+		expect(error).toMatchObject({
+			code: "host-error",
+			message: expect.stringContaining("The cache store threw an error: down"),
+			line: 1,
+			cause,
+		});
 	});
 
 	test("a value Kiln didn't make is treated as missing", async () => {

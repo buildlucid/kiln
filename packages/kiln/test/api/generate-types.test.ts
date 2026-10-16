@@ -63,7 +63,7 @@ describe("generateTypes", () => {
 
 	test("maps every built-in type", async () => {
 		const output = await generate({
-			all: "{% props a: null | boolean | number, b: array, c: hash, d: set, e: date, f: markup, g: object, h: number[] %}",
+			all: "{% props a: null | boolean | number, b: array, c: hash, d: set, e: date, f: markup, g: object, h: number[], i: number[][] %}",
 		});
 		expect(entry(output, "all")).toContain(
 			lines(
@@ -75,6 +75,7 @@ describe("generateTypes", () => {
 				"\t\t\t\tf: Markup;",
 				"\t\t\t\tg: object;",
 				"\t\t\t\th: readonly number[];",
+				"\t\t\t\ti: readonly (readonly number[])[];",
 			),
 		);
 	});

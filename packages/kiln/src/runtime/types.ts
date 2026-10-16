@@ -55,6 +55,7 @@ export type PathStep = {
 	name: string | null;
 	/** The full read, for everything else: arrays, maps, class instances, null and missing keys. */
 	read: (run: Run, target: unknown) => unknown;
+	span: Span;
 };
 
 export type BlockDef = {

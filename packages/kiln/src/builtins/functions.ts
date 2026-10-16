@@ -130,7 +130,13 @@ export const builtinFunctions: Record<string, BuiltinEntry> = {
 	),
 	dump: define((run, ...values) => {
 		if (!run.state.env.debug) return new Markup("", "html");
-		const data = values.map((value) => toPlainData(value, () => "[Circular]"));
+		const data = values.map((value) =>
+			toPlainData(
+				value,
+				() => "[Circular]",
+				(count) => consume(run, count),
+			),
+		);
 		const text =
 			JSON.stringify(data.length === 1 ? data[0] : data, null, 2) ?? "null";
 		return new Markup(

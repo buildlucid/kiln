@@ -197,13 +197,38 @@ export const describeValue = (
 	) {
 		return JSON.stringify(plain);
 	}
+	return aType(value);
+};
+
+/** A value's type with an article, such as "a hash" or "an array", or "null". */
+const aType = (value: unknown): string => {
 	const name = typeName(value);
 	if (name === "null") return "null";
 	return `${/^[aeiou]/.test(name) ? "an" : "a"} ${name}`;
 };
 
-/** Arrow functions written in templates. Built-ins that take callbacks accept only these, never functions found in data. */
-export const templateFunctions = new WeakSet<object>();
+/**
+ * Names a value in an error message without calling any of its methods, which templates may not call: a string,
+ * number or boolean in quotes, or else its type, such as "a hash".
+ */
+export const valueLabel = (value: unknown): string => {
+	const plain = unwrap(value);
+	return typeof plain === "string" ||
+		typeof plain === "number" ||
+		typeof plain === "boolean"
+		? `"${String(plain)}"`
+		: aType(value);
+};
+
+/**
+ * Arrow functions written in templates, each mapped to the version built-ins call. Built-ins that take callbacks accept
+ * only these, never functions found in data. A promise from the built-ins' version may resolve to a held value; see
+ * `hold`.
+ */
+export const templateFunctions = new WeakMap<
+	object,
+	(...args: unknown[]) => unknown
+>();
 
 /** A class instance prints only when its class exposes `toString`. */
 const exposesToString = (value: object): boolean => {

@@ -477,17 +477,30 @@ class Environment<State> implements EnvironmentCore {
 				if (!opened) reject(error);
 				else if (!cancelled) controller.error(error);
 			};
+			// The first half of a character split across two sends, held back so each part encodes to valid UTF-8.
+			let held = "";
 			const send = (text: string) => {
 				if (failed) return;
 				length += text.length;
 				if (length > state.maxSize) return failWith(tooLong(render));
-				if (!cancelled) controller.enqueue(encoder.encode(text));
+				text = held + text;
+				held = "";
+				const last = text.charCodeAt(text.length - 1);
+				if (last >= 0xd800 && last <= 0xdbff) {
+					held = text.slice(-1);
+					text = text.slice(0, -1);
+				}
+				if (!cancelled && text !== "") {
+					controller.enqueue(encoder.encode(text));
+				}
 				open();
 			};
 			const output = new RenderStream(state, out, send);
 			state.stream = output;
 			const close = () => {
-				if (!failed && !cancelled) controller.close();
+				if (failed || cancelled) return;
+				if (held !== "") controller.enqueue(encoder.encode(held));
+				controller.close();
 			};
 			// Streamed islands follow the page, each as soon as it is ready.
 			const finish = () => {

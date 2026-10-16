@@ -612,17 +612,26 @@ class Parser {
 
 	/** Reads a prop type such as `string | null`, `"primary" | "secondary"`, `Post[]` or `{ name: string }`. */
 	#parsePropType(): PropType[] {
-		const members: PropType[] = [];
-		for (;;) {
-			let type = this.#parsePropTypeTerm();
-			while (this.#isPunct("[") && this.#isPunct("]", 1)) {
+		this.#enter();
+		const nesting = this.#nesting;
+		try {
+			const members: PropType[] = [];
+			for (;;) {
+				let type = this.#parsePropTypeTerm();
+				// Each `[]` nests the type inside a list, so it counts as a level.
+				while (this.#isPunct("[") && this.#isPunct("]", 1)) {
+					this.#enter();
+					this.#next();
+					this.#next();
+					type = [{ list: type }];
+				}
+				this.#nesting = nesting;
+				members.push(...type);
+				if (!this.#isPunct("|")) return members;
 				this.#next();
-				this.#next();
-				type = [{ list: type }];
 			}
-			members.push(...type);
-			if (!this.#isPunct("|")) return members;
-			this.#next();
+		} finally {
+			this.#nesting = nesting - 1;
 		}
 	}
 
@@ -1154,11 +1163,15 @@ class Parser {
 
 	#parseCoalesce(): Expression {
 		const left = this.#parseOr();
-		if (this.#isPunct("??")) {
-			this.#next();
+		if (!this.#isPunct("??")) return left;
+		this.#next();
+		// `??` groups to the right, so each one nests the rest of the chain inside it.
+		this.#enter();
+		try {
 			return this.#binary("??", left, this.#parseCoalesce());
+		} finally {
+			this.#nesting--;
 		}
-		return left;
 	}
 
 	#parseOr(): Expression {

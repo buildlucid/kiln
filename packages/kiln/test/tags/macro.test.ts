@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import { errorCode, lines, render } from "../helpers.js";
+import { createKiln, KilnRenderError } from "../../src/index.js";
+import { errorCode, lines, render, settle } from "../helpers.js";
 
 describe("macro", () => {
 	test("takes arguments with defaults and named arguments", async () => {
@@ -177,6 +178,22 @@ describe("import and from", () => {
 		expect(
 			await errorCode('{% from "lib" import m as range %}', { templates }),
 		).toBe("macro-conflict");
+	});
+
+	test("a failing import leaves no unhandled rejection from one still loading", async () => {
+		const kiln = createKiln({
+			loader: {
+				load: (name) => {
+					if (name === "index.kiln") {
+						return '{% import "slow" as a %}{% import "broken" as b %}';
+					}
+					if (name === "slow.kiln") return Promise.reject(new Error("slow"));
+					throw new Error("broken");
+				},
+			},
+		});
+		await expect(kiln.render("index")).rejects.toThrow(KilnRenderError);
+		await settle();
 	});
 });
 

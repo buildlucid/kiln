@@ -57,6 +57,22 @@ describe("component", () => {
 		expect(await render(template, { templates })).toBe("component:caller");
 	});
 
+	test("a fill can set a variable read after the component", async () => {
+		const templates = { box: "{% slot %}{% endslot %}" };
+		expect(
+			await render(
+				'{% set x = 1 %}{{ x }}{% if true %}{% component "box" %}{% set x = 2 %}{% endcomponent %}{% endif %}{{ x }}',
+				{ templates },
+			),
+		).toBe("12");
+		expect(
+			await render(
+				'{% set x = 0 %}{% for i in [1, 2, 3] %}{% component "box" %}{% set x = x + 1 %}{% endcomponent %}{{ x }}{% endfor %}',
+				{ templates },
+			),
+		).toBe("123");
+	});
+
 	test("on a line of its own, the component and its slots line up with their tags", async () => {
 		const card = lines(
 			"<article>",
@@ -140,6 +156,22 @@ describe("slot", () => {
 		expect(
 			await render('{% component "box" %}x{% endcomponent %}', { templates }),
 		).toBe("xx");
+	});
+
+	test("slots includes the slots of a layout the component extends", async () => {
+		const templates = {
+			base: '{% slot %}{% endslot %}{% block footer %}{% slot "footer" %}{% endslot %}{% endblock %}',
+			card: '{% extends "base" %}{% block footer %}[{{ slots.footer ? "filled" : "empty" }}]{% endblock %}',
+		};
+		expect(
+			await render('{% component "card" %}x{% endcomponent %}', { templates }),
+		).toBe("x[empty]");
+		expect(
+			await render(
+				'{% component "card" %}x{% fill "footer" %}f{% endfill %}{% endcomponent %}',
+				{ templates },
+			),
+		).toBe("x[filled]");
 	});
 
 	test("slots belong to the component, not the templates it includes", async () => {

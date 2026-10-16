@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { expose, lookup } from "../../src/index.js";
-import { errorCode, render } from "../helpers.js";
+import { errorCode, later, render } from "../helpers.js";
 
 describe("hashes and arrays", () => {
 	test("prototype properties cannot be read", async () => {
@@ -81,6 +81,63 @@ describe("functions in data", () => {
 		expect(await errorCode(template, { context: { fns, nofn: null } })).toBe(
 			"type-error",
 		);
+	});
+});
+
+describe("conversions", () => {
+	class Label {
+		calls = 0;
+		toString() {
+			this.calls++;
+			return "html";
+		}
+		toJSON() {
+			this.calls++;
+			return "html";
+		}
+	}
+
+	test.each([
+		["{{ 1|round(1, label) }}", "type-error"],
+		["{{ 1|formatNumber(style: label) }}", "type-error"],
+		['{{ "a"|trim(side: label) }}', "invalid-argument"],
+		['{{ "a"|escape(label) }}', "unknown-strategy"],
+		["{{ block(label) }}", "unknown-block"],
+		["{{ none[label] }}", "null-access"],
+		["{{ none[label]() }}", "null-access"],
+	])("never call unexposed methods: %s", async (template, code) => {
+		const label = new Label();
+		expect(await errorCode(template, { context: { label, none: null } })).toBe(
+			code,
+		);
+		expect(label.calls).toBe(0);
+	});
+});
+
+describe("then methods in data", () => {
+	class Box {
+		static [expose] = ["name"];
+		name = "box";
+		calls = 0;
+		// oxlint-disable-next-line unicorn/no-thenable -- the data this test protects
+		then(resolve: (value: unknown) => void) {
+			this.calls++;
+			resolve({ name: "leaked" });
+		}
+	}
+
+	test.each([
+		"{{ [later(1), box][1].name }}",
+		"{{ (later(true) ? box : null).name }}",
+		"{{ ([box]|map(item => later(true) ? item : null)|first).name }}",
+		"{{ ([box]|find(item => later(true))).name }}",
+		"{{ ([box]|reduce((carry, item) => later(true) ? item : carry)).name }}",
+	])("are never called, even after waiting: %s", async (template) => {
+		const box = new Box();
+		expect(
+			await render(template, { functions: { later }, context: { box } }),
+		).toBe("box");
+		expect(box.calls).toBe(0);
 	});
 });
 

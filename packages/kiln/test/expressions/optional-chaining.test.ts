@@ -20,6 +20,21 @@ describe("?.", () => {
 		).toBe("[]|ada");
 	});
 
+	test("leaves keys and arguments after it unevaluated", async () => {
+		let calls = 0;
+		const count = () => {
+			calls++;
+			return "x";
+		};
+		expect(
+			await render(
+				"[{{ none?.[count()] }}][{{ none?.excerpt(count()) }}][{{ none?.a[count()] }}][{{ page?.[count()] }}]",
+				{ context, functions: { count } },
+			),
+		).toBe("[][][][]");
+		expect(calls).toBe(1);
+	});
+
 	test("guards missing variables and properties in its chain", async () => {
 		expect(
 			await render("[{{ missing?.b }}][{{ page?.nope.deep }}]", { context }),

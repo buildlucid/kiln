@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { errorCode, render } from "../helpers.js";
+import { errorCode, render, renderError } from "../helpers.js";
 
 const context = {
 	page: { title: "Home", author: null },
@@ -38,6 +38,26 @@ describe("property access", () => {
 		expect(
 			await render("{{ map.a }}|{{ map['a'] }}", { context: { map } }),
 		).toBe("1|1");
+	});
+
+	test.each([
+		"{{ data.value }}",
+		"{{ data.value|upper }}",
+		"{{ data['value'] }}",
+		"{% for i in [1] %}{{ data.value }}{% endfor %}",
+	])("an error a getter throws is located: %s", async (template) => {
+		const cause = new Error("boom");
+		const data = {
+			get value(): string {
+				throw cause;
+			},
+		};
+		const error = await renderError(template, { context: { data } });
+		expect(error).toMatchObject({
+			code: "host-error",
+			message: expect.stringContaining('Reading "value" threw an error: boom'),
+			cause,
+		});
 	});
 
 	test("property names must be strings or numbers", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { errorCode, render } from "../helpers.js";
+import { errorCode, later, render } from "../helpers.js";
 
 describe("for", () => {
 	test("loops over array items", async () => {
@@ -110,6 +110,17 @@ describe("loop scope", () => {
 		const template =
 			'{% for i in [1, 2] %}{% if i == 2 %}{{ seen ?? "fresh" }}{% endif %}{% set seen = "old" %}{% endfor %}';
 		expect(await render(template)).toBe("fresh");
+	});
+
+	test("variables set in a pass stay after an include that waits", async () => {
+		const template =
+			'{% for i in [1, 2] %}{% set n = i %}{% include "part" %}{{ n }}{% endfor %}';
+		expect(
+			await render(template, {
+				functions: { later },
+				templates: { part: '{{ later("-") }}' },
+			}),
+		).toBe("-1-2");
 	});
 
 	test("the loop variable does not leak", async () => {

@@ -48,6 +48,15 @@ describe("edge cases", () => {
 		);
 	});
 
+	test("option values must be strings, numbers or booleans", async () => {
+		expect(await render('{{ 0.5|formatNumber(style: "percent"|raw) }}')).toBe(
+			"50%",
+		);
+		expect(await errorCode("{{ 1|formatNumber(style: [1]) }}")).toBe(
+			"type-error",
+		);
+	});
+
 	test("an invalid locale is an error", async () => {
 		expect(await errorCode('{{ 1|formatNumber(locale: "!!") }}')).toBe(
 			"invalid-argument",

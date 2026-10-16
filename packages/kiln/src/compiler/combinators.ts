@@ -1,4 +1,4 @@
-import { isPromise, silence } from "../runtime/render.js";
+import { all, hold, isPromise, silence, unhold } from "../runtime/render.js";
 import type { Compiled, Run, Scope } from "../runtime/types.js";
 
 /** A compiled literal. */
@@ -26,7 +26,7 @@ export const map1 = (
 		ev: (run, scope) => {
 			const value = ev(run, scope);
 			return isPromise(value)
-				? value.then((resolved) => f(resolved, run, scope))
+				? value.then((resolved) => hold(f(unhold(resolved), run, scope)))
 				: f(value, run, scope);
 		},
 		async: true,
@@ -59,7 +59,7 @@ export const map2 = (
 				throw error;
 			}
 			if (isPromise(l) || isPromise(r)) {
-				return Promise.all([l, r]).then(([lv, rv]) => f(lv, rv, run, scope));
+				return all([l, r]).then(([lv, rv]) => hold(f(lv, rv, run, scope)));
 			}
 			return f(l, r, run, scope);
 		},
@@ -98,6 +98,6 @@ export const evalAll = (
 			for (const value of values) silence(value);
 			throw error;
 		}
-		return pending ? Promise.all(values) : values;
+		return pending ? all(values) : values;
 	};
 };

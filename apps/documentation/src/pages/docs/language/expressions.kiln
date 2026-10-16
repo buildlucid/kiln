@@ -68,7 +68,7 @@ null  true  false
 		{% endverbatim %}
 	{% endapply %}
 
-	<p><code>?.</code> returns null when the left side is null, and stops there. In <a href="/docs/language/strict-mode/">strict mode</a>, reading a missing property is an error unless you guard it with <code>?.</code>, <code>??</code>, <code>default</code> or <code>is defined</code>.</p>
+	<p><code>?.</code> returns null when the left side is null, and stops there. Nothing after it runs, so keys in brackets and method arguments later in the chain are not evaluated. In <a href="/docs/language/strict-mode/">strict mode</a>, reading a missing property is an error unless you guard it with <code>?.</code>, <code>??</code>, <code>default</code> or <code>is defined</code>.</p>
 
 	<h2>Calling functions</h2>
 
