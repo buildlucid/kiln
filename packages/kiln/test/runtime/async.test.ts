@@ -1,5 +1,20 @@
 import { describe, expect, test } from "vite-plus/test";
-import { errorCode, later, render, settle } from "../helpers.js";
+import {
+	deferIslands,
+	islandScript,
+	KilnRenderError,
+	memoryCache,
+} from "../../src/index.js";
+import {
+	errorCode,
+	later,
+	lines,
+	readParts,
+	render,
+	renderError,
+	renderStream,
+	settle,
+} from "../helpers.js";
 
 const functions = { later };
 
@@ -212,5 +227,347 @@ describe("guards and short-circuits", () => {
 		expect(
 			await errorCode("{{ p.then }}", { context: { p: Promise.resolve(1) } }),
 		).toBe("missing-property");
+	});
+});
+
+/**
+ * A host function that resolves to `value` after `ms` milliseconds, and records how many of its calls wait at once
+ * and in what order they started.
+ */
+const tracked = () => {
+	const calls = { active: 0, most: 0, started: [] as string[] };
+	const load = async <T>(value: T, ms = 1): Promise<T> => {
+		calls.active++;
+		calls.most = Math.max(calls.most, calls.active);
+		calls.started.push(String(value));
+		await later(null, ms);
+		calls.active--;
+		return value;
+	};
+	return { calls, load };
+};
+
+describe("running at the same time", () => {
+	test("independent sets wait at the same time", async () => {
+		const { calls, load } = tracked();
+		const template =
+			'{% set a = load("a", 10) %}{% set b = load("b") %}{{ a }}{{ b }}';
+		expect(await render(template, { functions: { load } })).toBe("ab");
+		expect(calls.most).toBe(2);
+	});
+
+	test("a part that reads what an earlier one sets waits for it", async () => {
+		const { calls, load } = tracked();
+		const template = "{% set a = load(1) %}{% set b = load(a + 1) %}{{ b }}";
+		expect(await render(template, { functions: { load } })).toBe("2");
+		expect(calls.most).toBe(1);
+	});
+
+	test("parts after the ones that wait for a part start at once", async () => {
+		const { calls, load } = tracked();
+		const template = lines(
+			'{% set posts = load(["p1", "p2"], 10) %}',
+			"{% for post in posts %}{{ load(post) }} {% endfor %}",
+			'{{ load("categories") }}',
+		);
+		expect(await render(template, { functions: { load } })).toBe(
+			lines("p1 p2 ", "categories"),
+		);
+		expect(calls.started.slice(0, 2)).toEqual(["p1,p2", "categories"]);
+	});
+
+	test("a loop's items wait at the same time, and print in order", async () => {
+		const { calls, load } = tracked();
+		const template =
+			"{% for n in [30, 1, 15] %}{% set item = load(n, n) %}[{{ item }}]{% endfor %}";
+		expect(await render(template, { functions: { load } })).toBe("[30][1][15]");
+		expect(calls.most).toBe(3);
+	});
+
+	test("items of a loop that sets nothing keep their own variables", async () => {
+		const template =
+			"{% for n in [20, 1] %}{{ later(n, n) }}-{{ n }};{% endfor %}";
+		expect(await render(template, { functions: { later } })).toBe("20-20;1-1;");
+	});
+
+	test("a loop that sets a variable from outside it runs its items in turn", async () => {
+		const { calls, load } = tracked();
+		const template =
+			"{% set total = 0 %}{% for n in [1, 2, 3] %}{% set total = total + load(n) %}{% endfor %}{{ total }}";
+		expect(await render(template, { functions: { load } })).toBe("6");
+		expect(calls.most).toBe(1);
+	});
+
+	test("a block waits for earlier parts that set a variable", async () => {
+		const template =
+			'{% set v = later("late", 10) %}{% block b %}{{ v }}{% endblock %}';
+		expect(await render(template, { functions: { later } })).toBe("late");
+	});
+
+	test("up to 64 parts run early at once", async () => {
+		const { calls, load } = tracked();
+		const template =
+			"{% for n in 1..100 %}{% set v = load(n) %}{{ v }}{% endfor %}";
+		const expected = Array.from({ length: 100 }, (_, i) => i + 1).join("");
+		expect(await render(template, { functions: { load } })).toBe(expected);
+		expect(calls.most).toBe(65);
+	});
+
+	test("indentation is the same as when parts wait their turn", async () => {
+		const template = lines(
+			"<ul>",
+			'\t{% include "a" %}',
+			'\t{% include "b" %}',
+			"</ul>",
+		);
+		const templates = {
+			a: lines("<li>{{ later('a', 10) }}</li>", "<li>a2</li>", ""),
+			b: lines("<li>{{ later('b') }}</li>", "<li>b2</li>", ""),
+		};
+		expect(await render(template, { functions: { later }, templates })).toBe(
+			lines(
+				"<ul>",
+				"\t<li>a</li>",
+				"\t<li>a2</li>",
+				"\t<li>b</li>",
+				"\t<li>b2</li>",
+				"</ul>",
+			),
+		);
+	});
+
+	test("parts that depend on a part run once, after it", async () => {
+		const { calls, load } = tracked();
+		const template = lines(
+			'{% extends "layout" %}',
+			'{% block content %}{% set page = load({ title: "Hi" }, 10) %}<h1>{{ page.title }}</h1>{{ load("rel") }}{% endblock %}',
+		);
+		const templates = {
+			layout: "<main>{% block content %}{% endblock %}</main>",
+		};
+		expect(await render(template, { functions: { load }, templates })).toBe(
+			"<main><h1>Hi</h1>rel</main>",
+		);
+		expect(calls.started).toEqual(["[object Object]", "rel"]);
+	});
+
+	test("parts run once when no more may run early", async () => {
+		const parts = Array.from(
+			{ length: 70 },
+			(_, n) => `{% set v${n} = later(${n}, 1) %}<{{ v${n} }}>{{ later("") }}`,
+		);
+		const expected = Array.from({ length: 70 }, (_, n) => `<${n}>`).join("");
+		expect(await render(parts.join(""), { functions: { later } })).toBe(
+			expected,
+		);
+	});
+
+	test("a block whose content sets a variable runs before parts that read it", async () => {
+		const template =
+			'{% extends "layout" %}{% block a %}{{ later("A", 10) }}{% set count = 5 %}{% endblock %}';
+		const templates = {
+			layout: lines(
+				"{% set count = 1 %}",
+				"{% block a %}{% endblock %}",
+				'[{{ count }}]{{ later("F") }}',
+			),
+		};
+		expect(await render(template, { functions: { later }, templates })).toBe(
+			"A[5]F",
+		);
+	});
+
+	test("a loop placing a block that sets a variable runs its items in turn", async () => {
+		const template =
+			'{% extends "layout" %}{% block row %}{{ later("", 30 - i * 10) }}{% set n = n + 1 %}[{{ n }}]{% endblock %}';
+		const templates = {
+			layout:
+				"{% set n = 0 %}{% for i in [0, 1, 2] %}{% block row %}{% endblock %}{% endfor %}",
+		};
+		expect(await render(template, { functions: { later }, templates })).toBe(
+			"[1][2][3]",
+		);
+	});
+
+	test("a fill that sets a variable runs before a fill that reads it", async () => {
+		const template = lines(
+			"{% set x = 0 %}",
+			'{% component "card" %}',
+			'{% fill "a" %}{{ later("A", 10) }}{% set x = 1 %}{% endfill %}',
+			'{% fill "b" %}[{{ x }}]{{ later("B") }}{% endfill %}',
+			"{% endcomponent %}",
+		);
+		const templates = {
+			card: lines(
+				'{% slot "a" %}',
+				"{% endslot %}",
+				'{% slot "b" %}',
+				"{% endslot %}",
+				"",
+			),
+		};
+		expect(await render(template, { functions: { later }, templates })).toBe(
+			"A[1]B",
+		);
+	});
+
+	test("block() calls running at the same time don't count as nesting", async () => {
+		const template = lines(
+			'{% extends "base" %}',
+			"{% block item %}{{ later(1) }}{% endblock %}",
+		);
+		const templates = {
+			base: '{% for n in 1..70 %}{{ block("item") }}{% endfor %}{% block item %}{% endblock %}',
+		};
+		const output = await render(template, { functions: { later }, templates });
+		expect(output).toBe("1".repeat(71));
+	});
+});
+
+describe("running at the same time with outlets", () => {
+	test("outlets get content in the page's order", async () => {
+		const template =
+			'{% outlet "head" %}|{% for n in [30, 1, 15] %}{% set v = later(n, n) %}{% add to "head" %}[{{ v }}]{% endadd %}{% endfor %}';
+		expect(await render(template, { functions: { later } })).toBe(
+			"[30][1][15]|",
+		);
+	});
+
+	test("an outlet in a part that runs early stands in its place", async () => {
+		const template =
+			'{{ later("a", 10) }}<h>{% outlet "o" %}</h>{{ later("b") }}{% add to "o" %}x{% endadd %}';
+		const options = { functions: { later } };
+		expect(await render(template, options)).toBe("a<h>x</h>b");
+		const parts = await readParts(await renderStream(template, options));
+		expect(parts.join("")).toBe("a<h>x</h>b");
+	});
+
+	test("once keeps the content of the first tag in the page", async () => {
+		const template =
+			'{% outlet "o" %}|{% for n in [20, 1] %}{% set v = later(n, n) %}{% add to "o" once %}{{ v }}{% endadd %}{% endfor %}';
+		expect(await render(template, { functions: { later } })).toBe("20|");
+	});
+
+	test("a once tag runs its content only the first time in the page", async () => {
+		const template =
+			'{% outlet "o" %}{{ later(1, 10) }}{% include "q" %}{% include "q" %}';
+		const templates = {
+			q: '{% set n = 0 %}{% add to "o" once %}x{% set n = 1 %}{% endadd %}[{{ n }}]',
+		};
+		expect(await render(template, { functions: { later }, templates })).toBe(
+			"x1[1][0]",
+		);
+	});
+
+	test("repeats of a once tag after a flush add nothing, and are no error", async () => {
+		const template = lines(
+			'{% outlet "o" %}',
+			"{{ later(1, 10) }}",
+			'{% include "q" %}',
+			"{% flush %}",
+			"{{ later(2) }}",
+			'{% include "q" %}',
+		);
+		const templates = { q: '{% add to "o" once %}x{% endadd %}' };
+		expect(await render(template, { functions: { later }, templates })).toBe(
+			lines("x1", "2", ""),
+		);
+	});
+
+	test("content added early after a flush is an error", async () => {
+		const template =
+			'{% outlet "o" %}{% for n in [1, 2] %}{% if n == 1 %}{{ later("x", 10) }}{% flush %}{% else %}{% add to "o" %}late{% endadd %}{% endif %}{% endfor %}';
+		expect(await errorCode(template, { functions: { later } })).toBe(
+			"outlet-closed",
+		);
+	});
+
+	test("a streamed render sends the page in order", async () => {
+		const template = lines(
+			'<head>{% outlet "head" %}</head>{% flush %}',
+			"{% for n in [20, 1] %}{% set v = later(n, n) %}<p>{{ v }}</p>{% endfor %}",
+		);
+		const parts = await readParts(
+			await renderStream(template, { functions: { later } }),
+		);
+		expect(parts.join("")).toBe(lines("<head></head>", "<p>20</p><p>1</p>"));
+	});
+
+	test("the first deferred island in the page brings the script", async () => {
+		const template =
+			'{% for n in [20, 1] %}{% set v = later(n, n) %}{% island "card" with { n: v } %}{% endisland %}{% endfor %}';
+		const output = await render(template, {
+			functions: { later },
+			templates: { card: "{% props n %}{{ n }}" },
+			islands: deferIslands({ url: "/i/" }),
+		});
+		const first = output.indexOf("<kiln-island");
+		expect(output.startsWith(`<script>${islandScript}</script>`)).toBe(true);
+		expect(output.indexOf("<script>", first)).toBe(-1);
+	});
+
+	test("cached sections work in items that run at the same time", async () => {
+		const cache = memoryCache();
+		const template =
+			"{% for n in [20, 1] %}{% cache n %}[{{ later(n, n) }}]{% endcache %}{% endfor %}";
+		expect(await render(template, { cache, functions: { later } })).toBe(
+			"[20][1]",
+		);
+		expect(await render(template, { cache, functions: { later } })).toBe(
+			"[20][1]",
+		);
+	});
+});
+
+describe("running at the same time when parts fail", () => {
+	const fail = (message: string, ms: number) =>
+		later(null, ms).then(() => {
+			throw new Error(message);
+		});
+
+	test("parts that wait for the parts before them make no changes after one fails", async () => {
+		const islands = deferIslands({ url: "/i/" });
+		expect(
+			await errorCode(
+				'{{ fail("first", 10) }}{% island "card" with { n: 1 } %}{% endisland %}',
+				{
+					functions: { fail },
+					templates: { card: "{% props n %}{{ n }}" },
+					islands,
+				},
+			),
+		).toBe("host-error");
+		expect(Object.keys(islands.manifest)).toEqual([]);
+	});
+
+	test("the error that comes first in the page wins", async () => {
+		const error = await renderError(
+			'{{ fail("first", 20) }}{{ fail("second", 1) }}',
+			{ functions: { fail } },
+		);
+		expect(error instanceof KilnRenderError && error.code).toBe("host-error");
+		expect((error.cause as Error).message).toBe("first");
+		await settle();
+	});
+
+	test("the render fails once every part it started is done", async () => {
+		const { calls, load } = tracked();
+		const template =
+			'{{ fail("first", 1) }}{% for n in [1, 2, 3] %}{{ load(n, 20) }}{% endfor %}';
+		expect(await errorCode(template, { functions: { fail, load } })).toBe(
+			"host-error",
+		);
+		expect(calls.started).toEqual(["1", "2", "3"]);
+		expect(calls.active).toBe(0);
+	});
+
+	test("output running early counts towards the output limit", async () => {
+		const template = '{% for n in 1..4 %}{{ later("0123456789") }}{% endfor %}';
+		expect(
+			await errorCode(template, {
+				functions: { later },
+				limits: { maxOutputLength: 30 },
+			}),
+		).toBe("limit-output");
 	});
 });

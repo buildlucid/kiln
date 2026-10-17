@@ -47,7 +47,7 @@
 
 	<h2>Adding once</h2>
 
-	<p><code>once</code> adds the content only the first time that tag runs in a render. A component used many times on a page adds its styles once.</p>
+	<p><code>once</code> adds the content only the first time that tag runs in a render, in the order of the page. A component used many times on a page adds its styles once.</p>
 
 	{% apply highlight("kiln") %}
 		{% verbatim %}

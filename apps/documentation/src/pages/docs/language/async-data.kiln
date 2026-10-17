@@ -21,8 +21,38 @@
 	<ul>
 		<li>Any function, filter or test can return a promise.</li>
 		<li>Kiln only waits where a call returns one. Everything else runs straight through, so a template with no async calls never waits.</li>
-		<li>Output always follows the order of the template, whatever order the promises finish in. So does content that macros and blocks add to an <a href="/docs/tags/outlet/">outlet</a> while they wait.</li>
+		<li>Output always follows the order of the template, whatever order the promises finish in. So does content added to an <a href="/docs/tags/outlet/">outlet</a>.</li>
 		<li>Values in the render data and globals are not awaited, and Kiln never calls their <code>then</code> method, even next to a call that waits, as in <code>&#123;&#123; later() ~ value }}</code>. Pass data that is ready, or a function the template can call.</li>
+	</ul>
+
+	<h2>Running at the same time</h2>
+
+	<p>While one part of a template waits, Kiln starts the parts after it that don't depend on it. Their calls run at the same time, so a page takes about as long as its slowest chain of calls, not all of them added up.</p>
+
+	{% apply highlight("kiln") %}
+		{% verbatim %}
+{% set posts = documents("post", limit: 10) %}
+
+{% for post in posts %}
+	{% set author = document("author", id: post.authorId) %}
+	<a href="{{ post.url }}">{{ post.title }}</a> by {{ author.name }}
+{% endfor %}
+
+{% for category in categories() %}
+	<a href="{{ category.url }}">{{ category.name }}</a>
+{% endfor %}
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>Here Kiln loads the posts and the categories at the same time. Once the posts arrive, it loads all ten authors at the same time too. That is two waits instead of twelve.</p>
+
+	<ul>
+		<li>A part depends on an earlier one when it reads or sets a variable the earlier one sets, or sets a variable the earlier one reads. It waits for that part to finish first.</li>
+		<li>A <a href="/docs/tags/extends/">block</a> or <a href="/docs/tags/component/">slot</a> can read any variable, so it waits for earlier parts that set one, and later parts that set one wait for it. If the content of any block or fill in the page sets a variable, a block or slot also waits for earlier parts that read one, and later parts that read one wait for it.</li>
+		<li>The items of a loop run at the same time when the loop body only sets variables that don't exist outside the loop. Otherwise each item waits for the one before it.</li>
+		<li>Outlets, <a href="/docs/tags/flush/"><code>flush</code></a> and islands wait for every part before them, so they behave as if nothing ran early.</li>
+		<li>Up to 64 parts of a render run early at once. Beyond that, parts wait their turn.</li>
+		<li>The output is the same as if every part had waited its turn. The <a href="/docs/api/safety/">limits</a> count the same work too.</li>
 	</ul>
 
 	<h2>Async in filters</h2>
@@ -37,7 +67,7 @@
 
 	<h2>Errors</h2>
 
-	<p>If a promise rejects, the render stops with a render error. Its <code>cause</code> holds the original error.</p>
+	<p>If a promise rejects, the render stops with a render error. Its <code>cause</code> holds the original error. When parts were running at the same time, Kiln waits for all of them to finish, then stops with the error that comes first in the template.</p>
 
 	<p>You can use this on purpose. For example, a <code>notFound()</code> function can throw an error your server catches and turns into a 404 page.</p>
 
@@ -48,6 +78,6 @@
 	{% endapply %}
 
 	{% component "components/callout" with { title: "Don't rely on call order" } %}
-		<p>A later version of Kiln may run independent <code>set</code> tags at the same time. Write functions that don't depend on being called in a particular order.</p>
+		<p>Kiln calls functions in later parts of a template while earlier parts wait, so your functions may run in any order, and at the same time. A part may even start before an earlier part fails. Write functions that don't depend on being called in a particular order.</p>
 	{% endcomponent %}
 {% endblock %}

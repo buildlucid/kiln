@@ -18,6 +18,15 @@ import {
 } from "../parser/ast.js";
 import { parse } from "../parser/parser.js";
 import { getAttr, getMethod, readableNames } from "../runtime/access.js";
+import {
+	atFront,
+	contentSets,
+	isRoot,
+	passesAhead,
+	passesFrom,
+	runSequence,
+	type Sequence,
+} from "../runtime/ahead.js";
 import { packSaved, unpackSaved } from "../runtime/cache.js";
 import { escapeHtml, escapeWith } from "../runtime/escape.js";
 import {
@@ -38,6 +47,7 @@ import {
 } from "../runtime/operators.js";
 import {
 	additionsIn,
+	checkLate,
 	closeOutlets,
 	OUTLET_INDENT,
 	recordAddition,
@@ -60,7 +70,6 @@ import {
 	markCaller,
 	endPlace,
 	passData,
-	runFrom,
 	silence,
 	startPlace,
 	step,
@@ -120,6 +129,7 @@ import {
 import { Source, type Span } from "../source.js";
 import { suggest } from "../suggest.js";
 import { constant, evalAll, map1, map2 } from "./combinators.js";
+import { type Effects, effectsOf, planOf } from "./effects.js";
 
 /** Marks a short-circuited optional chain while it is being evaluated. */
 export const SHORT: unique symbol = Symbol("kiln.short");
@@ -286,10 +296,10 @@ const printParts = (list: Part[]): Stmt => {
 	const emits: (((value: unknown) => string) | null)[] = [];
 	const html: boolean[] = [];
 	const roots: (string | null)[] = [];
-	const names: (string | null)[][] = [];
-	const steps: PathStep["read"][][] = [];
-	const stepSpans: Span[][] = [];
+	const paths: PathStep[][] = [];
 	const choices: [string, string][] = [];
+	const tests: (Ev | null)[] = [];
+	const spans: Span[] = [];
 	for (const part of parts) {
 		const output = part.text === null ? part : null;
 		const compiled = output?.compiled;
@@ -308,17 +318,11 @@ const printParts = (list: Part[]): Stmt => {
 		emits.push(emit);
 		html.push(output?.strategy === "html");
 		roots.push(root);
-		names.push(path ? path.steps.map((access) => access.name) : NO_NAMES);
-		steps.push(path ? path.steps.map((access) => access.read) : NO_READS);
-		stepSpans.push(path ? path.steps.map((access) => access.span) : NO_SPANS);
+		paths.push(path ? path.steps : NO_STEPS);
 		choices.push(choice ?? NO_CHOICE);
+		tests.push(compiled?.choice?.test ?? null);
+		spans.push(part.span);
 	}
-	const tests = parts.map((part) =>
-		part.text === null && part.compiled.choice
-			? part.compiled.choice.test
-			: null,
-	);
-	const spans = parts.map((part) => part.span);
 
 	return (run, scope, out) => {
 		const indent = out.indent;
@@ -349,13 +353,7 @@ const printParts = (list: Part[]): Stmt => {
 				if (value === undefined || typeof value === "function") {
 					value = (evs[i] as Ev)(run, scope);
 				} else {
-					value = readKeys(
-						run,
-						value,
-						names[i] as (string | null)[],
-						steps[i] as PathStep["read"][],
-						stepSpans[i] as Span[],
-					);
+					value = readKeys(run, value, paths[i] as PathStep[]);
 				}
 			} else value = (evs[i] as Ev)(run, scope);
 			if (typeof value === "string" && html[i]) {
@@ -374,9 +372,7 @@ const printParts = (list: Part[]): Stmt => {
 	};
 };
 
-const NO_NAMES: (string | null)[] = [];
-const NO_READS: PathStep["read"][] = [];
-const NO_SPANS: Span[] = [];
+const NO_STEPS: PathStep[] = [];
 const NO_CHOICE: [string, string] = ["", ""];
 
 /** Emits both branches of a choice when compiling, or returns null when emitting one fails, so it fails at render. */
@@ -399,15 +395,14 @@ const emitChoice = (
 const readKeys = (
 	run: Run,
 	target: unknown,
-	names: readonly (string | null)[],
-	reads: readonly PathStep["read"][],
-	spans: readonly Span[],
+	steps: readonly PathStep[],
 ): unknown => {
 	let value = target;
 	let i = 0;
 	try {
-		for (; i < names.length; i++) {
-			const name = names[i] as string | null;
+		for (; i < steps.length; i++) {
+			const step = steps[i] as PathStep;
+			const name = step.name;
 			if (name !== null && typeof value === "object" && value !== null) {
 				const proto = Object.getPrototypeOf(value);
 				if (proto === Object.prototype || proto === null) {
@@ -422,11 +417,12 @@ const readKeys = (
 					}
 				}
 			}
-			value = (reads[i] as PathStep["read"])(run, value);
+			value = step.read(run, value);
 		}
 	} catch (error) {
 		// A getter in your data threw. Errors from the full reads are located already.
-		throw locate(run, spans[i] as Span, error, readingLabel(names[i] ?? ""));
+		const step = steps[i] as PathStep;
+		throw locate(run, step.span, error, readingLabel(step.name ?? ""));
 	}
 	return value;
 };
@@ -439,6 +435,23 @@ export const setsVariables = (statements: readonly Statement[]): boolean =>
 	containsNode(
 		statements,
 		(record) => record.type === "Set" || record.type === "SetBlock",
+	);
+
+/**
+ * Whether statements may set a variable, themselves or through content from elsewhere they place: a block, `block()`,
+ * `parent()` or a slot. For a component's fills, whose content may then set any variable around the component.
+ */
+export const mayWrite = (statements: readonly Statement[]): boolean =>
+	containsNode(
+		statements,
+		(record) =>
+			record.type === "Set" ||
+			record.type === "SetBlock" ||
+			record.type === "Block" ||
+			record.type === "Slot" ||
+			(record.type === "Call" &&
+				(record.callee as { type?: string }).type === "Name" &&
+				BUILTIN_CALLS.has((record.callee as { name: string }).name)),
 	);
 
 /** Checks whether any node under `node` matches. */
@@ -544,10 +557,13 @@ class Compiler {
 			parent: null,
 			parentSpan: { start: 0, end: 0 },
 			blocks: new Map(),
+			blockList: undefined,
 			macros: new Map(),
 			imports: [],
 			resolved: new Map(),
+			keyed: undefined,
 			slotNames: [],
+			plain: false,
 		};
 		this.#template = template;
 	}
@@ -567,18 +583,20 @@ class Compiler {
 			template.parent = this.#expr(extendsNode.template);
 			template.parentSpan = extendsNode.span;
 			const statements: Stmt[] = [];
-			for (const statement of body) {
+			const ranges: number[] = [];
+			body.forEach((statement, index) => {
 				if (
 					statement.type === "Set" ||
 					statement.type === "SetBlock" ||
 					statement.type === "Props"
 				) {
 					statements.push(this.#statement(statement));
+					ranges.push(index, index + 1);
 				} else if (statement.type === "Block") {
 					this.#defineBlock(statement);
 				}
-			}
-			template.body = this.#sequence(statements);
+			});
+			template.body = this.#sequence(statements, body, ranges);
 		} else {
 			template.body = this.#body(body);
 		}
@@ -586,6 +604,10 @@ class Compiler {
 		// Lexer, parser and compiler problems are found in separate passes. Report them in source order.
 		this.#diagnostics.sort((a, b) => a.start.offset - b.start.offset);
 		template.hasErrors = this.#diagnostics.some((d) => d.severity === "error");
+		template.plain =
+			template.parent === null &&
+			template.blocks.size === 0 &&
+			template.imports.length === 0;
 		return template;
 	}
 
@@ -934,19 +956,68 @@ class Compiler {
 
 	// Statements
 
-	#sequence(statements: Stmt[]): Stmt {
-		const list = statements.filter((statement) => statement !== NOOP);
+	/**
+	 * Statements in order. Statement `i` compiled from `source[ranges[2i]]` up to `source[ranges[2i + 1]]`, which
+	 * decide what may start early while it waits; see `runSequence`. They are only read the first time one waits.
+	 */
+	#sequence(
+		statements: Stmt[],
+		source: readonly Statement[],
+		ranges: readonly number[],
+	): Stmt {
+		const list: Stmt[] = [];
+		const kept: number[] = [];
+		statements.forEach((statement, index) => {
+			if (statement === NOOP) return;
+			list.push(statement);
+			kept.push(ranges[2 * index] as number, ranges[2 * index + 1] as number);
+		});
 		if (list.length === 0) return NOOP;
 		if (list.length === 1) return list[0] as Stmt;
-		return (run, scope, out) => runFrom(list, 0, run, scope, out);
+		const env = this.#env;
+		// Effects and plans are only found the first time a statement waits. The strict plan is for renders whose
+		// blocks or fills set variables; see `contentSets`.
+		let effects: Effects[] | null = null;
+		let spans: Span[] = [];
+		let elsewhere = false;
+		let loose: ReturnType<Sequence["plan"]> | null = null;
+		let strict: ReturnType<Sequence["plan"]> | null = null;
+		const sequence: Sequence = {
+			statements: list,
+			plan: (run) => {
+				if (effects === null) {
+					const groups = list.map((_, i) =>
+						source.slice(kept[2 * i] as number, kept[2 * i + 1] as number),
+					);
+					effects = groups.map((group) => effectsOf(group, env));
+					spans = groups.map((group) => ({
+						start: (group[0] as Statement).span.start,
+						end: (group.at(-1) as Statement).span.end,
+					}));
+					elsewhere = effects.some((part) => part.elsewhere);
+				}
+				if (elsewhere && contentSets(run)) {
+					return (strict ??= { ...planOf(effects, true), spans });
+				}
+				return (loose ??= { ...planOf(effects, false), spans });
+			},
+		};
+		const last = list.length - 1;
+		return (run, scope, out) => runSequence(sequence, 0, last, run, scope, out);
 	}
 
 	/** Compiles statements in order. Runs of text and outputs that never wait become one statement, see `printParts`. */
 	#body(statements: Statement[]): Stmt {
 		const compiled: Stmt[] = [];
+		// The statements each compiled statement covers, as start and end indexes into `statements`.
+		const ranges: number[] = [];
 		let parts: Part[] = [];
-		const flush = () => {
-			if (parts.length > 0) compiled.push(printParts(parts));
+		let partsStart = 0;
+		const flush = (end: number) => {
+			if (parts.length > 0) {
+				compiled.push(printParts(parts));
+				ranges.push(partsStart, end);
+			}
 			parts = [];
 		};
 		for (let i = 0; i < statements.length; i++) {
@@ -957,14 +1028,16 @@ class Compiler {
 					(item, index) => index >= i && item.span.end === generated.end,
 				);
 				if (last !== -1) {
-					flush();
+					flush(i);
 					compiled.push(generated.run);
+					ranges.push(i, last + 1);
 					this.#defineCovered(statements.slice(i, last + 1));
 					i = last;
 					continue;
 				}
 			}
 			if (statement.type === "Text") {
+				if (parts.length === 0) partsStart = i;
 				parts.push({
 					text: statement.value,
 					lines: statement.lines,
@@ -975,6 +1048,7 @@ class Compiler {
 			if (statement.type === "Output") {
 				const expression = this.#expr(statement.expression);
 				if (!expression.async) {
+					if (parts.length === 0) partsStart = i;
 					parts.push({
 						text: null,
 						compiled: expression,
@@ -983,15 +1057,17 @@ class Compiler {
 					});
 					continue;
 				}
-				flush();
+				flush(i);
 				compiled.push(this.#output(expression, statement.span));
+				ranges.push(i, i + 1);
 				continue;
 			}
-			flush();
+			flush(i);
 			compiled.push(this.#statement(statement));
+			ranges.push(i, i + 1);
 		}
-		flush();
-		return this.#sequence(compiled);
+		flush(statements.length);
+		return this.#sequence(compiled, statements, ranges);
 	}
 
 	/**
@@ -1140,7 +1216,15 @@ class Compiler {
 		// Without `set` or arrow functions nothing can keep or change an iteration's scope, so one object serves every
 		// iteration.
 		const shared = !keepsScope;
+		// What the body sets, found the first time a pass waits. See `passesAhead`.
+		let effects: { sets: readonly string[]; elsewhere: boolean } | null = null;
+		const env = this.#env;
 
+		/**
+		 * Runs passes `index` to `end`. When a pass waits, the passes after it run as `passesFrom` runs them: ahead of
+		 * it when they may. `ahead` is whether they may, found the first time a pass waits, and `indent` is the
+		 * output's indentation when the loop started.
+		 */
 		const iterate = (
 			run: Run,
 			scope: Scope,
@@ -1148,12 +1232,16 @@ class Compiler {
 			values: readonly unknown[],
 			keys: readonly unknown[] | null,
 			index: number,
+			end: number,
 			reused: Scope | null,
+			indent: string,
+			ahead: boolean | null,
 		): void | Promise<void> => {
 			const length = values.length;
-			for (let i = index; i < length; i++) {
+			for (let i = index; i < end; i++) {
 				step(run, span);
 				const inner = reused ?? childScope(scope);
+				const inline = out.inline;
 				inner[valueName] = values[i] ?? null;
 				if (keyName !== null) inner[keyName] = keys ? (keys[i] ?? null) : i;
 				if (usesLoop) {
@@ -1169,11 +1257,43 @@ class Compiler {
 					};
 				}
 				const result = body(run, inner, out);
-				if (result !== undefined) {
-					return result.then(() =>
-						iterate(run, scope, out, values, keys, i + 1, reused),
-					);
+				if (result === undefined) continue;
+				if (i + 1 >= end) return result;
+				if (effects === null) {
+					const found = effectsOf(node.body, env);
+					effects = { sets: [...found.sets], elsewhere: found.elsewhere };
 				}
+				const may = (ahead ??= passesAhead(
+					run,
+					scope,
+					effects.sets,
+					effects.elsewhere,
+				));
+				// Each pass after it gets a scope of its own, since the waiting pass still uses this one.
+				return passesFrom(
+					run,
+					out,
+					result,
+					inline,
+					i + 1,
+					end,
+					indent,
+					(aheadRun, aheadOut, at) =>
+						iterate(
+							aheadRun,
+							scope,
+							aheadOut,
+							values,
+							keys,
+							at,
+							at + 1,
+							shared ? childScope(scope) : null,
+							indent,
+							may,
+						),
+					span,
+					may,
+				);
 			}
 		};
 
@@ -1181,7 +1301,18 @@ class Compiler {
 			const { values, keys } = loopItems(run, span, value, keyName !== null);
 			if (values.length === 0) return alternate?.(run, scope, out);
 			const reused = shared ? childScope(scope) : null;
-			return iterate(run, scope, out, values, keys, 0, reused);
+			return iterate(
+				run,
+				scope,
+				out,
+				values,
+				keys,
+				0,
+				values.length,
+				reused,
+				out.indent,
+				null,
+			);
 		};
 
 		const ev = iterable.ev;
@@ -1385,7 +1516,7 @@ class Compiler {
 			// The block renders in the capture it is placed in, such as a cached section.
 			const render = () =>
 				entry.def.body(
-					entry.run.within(run.capture),
+					entry.run.within(run.capture, run.blockDepth),
 					blockScope(entry.def, scope),
 					out,
 				);
@@ -1431,15 +1562,10 @@ class Compiler {
 
 	#component(node: Extract<Statement, { type: "Component" }>): Stmt {
 		const { span, indent } = node;
-		const setsIn = (body: Statement[]) =>
-			containsNode(
-				body,
-				(record) => record.type === "Set" || record.type === "SetBlock",
-			);
 		const fills = node.fills.map((fill) => ({
 			name: fill.name,
 			body: this.#body(fill.body),
-			sets: setsIn(fill.body),
+			sets: mayWrite(fill.body),
 		}));
 		const hasDefault = node.body.some((statement) => !isBlank(statement));
 		if (hasDefault) {
@@ -1453,7 +1579,7 @@ class Compiler {
 			fills.push({
 				name: DEFAULT_SLOT,
 				body: this.#body(node.body),
-				sets: setsIn(node.body),
+				sets: mayWrite(node.body),
 			});
 		}
 		return this.#embedding(
@@ -1506,7 +1632,7 @@ class Compiler {
 			if (islands.script && !state.islandScript) {
 				opening = ISLAND_SCRIPT + opening;
 				// A capture may never be output, so an island in one brings its own script.
-				if (out === state.root) state.islandScript = true;
+				if (isRoot(state, out)) state.islandScript = true;
 			}
 			const lead = (at: string) => (out.inline ? "" : out.indent) + at;
 			write(
@@ -1550,41 +1676,53 @@ class Compiler {
 			streamed.push(html);
 			return element(run, out, scope, islands, `stream="${n}"`);
 		};
+		const place = (
+			run: Run,
+			out: Out,
+			name: unknown,
+			variables: unknown,
+			scope: Scope,
+		): void | Promise<void> => {
+			const props = islandProps(run, span, variables);
+			const state = run.state;
+			const islands = state.islands;
+			// Only `renderStream` streams, and only output that is sure to be sent once.
+			const away =
+				islands !== null &&
+				(islands.mode === "defer" ||
+					(state.stream !== null &&
+						isRoot(state, out) &&
+						!run.capture?.section));
+			if (away) {
+				return after(loadTemplate(run, name, span), (template) =>
+					template
+						? render(run, out, scope, islands, template, props)
+						: undefined,
+				);
+			}
+			if (indent === "") {
+				return embed(run, out, span, name, props, null, false);
+			}
+			const saved = out.indent;
+			const inline = out.inline;
+			startPlace(out, indent);
+			return endPlace(
+				out,
+				saved,
+				inline,
+				embed(run, out, span, name, props, null, false),
+			);
+		};
 		return this.#embedding(
 			node.template,
 			node.with,
 			span,
-			(run, out, name, variables, scope) => {
-				const props = islandProps(run, span, variables);
-				const state = run.state;
-				const islands = state.islands;
-				// Only `renderStream` streams, and only output that is sure to be sent once.
-				const away =
-					islands !== null &&
-					(islands.mode === "defer" ||
-						(state.stream !== null &&
-							out === state.root &&
-							!run.capture?.section));
-				if (away) {
-					return after(loadTemplate(run, name, span), (template) =>
-						template
-							? render(run, out, scope, islands, template, props)
-							: undefined,
-					);
-				}
-				if (indent === "") {
-					return embed(run, out, span, name, props, null, false);
-				}
-				const saved = out.indent;
-				const inline = out.inline;
-				startPlace(out, indent);
-				return endPlace(
-					out,
-					saved,
-					inline,
-					embed(run, out, span, name, props, null, false),
-				);
-			},
+			(run, out, name, variables, scope) =>
+				// Which island brings the script, and the order streamed islands are numbered in, follow the page, so an
+				// island running ahead waits for the parts before it.
+				run.state.islands === null
+					? place(run, out, name, variables, scope)
+					: atFront(run, () => place(run, out, name, variables, scope)),
 		);
 	}
 
@@ -1632,7 +1770,7 @@ class Compiler {
 			try {
 				// The fill renders in the capture the slot is in, such as a cached section.
 				const result = fill.body(
-					fill.run.within(run.capture),
+					fill.run.within(run.capture, run.blockDepth),
 					fillScope(fill, run),
 					out,
 				);
@@ -1760,7 +1898,7 @@ class Compiler {
 			return value;
 		};
 
-		const render = (
+		const save = (
 			run: Run,
 			scope: Scope,
 			out: Out,
@@ -1792,23 +1930,37 @@ class Compiler {
 			return after(found, (value) => {
 				const saved = typeof value === "string" ? unpackSaved(value) : null;
 				if (saved) {
-					const islands = state.islands;
-					if (islands?.mode === "defer" && saved.islands.length > 0) {
-						// The copy holds the island script only if it was the first in its render to need it.
-						if (saved.islandScript) {
-							if (out === state.root) state.islandScript = true;
-						} else if (islands.script && !state.islandScript) {
-							write(run, out, ISLAND_SCRIPT, span);
-							if (out === state.root) state.islandScript = true;
+					const replay = (front: boolean) => {
+						const islands = state.islands;
+						if (islands?.mode === "defer" && saved.islands.length > 0) {
+							// The copy holds the island script only if it was the first in its render to need it.
+							if (saved.islandScript) {
+								if (isRoot(state, out)) state.islandScript = true;
+							} else if (islands.script && !state.islandScript) {
+								write(run, out, ISLAND_SCRIPT, span);
+								if (isRoot(state, out)) state.islandScript = true;
+							}
+							for (const island of saved.islands) {
+								recordIsland(run, span, islands, island.template, island.props);
+							}
 						}
-						for (const island of saved.islands) {
-							recordIsland(run, span, islands, island.template, island.props);
+						write(run, out, saved.html, span);
+						for (const addition of saved.additions) {
+							recordAddition(run, span, addition, front);
 						}
+					};
+					// A copy that adds a `once` tag not added yet waits for the parts before it, as `add to` does.
+					if (
+						run.capture?.behind &&
+						saved.additions.some(
+							(addition) =>
+								addition.once !== null &&
+								state.once?.has(addition.once) !== true,
+						)
+					) {
+						return atFront(run, () => replay(true));
 					}
-					write(run, out, saved.html, span);
-					for (const addition of saved.additions) {
-						recordAddition(run, span, addition);
-					}
+					replay(false);
 					return;
 				}
 				const start = out.s.length;
@@ -1835,6 +1987,19 @@ class Compiler {
 				});
 			});
 		};
+
+		// Whether a section holds the island script depends on the islands before it in the page, so with deferred
+		// islands a section running ahead waits for the parts before it.
+		const render = (
+			run: Run,
+			scope: Scope,
+			out: Out,
+			keyValue: unknown,
+			secondsValue: unknown,
+		): void | Promise<void> =>
+			run.state.islands?.mode === "defer"
+				? atFront(run, () => save(run, scope, out, keyValue, secondsValue))
+				: save(run, scope, out, keyValue, secondsValue);
 
 		return (run, scope, out) => {
 			step(run, span);
@@ -1865,10 +2030,9 @@ class Compiler {
 	 */
 	#outlet(node: Extract<Statement, { type: "Outlet" }>): Stmt {
 		const { name, span, indent } = node;
-		return (run, _scope, out) => {
-			step(run, span);
+		const mark = (run: Run, out: Out) => {
 			const state = run.state;
-			if (out !== state.root || run.capture?.section) {
+			if (!isRoot(state, out) || run.capture?.section) {
 				throw fail(
 					run,
 					span,
@@ -1887,11 +2051,17 @@ class Compiler {
 			}
 			// Without `indent` the tag shares its line, as `startPlace` treats it.
 			state.outlets.set(name, {
+				out,
 				offset: out.s.length,
 				indent: indent === undefined ? out.indent : out.indent + indent,
 				inline: indent === undefined,
 				content: null,
 			});
+		};
+		// Outlets are marked in the order of the page, so one running ahead waits for the parts before it.
+		return (run, _scope, out) => {
+			step(run, span);
+			return atFront(run, () => mark(run, out));
 		};
 	}
 
@@ -1901,10 +2071,9 @@ class Compiler {
 	 */
 	#flush(node: Extract<Statement, { type: "Flush" }>): Stmt {
 		const { span } = node;
-		return (run, _scope, out) => {
-			step(run, span);
+		const close = (run: Run, out: Out) => {
 			const state = run.state;
-			if (out !== state.root || run.capture?.section) {
+			if (!isRoot(state, out) || run.capture?.section) {
 				throw fail(
 					run,
 					span,
@@ -1913,7 +2082,13 @@ class Compiler {
 				);
 			}
 			closeOutlets(state);
+			checkLate(state);
 			state.stream?.flush();
+		};
+		// The outlets close with what the parts before the flush added, so one running ahead waits for them.
+		return (run, _scope, out) => {
+			step(run, span);
+			return atFront(run, () => close(run, out));
 		};
 	}
 
@@ -1926,18 +2101,38 @@ class Compiler {
 		const body = this.#body(node.body);
 		const { outlet, span } = node;
 		const once = node.once ? `${this.#template.name}:${span.start}` : null;
-		return (run, scope) => {
-			step(run, span);
-			const state = run.state;
-			const first = once === null ? undefined : state.once?.get(once);
+		const add = (
+			run: Run,
+			scope: Scope,
+			front: boolean,
+		): void | Promise<void> => {
+			const first = once === null ? undefined : run.state.once?.get(once);
 			if (first !== undefined) {
-				recordAddition(run, span, { outlet, html: first, once });
+				recordAddition(run, span, { outlet, html: first, once }, front);
 				return;
 			}
-			const capture: Out = { s: "", indent: OUTLET_INDENT, inline: false };
+			const capture: Out = {
+				s: "",
+				indent: OUTLET_INDENT,
+				inline: false,
+				ahead: null,
+			};
 			return after(body(run, childScope(scope), capture), () =>
-				recordAddition(run, span, { outlet, html: capture.s, once }),
+				recordAddition(run, span, { outlet, html: capture.s, once }, front),
 			);
+		};
+		return (run, scope) => {
+			step(run, span);
+			// Whether a `once` tag is the first follows the page, so one running ahead that hasn't been added yet
+			// waits for the parts before it, and then knows.
+			if (
+				once !== null &&
+				run.capture?.behind &&
+				run.state.once?.has(once) !== true
+			) {
+				return atFront(run, () => add(run, scope, true));
+			}
+			return add(run, scope, false);
 		};
 	}
 
@@ -2935,7 +3130,8 @@ const renderBlockEntry = (
 ): Markup | Promise<Markup> => {
 	const state = run.state;
 	// `block()` can call itself, so count its nesting against `maxDepth`.
-	if (++state.blockDepth > state.maxDepth) {
+	const depth = run.blockDepth + 1;
+	if (depth > state.maxDepth) {
 		throw fail(
 			run,
 			span,
@@ -2946,25 +3142,14 @@ const renderBlockEntry = (
 	const out = emptyOut();
 	// A capture of its own, since the block can render alongside other expressions.
 	const capture = startCapture(run);
-	const done = () => {
-		state.blockDepth--;
+	const blockRun = entry.run.within(capture, depth);
+	const result = withCaller(run, span, () =>
+		entry.def.body(blockRun, blockScope(entry.def, scope), out),
+	);
+	return after(result, () => {
 		endCapture(run, capture);
 		return new Markup(out.s, entry.def.strategy || "html");
-	};
-	const result = withCaller(run, span, () =>
-		entry.def.body(
-			entry.run.within(capture),
-			blockScope(entry.def, scope),
-			out,
-		),
-	);
-	if (result instanceof Promise) {
-		return result.then(done, (error: unknown) => {
-			state.blockDepth--;
-			throw error;
-		});
-	}
-	return done();
+	});
 };
 
 /**
@@ -3025,11 +3210,8 @@ export const readMember = (
 /** Reads literal keys one after another, such as `post.author.name`, in one closure. See `readKeys`. */
 const pathRead = (root: Compiled, steps: PathStep[]): Compiled => {
 	const ev = root.ev;
-	const names = steps.map((access) => access.name);
-	const reads = steps.map((access) => access.read);
-	const spans = steps.map((access) => access.span);
 	return {
-		ev: (run, scope) => readKeys(run, ev(run, scope), names, reads, spans),
+		ev: (run, scope) => readKeys(run, ev(run, scope), steps),
 		async: false,
 		path: { root, steps },
 	};

@@ -84,6 +84,7 @@ export const callMacro = (
 		null,
 		null,
 		capture,
+		run.blockDepth,
 	);
 	const scope = childScope(state.globals);
 

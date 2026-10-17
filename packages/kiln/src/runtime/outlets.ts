@@ -1,6 +1,12 @@
 import type { Span } from "../source.js";
 import { fail } from "./render.js";
-import { additionLog, Capture, type RenderState, type Run } from "./types.js";
+import {
+	additionLog,
+	Capture,
+	type Out,
+	type RenderState,
+	type Run,
+} from "./types.js";
 
 /*
  * Outlets and `add to`.
@@ -25,9 +31,13 @@ export const OUTLET_INDENT = "\uFDD0";
 
 const INDENT_MARKERS = /(?:^|\n)\uFDD0/g;
 
-/** Where an outlet stands in the render's output, and the indentation its content takes. */
+/**
+ * Where an outlet stands in the render's output, and the indentation its content takes. An outlet reached in output
+ * running ahead stands in that buffer until it joins the render's; see `ahead.ts`.
+ */
 export type OutletMark = {
-	readonly offset: number;
+	out: Out;
+	offset: number;
 	readonly indent: string;
 	/** The outlet shares its line, so the content's first line gets no indentation. */
 	readonly inline: boolean;
@@ -55,17 +65,29 @@ export const additionsIn = (
 	return into;
 };
 
+/** An `add to` that ran ahead of a part that waits, kept until a `flush` checks it. See `checkLate`. */
+export type LateAddition = {
+	readonly addition: Addition;
+	readonly run: Run;
+	readonly span: Span;
+};
+
 /**
  * Records an addition in the log of the capture `run` is in, or the render's. A `once` tag that already added keeps
  * its first content. New content for a closed outlet is an error, since the outlet's part of the page may have been
  * sent.
+ *
+ * Only parts that run ahead of nothing, or `front` ones whose parts before are all done, note a `once` tag's first
+ * content: until then, a part before may still add the same tag. `add to` waits until then for a tag not added yet.
  */
 export const recordAddition = (
 	run: Run,
 	span: Span,
 	addition: Addition,
+	front = false,
 ): void => {
 	const state = run.state;
+	const ahead = !front && run.capture !== null && run.capture.behind !== null;
 	if (addition.once !== null) {
 		const first = state.once?.get(addition.once);
 		// A repeat adds nothing new, so it is fine after the outlet closed.
@@ -78,18 +100,42 @@ export const recordAddition = (
 	}
 	const mark = state.outlets?.get(addition.outlet);
 	if (mark !== undefined && mark.content !== null) {
-		throw fail(
-			run,
-			span,
-			"outlet-closed",
-			`Outlet "${addition.outlet}" was closed by "flush", so content can't be added to it any more`,
-		);
+		throw closedError(run, span, addition.outlet);
 	}
-	if (addition.once !== null) {
+	if (ahead) (state.late ??= []).push({ addition, run, span });
+	else if (addition.once !== null) {
 		(state.once ??= new Map()).set(addition.once, addition.html);
 	}
 	additionLog(run).push(addition);
 };
+
+/**
+ * After a `flush` closes outlets, fails for content a part running ahead added to one of them before then. Every part
+ * before the flush is done and in the log by now, so content outside the log comes after the flush in the template,
+ * where adding to a closed outlet is an error.
+ */
+export const checkLate = (state: RenderState): void => {
+	const late = state.late;
+	if (late === null) return;
+	const logged = new Set(additionsIn(state.additions ?? []));
+	for (const { addition, run, span } of late) {
+		if (logged.has(addition)) continue;
+		const mark = state.outlets?.get(addition.outlet);
+		if (mark === undefined || mark.content === null) continue;
+		// A repeat of a `once` tag that added before the flush adds nothing new.
+		if (addition.once !== null && state.once?.has(addition.once)) continue;
+		throw closedError(run, span, addition.outlet);
+	}
+	state.late = late.filter(({ addition }) => !logged.has(addition));
+};
+
+const closedError = (run: Run, span: Span, outlet: string) =>
+	fail(
+		run,
+		span,
+		"outlet-closed",
+		`Outlet "${outlet}" was closed by "flush", so content can't be added to it any more`,
+	);
 
 /** Closes every outlet reached so far, fixing its content. */
 export const closeOutlets = (state: RenderState): void => {
@@ -125,6 +171,21 @@ const contentFor = (
 	return content;
 };
 
+/** Moves the outlets reached in `from`, output that ran ahead, into `to`, which it joined at `offset`. */
+export const moveOutlets = (
+	state: RenderState,
+	from: Out,
+	to: Out,
+	offset: number,
+): void => {
+	if (state.outlets === null) return;
+	for (const mark of state.outlets.values()) {
+		if (mark.out !== from) continue;
+		mark.out = to;
+		mark.offset += offset;
+	}
+};
+
 /**
  * Takes the part of the render's output that is final and not yet taken: up to the first open outlet, with each
  * closed outlet's content in place. Close the outlets first to take the rest of the output.
@@ -137,9 +198,11 @@ export const takeOutput = (state: RenderState, output: string): string => {
 	}
 	let text = "";
 	let index = 0;
-	// Outlets are marked in the order they are reached, which is their order in the output.
+	// Outlets are marked in the order they are reached, which is their order in the output. One in output running
+	// ahead comes after all of the render's output so far.
 	for (const mark of state.outlets.values()) {
 		if (index++ < state.takenOutlets) continue;
+		if (mark.out !== state.root) break;
 		text += output.slice(state.taken, mark.offset);
 		state.taken = mark.offset;
 		if (mark.content === null) return text;

@@ -28,6 +28,7 @@ import {
 	typeName,
 	unwrap,
 } from "../runtime/values.js";
+import { dateFormat, type Format, numberFormat } from "./formatters.js";
 import {
 	checkDepth,
 	entriesOf,
@@ -519,7 +520,7 @@ const optionsKey = (
 	return key;
 };
 
-type Formatter = Intl.NumberFormat | Intl.DateTimeFormat | Intl.PluralRules;
+type Formatter = Format | Intl.PluralRules;
 
 /** Formatters that calls without options last resolved to. */
 const NO_OPTIONS: FormatterCells = {};
@@ -698,6 +699,31 @@ const sortBy = <T>(
 	}));
 	keyed.sort((a, b) => compare(a.key, b.key));
 	return keyed.map((entry) => entry.item);
+};
+
+const allStrings = (items: unknown[]): items is string[] => {
+	for (let i = 0; i < items.length; i++) {
+		if (typeof items[i] !== "string") return false;
+	}
+	return true;
+};
+
+/**
+ * Sorts strings by UTF-16 code units, as the default sort does, which skips calling `compare`. Short lists, such as a
+ * post's tags, sort in place by insertion, which keeps the same order and is faster for them.
+ */
+const sortStrings = (items: string[]): string[] => {
+	if (items.length > 16) return items.sort();
+	for (let i = 1; i < items.length; i++) {
+		const item = items[i] as string;
+		let j = i - 1;
+		while (j >= 0 && (items[j] as string) > item) {
+			items[j + 1] = items[j] as string;
+			j--;
+		}
+		items[j + 1] = item;
+	}
+	return items;
 };
 
 /** A hash of keys and values in the order given. A `Map`, so keys that look like numbers keep their place too. */
@@ -1128,12 +1154,8 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 			}
 			const items = [...listOf(run, value, "sort")];
 			consume(run, items.length);
-			// Strings compare by UTF-16 code units, as the default sort does, which skips calling `compare`.
-			if (
-				(by === undefined || by === null) &&
-				items.every((item) => typeof item === "string")
-			) {
-				return items.sort();
+			if ((by === undefined || by === null) && allStrings(items)) {
+				return sortStrings(items);
 			}
 			return sortBy(items, (item) => item, by);
 		},
@@ -1266,10 +1288,11 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 				options,
 				NUMBER_OPTIONS,
 				() => ({}),
-				(locale, settings) => new Intl.NumberFormat(locale, settings),
+				(locale, settings) =>
+					numberFormat(new Intl.NumberFormat(locale, settings)),
 			);
 			if (value === null || value === undefined) return "";
-			return formatter.format(toNumber(value, "formatNumber"));
+			return formatter(toNumber(value, "formatNumber"));
 		},
 		[],
 		true,
@@ -1301,9 +1324,10 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 				options,
 				PLURAL_OPTIONS,
 				() => ({}),
-				(locale, settings) => new Intl.NumberFormat(locale, settings),
+				(locale, settings) =>
+					numberFormat(new Intl.NumberFormat(locale, settings)),
 			);
-			const number = formatter.format(count);
+			const number = formatter(count);
 			const parts = form.split("#");
 			refuseLength(
 				run,
@@ -1328,10 +1352,11 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 						? {}
 						: { dateStyle: "medium" }),
 				}),
-				(locale, resolved) => new Intl.DateTimeFormat(locale, resolved),
+				(locale, resolved) =>
+					dateFormat(new Intl.DateTimeFormat(locale, resolved)),
 			);
 			if (value === null || value === undefined) return "";
-			return formatter.format(toTime(value, '"formatDate"'));
+			return formatter(toTime(value, '"formatDate"'));
 		},
 		[],
 		true,

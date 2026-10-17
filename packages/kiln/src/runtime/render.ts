@@ -225,12 +225,20 @@ export const checkLength = (run: Run, text: string): string => {
 	return text;
 };
 
-/** Appends text to an output buffer, enforcing `maxOutputLength`. */
+/**
+ * Appends text to an output buffer, enforcing `maxOutputLength`. Output running ahead counts together with the buffer
+ * it joins, as it would if it had waited its turn.
+ */
 export const write = (run: Run, out: Out, text: string, span: Span): void => {
 	out.s += text;
 	if (out.inline && text !== "") out.inline = false;
 	const state = run.state;
-	if (out.s.length > state.maxSize) {
+	const ahead = out.ahead;
+	if (
+		out.s.length > state.maxSize ||
+		(ahead !== null &&
+			(ahead.size += text.length) + ahead.base.s.length > state.maxSize)
+	) {
 		throw fail(
 			run,
 			span,
@@ -305,30 +313,6 @@ export const indentText = (
 	return inline && entry.lines[0] === 0
 		? entry.indented.slice(indent.length)
 		: entry.indented;
-};
-
-/** Runs statements in order, waiting only when one returns a promise. */
-export const runFrom = (
-	statements: readonly ((
-		run: Run,
-		scope: Scope,
-		out: Out,
-	) => void | Promise<void>)[],
-	index: number,
-	run: Run,
-	scope: Scope,
-	out: Out,
-): void | Promise<void> => {
-	for (let i = index; i < statements.length; i++) {
-		const result = (statements[i] as (typeof statements)[number])(
-			run,
-			scope,
-			out,
-		);
-		if (result !== undefined) {
-			return result.then(() => runFrom(statements, i + 1, run, scope, out));
-		}
-	}
 };
 
 /** Records the caller's location on a render error that passes through an include, component or `extends`. */
@@ -592,12 +576,7 @@ const embedLoaded = (
 		);
 	}
 	if (!loaded) return;
-	// Most partials extend nothing, define no blocks and import nothing, so they render without `renderTemplate`.
-	if (
-		loaded.parent === null &&
-		loaded.blocks.size === 0 &&
-		loaded.imports.length === 0
-	) {
+	if (loaded.plain) {
 		const state = run.state;
 		const depth = run.depth + 1;
 		if (depth > state.maxDepth) {
@@ -613,7 +592,15 @@ const embedLoaded = (
 		}
 		try {
 			const result = loaded.body(
-				new Run(state, loaded, depth, slots, passed, run.capture),
+				new Run(
+					state,
+					loaded,
+					depth,
+					slots,
+					passed,
+					run.capture,
+					run.blockDepth,
+				),
 				scope,
 				out,
 			);
@@ -774,6 +761,7 @@ export const renderTemplate = (
 		slots,
 		passed,
 		caller?.capture ?? null,
+		caller?.blockDepth ?? 0,
 	);
 
 	// Every template in an inheritance chain shares one block table, most derived definition first, so `parent()` can find the next one from any level.

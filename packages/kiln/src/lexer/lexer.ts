@@ -112,6 +112,54 @@ for (const punct of PUNCTUATORS) {
 	else PUNCTUATORS_BY_CHARACTER.set(code, [punct]);
 }
 
+/**
+ * The punctuator at `pos`, whose first two character codes are `code` and `next`, or null. Longest first, so `...` wins
+ * over `..` and `.`, as in `PUNCTUATORS`.
+ */
+const punctuatorAt = (
+	text: string,
+	pos: number,
+	code: number,
+	next: number,
+): string | null => {
+	switch (code) {
+		case 46: // .
+			if (next === 46) return text.charCodeAt(pos + 2) === 46 ? "..." : "..";
+			return ".";
+		case 63: // ?
+			return next === 46 ? "?." : next === 63 ? "??" : next === 58 ? "?:" : "?";
+		case 42: // *
+			return next === 42 ? "**" : "*";
+		case 47: // /
+			return next === 47 ? "//" : "/";
+		case 61: // =
+			return next === 61 ? "==" : next === 62 ? "=>" : "=";
+		case 33: // !
+			return next === 61 ? "!=" : null;
+		case 60: // <
+			return next === 61 ? "<=" : "<";
+		case 62: // >
+			return next === 61 ? ">=" : ">";
+		default: {
+			const single = SINGLE_PUNCTUATORS[code];
+			return single === undefined ? null : single;
+		}
+	}
+};
+
+/** Punctuators of one character that start no longer one, by character code. */
+const SINGLE_PUNCTUATORS: (string | undefined)[] = [];
+for (const punct of PUNCTUATORS) {
+	const code = punct.charCodeAt(0);
+	if ((PUNCTUATORS_BY_CHARACTER.get(code) as string[]).length === 1) {
+		SINGLE_PUNCTUATORS[code] = punct;
+	}
+}
+
+const CLOSED = { closed: true, trim: false } as const;
+const CLOSED_TRIM = { closed: true, trim: true } as const;
+const NOT_CLOSED = { closed: false, trim: false } as const;
+
 const ESCAPES: Record<string, string> = {
 	n: "\n",
 	r: "\r",
@@ -403,82 +451,99 @@ class Lexer {
 	 */
 	#lexExpression(mode: ExpressionMode): { closed: boolean; trim: boolean } {
 		const text = this.#text;
+		const length = text.length;
+		const tokens = this.#tokens;
 		let depth = 0;
+		// The position lives in a local while lexing names and punctuators, and in `#pos` around everything else.
+		let pos = this.#pos;
 
 		for (;;) {
-			while (this.#pos < text.length && isSpace(text.charCodeAt(this.#pos))) {
-				this.#pos++;
+			while (pos < length && isSpace(text.charCodeAt(pos))) pos++;
+			if (pos >= length) {
+				this.#pos = pos;
+				return NOT_CLOSED;
 			}
-			const pos = this.#pos;
-			if (pos >= text.length) return { closed: false, trim: false };
 
 			const code = text.charCodeAt(pos);
+			const next = text.charCodeAt(pos + 1);
 
 			if (mode === "tag") {
-				if (text.startsWith("-%}", pos)) {
-					this.#pos += 3;
-					return { closed: true, trim: true };
+				// -%} or %}
+				if (code === 45 && next === 37 && text.charCodeAt(pos + 2) === 125) {
+					this.#pos = pos + 3;
+					return CLOSED_TRIM;
 				}
-				if (text.startsWith("%}", pos)) {
-					this.#pos += 2;
-					return { closed: true, trim: false };
+				if (code === 37 && next === 125) {
+					this.#pos = pos + 2;
+					return CLOSED;
 				}
 			} else if (mode === "output" && depth === 0) {
-				if (text.startsWith("-}}", pos)) {
-					this.#pos += 3;
-					return { closed: true, trim: true };
+				// -}} or }}
+				if (code === 45 && next === 125 && text.charCodeAt(pos + 2) === 125) {
+					this.#pos = pos + 3;
+					return CLOSED_TRIM;
 				}
-				if (text.startsWith("}}", pos)) {
-					this.#pos += 2;
-					return { closed: true, trim: false };
+				if (code === 125 && next === 125) {
+					this.#pos = pos + 2;
+					return CLOSED;
 				}
 			} else if (mode === "interp" && depth === 0 && code === 125) {
-				this.#push("interpClose", "}", pos, pos + 1);
-				this.#pos++;
-				return { closed: true, trim: false };
+				tokens.push({
+					type: "interpClose",
+					value: "}",
+					start: pos,
+					end: pos + 1,
+				});
+				this.#pos = pos + 1;
+				return CLOSED;
 			}
 
 			// A new delimiter means this one was never closed. None of these pairs is valid inside an expression.
-			if (
-				code === 123 &&
-				(text[pos + 1] === "{" ||
-					text[pos + 1] === "%" ||
-					text[pos + 1] === "#")
-			) {
-				return { closed: false, trim: false };
+			if (code === 123 && (next === 123 || next === 37 || next === 35)) {
+				this.#pos = pos;
+				return NOT_CLOSED;
 			}
-			if (mode === "interp" && text.startsWith("%}", pos)) {
-				return { closed: false, trim: false };
+			if (mode === "interp" && code === 37 && next === 125) {
+				this.#pos = pos;
+				return NOT_CLOSED;
 			}
 
 			if (isNameStart(code)) {
 				let end = pos + 1;
-				while (end < text.length && isNamePart(text.charCodeAt(end))) end++;
-				this.#push("name", text.slice(pos, end), pos, end);
-				this.#pos = end;
+				while (end < length && isNamePart(text.charCodeAt(end))) end++;
+				tokens.push({
+					type: "name",
+					value: text.slice(pos, end),
+					start: pos,
+					end,
+				});
+				pos = end;
 				continue;
 			}
 			if (isDigit(code)) {
+				this.#pos = pos;
 				this.#lexNumber();
+				pos = this.#pos;
 				continue;
 			}
 			if (code === 34 || code === 39) {
+				this.#pos = pos;
 				this.#lexString();
+				pos = this.#pos;
 				continue;
 			}
 
-			let punct: string | undefined;
-			for (const candidate of PUNCTUATORS_BY_CHARACTER.get(code) ?? []) {
-				if (candidate.length === 1 || text.startsWith(candidate, pos)) {
-					punct = candidate;
-					break;
-				}
-			}
-			if (punct) {
-				if (punct === "{") depth++;
-				else if (punct === "}") depth = Math.max(0, depth - 1);
-				this.#push("punct", punct, pos, pos + punct.length);
-				this.#pos += punct.length;
+			const punct = punctuatorAt(text, pos, code, next);
+			if (punct !== null) {
+				if (code === 123) depth++;
+				else if (code === 125 && depth > 0) depth--;
+				tokens.push({
+					type: "punct",
+					value: punct,
+					start: pos,
+					end: pos + punct.length,
+				});
+				pos += punct.length;
 				continue;
 			}
 
@@ -490,7 +555,7 @@ class Lexer {
 				pos,
 				pos + character.length,
 			);
-			this.#pos += character.length;
+			pos += character.length;
 		}
 	}
 

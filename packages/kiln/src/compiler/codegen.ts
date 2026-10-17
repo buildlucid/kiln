@@ -13,9 +13,11 @@ import type { Span } from "../source.js";
 import {
 	containsNode,
 	emitter,
+	mayWrite,
 	placeArguments,
 	setsVariables,
 } from "./compiler.js";
+import { effectsOf, planOf } from "./effects.js";
 import { PRECOMPILED_VERSION } from "./precompiled.js";
 
 /**
@@ -64,6 +66,11 @@ type Context = {
 	inLoop: boolean;
 	/** At the top level of a run, where a wait can end the function and continue in the next. See `#function`. */
 	top: boolean;
+	/**
+	 * At the top level of a loop function's pass, where a call to your function can end the function too, and the
+	 * pass continue with its value in the next. See `#loopFunction`.
+	 */
+	pass: boolean;
 	/** The JavaScript name of the scope variables are looked up and set in: the function's, or a loop pass's. */
 	scope: string;
 };
@@ -83,6 +90,10 @@ type FunctionState = {
 	waits: boolean;
 	/** It may wait somewhere other than at the end of a top-level statement, such as in a loop, so it is a generator. */
 	waitsInside: boolean;
+	/** Waits it has somewhere a run can't continue from, such as inside an `if`. See `#list`. */
+	inner: number;
+	/** Top-level waits that start the rest of the run ahead of them. See `#list`. */
+	aheadWaits: number;
 	/**
 	 * It reads properties inline, where a getter in your data may throw. Each read puts its place in `at`, so the
 	 * function can locate the error; see `#guard`.
@@ -96,6 +107,8 @@ const newFunction = (): FunctionState => ({
 	plainUsed: new Set(),
 	waits: false,
 	waitsInside: false,
+	inner: 0,
+	aheadWaits: 0,
 	reads: false,
 });
 
@@ -107,7 +120,29 @@ const newFunction = (): FunctionState => ({
 const WAIT = "\u0000wait ";
 
 // oxlint-disable-next-line no-control-regex -- matches the marker, see `WAIT`
-const WAIT_LINE = /^(\t*)\u0000wait (t\d+)$/;
+const WAIT_LINE = /^(\t*)\u0000wait (t\d+)( ahead| guarded)?$/;
+
+/**
+ * Stands for waiting for a call to one of your functions at the top of a loop function's pass, `\u0000value t S X`:
+ * the call's result, its span and the function. When the result is a promise, the pass continues in another function
+ * with its value. See `#loopFunction`.
+ */
+const VALUE = "\u0000value ";
+
+// oxlint-disable-next-line no-control-regex -- matches the marker, see `WAIT`
+const VALUE_LINE = /^(\t*)\u0000value (t\d+) (S\[\d+\]) (X\d+)$/;
+
+/** Marks a wait whose statement lets the rest of the run start ahead of it, in `WAIT` lines. See `#list`. */
+const AHEAD = " ahead";
+
+/** Marks a wait that lets the rest of the run start ahead of it unless the render's blocks or fills set variables. */
+const GUARDED = " guarded";
+
+/**
+ * Stands for starting the passes after the current one, where a loop that pauses inside its passes is about to wait.
+ * `#loopGenerator` writes it out, and other functions drop it.
+ */
+const FORK = "\u0003fork";
 
 /**
  * Stands for setting a variable's plain-object flag, `\u0001flag:value\u0001`, until `#function` knows whether any
@@ -138,6 +173,11 @@ const HELPERS = [
 	"aborted",
 	"write",
 	"drive",
+	"unhold",
+	"restAhead",
+	"contentSets",
+	"passAhead",
+	"startAhead",
 	"startPlace",
 	"endPlace",
 	"indentText",
@@ -298,29 +338,6 @@ const setsIn = (
 	return names;
 };
 
-/** Whether statements include one that may wait, such as an include, so a loop over them may become a function. */
-const waitsIn = (statements: Statement[]): boolean =>
-	statements.some((statement) => {
-		switch (statement.type) {
-			case "Include":
-			case "Component":
-			case "Slot":
-			case "Block":
-				return true;
-			case "If":
-				return (
-					statement.branches.some((branch) => waitsIn(branch.body)) ||
-					waitsIn(statement.alternate ?? [])
-				);
-			case "For":
-				return waitsIn(statement.body) || waitsIn(statement.alternate ?? []);
-			case "Autoescape":
-				return waitsIn(statement.body);
-			default:
-				return false;
-		}
-	});
-
 /** Characters of text a loop gathers before writing them out. */
 const FLUSH_AT = 4096;
 
@@ -397,6 +414,10 @@ const isBlank = (statement: Statement) =>
 
 const indent = (lines: string[]): string[] => lines.map((line) => `\t${line}`);
 
+/** Lines without `FORK` markers, for functions that never start passes ahead. */
+const dropForks = (lines: string[]): string[] =>
+	lines.filter((line) => line.trim() !== FORK);
+
 class Generator {
 	readonly #env: EnvironmentCore;
 	readonly #ast: TemplateNode;
@@ -421,6 +442,11 @@ class Generator {
 	/** Loops so far, for local names unique in the module, so a fill's loops never hide the loop around it. */
 	#loops = 0;
 	#depth = 0;
+	/**
+	 * Whether the top-level statement being generated lets the rest of the run start while it waits: `AHEAD`, or
+	 * `GUARDED` when only for renders whose blocks and fills set nothing. See `#list`.
+	 */
+	#forkable: typeof AHEAD | typeof GUARDED | null = null;
 
 	constructor(env: EnvironmentCore, ast: TemplateNode) {
 		this.#env = env;
@@ -478,8 +504,20 @@ class Generator {
 			strategy,
 			inLoop: false,
 			top: true,
+			pass: false,
 			scope: "scope",
 		};
+		// Which statements may start while each waits, as the closures find it. See `planOf`. Runs are cut by the plan
+		// for renders whose blocks and fills set nothing, and the closures pick a plan for each render.
+		const effects = searchOnly
+			? []
+			: list.map((statement) => effectsOf([statement], this.#env));
+		const plan = planOf(effects, false);
+		const strict = planOf(effects, true);
+		// Statements a run must end at, so the closures' sequence can start the statements after them early.
+		const stops: number[] = [];
+		const stopFrom = (index: number) =>
+			Math.min(list.length - 1, ...stops.filter((stop) => stop >= index));
 		let i = 0;
 		while (i < list.length) {
 			if (searchOnly) {
@@ -491,15 +529,55 @@ class Generator {
 			let groups: string[][] = [];
 			let end = i;
 			let work = false;
+			let last = stopFrom(i);
 			while (end < list.length) {
+				// Text alone goes on into the next run, rather than leave a run with nothing to do before it.
+				if (end > last) {
+					if (work) break;
+					last = stopFrom(end);
+				}
 				const statement = list[end] as Statement;
+				const after = plan.after[end] as number;
+				const reach = plan.reach[end] as number;
+				const forkable = reach > after;
+				// A wait in a run's chain of functions can only start the rest of the run, which must not depend on it.
+				// When blocks or fills that set variables would change that, it checks when it waits.
+				const chained = forkable && after === end;
+				const { inner, aheadWaits } = this.#fn;
+				const restore = this.#snapshot();
+				this.#forkable = !chained
+					? null
+					: strict.after[end] === end && (strict.reach[end] as number) >= reach
+						? AHEAD
+						: GUARDED;
 				const generated = this.#attempt(() =>
 					this.#statement(statement, context),
 				);
+				this.#forkable = null;
 				if (!generated) break;
+				const waitsInside = this.#fn.inner > inner;
+				// A run that waits inside a statement is a generator, which can't start the rest of the run while it
+				// waits, and a chain can't run statements that depend on a wait before the ones that start early. Then
+				// the statement gets a run of its own, and so do the statements that depend on it and the ones that start
+				// early, so the closures' sequence can start them. A statement that waits inside after a wait that
+				// starts the rest of the run ahead gets a run of its own too, so the chain stays a chain.
+				const own = forkable && (waitsInside || !chained || this.#fn.inner > 0);
+				if (own || (waitsInside && aheadWaits > 0)) {
+					if (end > i && work) {
+						restore();
+						break;
+					}
+					groups.push(generated);
+					work = true;
+					end++;
+					if (forkable) stops.push(after, reach);
+					break;
+				}
 				groups.push(generated);
 				if (statement.type !== "Text") work = true;
 				end++;
+				// A wait that starts the rest of the run ahead needs all of it within its reach.
+				if (chained) last = Math.min(last, reach);
 			}
 			if (end === i) {
 				this.#children(list[i] as Statement, strategy);
@@ -529,7 +607,9 @@ class Generator {
 	 */
 	#function(groups: string[][], span: string, nested: boolean): string {
 		const fn = this.#fn;
-		groups = groups.map((lines) => this.#forgetLines(this.#setFlags(lines)));
+		groups = groups.map((lines) =>
+			this.#forgetLines(this.#setFlags(dropForks(lines))),
+		);
 		// Steps are counted in a local, and `state.steps` kept up to date wherever other code may read or count them.
 		const start = this.#start(span);
 		const end = ["state.steps = steps;", `write(run, out, s, ${span});`];
@@ -550,11 +630,21 @@ class Generator {
 			const base = `R${this.#generators++}`;
 			segments.forEach((lines, index) => {
 				const next = `${base}_${index + 1}(run, scope, out)`;
+				// A wait that lets the rest of the run start ahead runs it in another buffer while it waits.
 				const body = lines.map((line) =>
 					line.replace(
 						WAIT_LINE,
-						(_, tabs: string, result: string) =>
-							`${tabs}if (${result} !== undefined) return ${result}.then(() => ${next});`,
+						(_, tabs: string, result: string, ahead?: string) => {
+							const then = `${result}.then(() => ${next})`;
+							const rest = `restAhead(run, out, ${result}, inl, ind, (run, out) => ${next}, ${span})`;
+							return `${tabs}if (${result} !== undefined) return ${
+								ahead === AHEAD
+									? rest
+									: ahead === GUARDED
+										? `contentSets(run) ? ${then} : ${rest}`
+										: then
+							};`;
+						},
 					),
 				);
 				// Each function writes its own text, such as a slot's fallback, before the next takes over.
@@ -641,6 +731,7 @@ class Generator {
 			"const signal = state.signal;",
 			`signal !== undefined && signal.aborted && aborted(run, ${span});`,
 			"const ind = out.indent;",
+			"const inl = out.inline;",
 			'let s = "";',
 			`let ${["q", "b", ...declared].join(", ")};`,
 			...(fn.reads ? ["let at = null;"] : []),
@@ -775,14 +866,19 @@ class Generator {
 	 */
 	#wait(span: string, call: string, top: boolean): string[] {
 		this.#fn.waits = true;
-		if (!top) this.#fn.waitsInside = true;
+		if (!top) {
+			this.#fn.waitsInside = true;
+			this.#fn.inner++;
+		}
 		const result = this.#temp();
+		const ahead = top ? this.#forkable : null;
+		if (ahead !== null) this.#fn.aheadWaits++;
 		return [
 			`write(run, out, s, ${span});`,
 			's = "";',
 			"state.steps = steps;",
 			`${result} = ${call};`,
-			`${WAIT}${result}`,
+			`${WAIT}${result}${ahead ?? ""}`,
 			"steps = state.steps;",
 			`signal !== undefined && signal.aborted && aborted(run, ${span});`,
 		];
@@ -865,7 +961,7 @@ class Generator {
 
 	/** Statements inside another, such as a loop's body. */
 	#body(list: Statement[], context: Context): string[] {
-		const inner = { ...context, top: false };
+		const inner = { ...context, top: false, pass: false };
 		return this.#parts(
 			list,
 			list.map((statement) => this.#statement(statement, inner)),
@@ -946,11 +1042,12 @@ class Generator {
 		const value = this.#temp();
 		const code = this.#value(expression, context, value);
 		const strategy = context.strategy;
+		// Strings and numbers print in place. Numbers need no escaping in HTML.
 		const print =
 			strategy === "html"
-				? `typeof ${value} === "string" ? escapeHtml(${value}) : print(run, ${span}, ${value}, "html")`
+				? `typeof ${value} === "string" ? escapeHtml(${value}) : typeof ${value} === "number" ? String(${value}) : print(run, ${span}, ${value}, "html")`
 				: strategy === false
-					? `typeof ${value} === "string" ? ${value} : print(run, ${span}, ${value}, "none")`
+					? `typeof ${value} === "string" ? ${value} : typeof ${value} === "number" ? String(${value}) : print(run, ${span}, ${value}, "none")`
 					: `print(run, ${span}, ${value}, ${JSON.stringify(strategy)})`;
 		return [step, ...code, `s += ${print};`, limit];
 	}
@@ -1060,35 +1157,51 @@ class Generator {
 			scope: scoped ?? context.scope,
 		};
 		const looped =
-			context.top && !context.inLoop && waitsIn(statement.body)
+			context.top &&
+			!context.inLoop &&
+			effectsOf(statement.body, this.#env).waits
 				? this.#loopFunction(statement, passContext, loop)
 				: null;
-		const body = looped
-			? []
-			: this.#body(statement.body, { ...passContext, inLoop: true });
+		const range = looped ? null : literalRange(statement.iterable);
+		const paused =
+			looped || range
+				? null
+				: this.#loopGenerator(statement, passContext, loop);
+		const body =
+			looped || paused
+				? []
+				: this.#body(statement.body, { ...passContext, inLoop: true });
 		const alternate = statement.alternate
 			? this.#body(statement.alternate, context)
 			: [];
-		const range = looped ? null : literalRange(statement.iterable);
 		if (range) {
 			return this.#rangeLoop(statement, context, loop, range, body, alternate);
 		}
 		const passes = looped
 			? this.#wait(
 					span,
-					`${looped}(run, ${context.scope}, out, ${values}, ${length}, 0${hasKeys ? `, ${keys}` : ""})`,
+					`${looped}(run, ${context.scope}, out, ${values}, ${length}, 0, ${length}${hasKeys ? `, ${keys}` : ""})`,
 					context.top,
 				)
-			: [
-					`for (let ${index} = 0; ${index} < ${length}; ${index}++) {`,
-					...indent(this.#pass(loop, true)),
-					...indent(body),
-					`\tif (s.length > ${FLUSH_AT}) {`,
-					`\t\twrite(run, out, s, ${span});`,
-					'\t\ts = "";',
-					"\t}",
-					"}",
-				];
+			: paused
+				? [
+						...paused,
+						...this.#wait(
+							span,
+							`drive(LG${id}(run, out, 0, ${length}))`,
+							context.top,
+						),
+					]
+				: [
+						`for (let ${index} = 0; ${index} < ${length}; ${index}++) {`,
+						...indent(this.#pass(loop, true)),
+						...indent(body),
+						`\tif (s.length > ${FLUSH_AT}) {`,
+						`\t\twrite(run, out, s, ${span});`,
+						'\t\ts = "";',
+						"\t}",
+						"}",
+					];
 		return [
 			this.#checkedStep(span),
 			...this.#value(statement.iterable, context, iterable),
@@ -1198,9 +1311,9 @@ class Generator {
 	/**
 	 * A loop at the top of a run whose passes may wait, such as one that includes a template, as plain functions
 	 * rather than a generator, which V8 runs more slowly. The loop is a function of its items and the index to start
-	 * at. A pass that gets a promise continues in a function for the rest of that pass, which then calls the loop for
-	 * the next index. Returns the loop function's name, or null when a pass may wait somewhere a function can't
-	 * continue from, such as in a nested loop.
+	 * at. A pass that gets a promise continues in a function for the rest of that pass, and `passAhead` calls the loop
+	 * for the next index: at once, ahead of the pass, when it may. Returns the loop function's name, or null when a pass
+	 * may wait somewhere a function can't continue from, such as in a nested loop.
 	 */
 	#loopFunction(
 		statement: Extract<Statement, { type: "For" }>,
@@ -1211,7 +1324,12 @@ class Generator {
 		const restore = this.#snapshot();
 		this.#fn = newFunction();
 		try {
-			const inner: Context = { ...context, inLoop: true, top: true };
+			const inner: Context = {
+				...context,
+				inLoop: true,
+				top: true,
+				pass: true,
+			};
 			const generated = this.#parts(
 				statement.body,
 				statement.body.map((child) => this.#statement(child, inner)),
@@ -1223,30 +1341,70 @@ class Generator {
 			// Flags are set once every statement is generated, so every lookup of a variable sets the flag a later read
 			// uses. A lookup that skipped it would leave the flag of an earlier value, which may not be a plain object.
 			const groups = generated.map((lines) => this.#setFlags(lines));
+			// A pass is split after each statement that waits, and after each call to your function, whose value the
+			// next function takes: `values[k]` names the local it goes in for segment k.
 			const segments: string[][] = [[]];
+			const values: (string | null)[] = [null];
 			for (const group of groups) {
-				(segments.at(-1) as string[]).push(...group);
-				if (group.some((line) => WAIT_LINE.test(line))) segments.push([]);
+				for (const line of group) {
+					(segments.at(-1) as string[]).push(line);
+					const value = VALUE_LINE.exec(line);
+					if (value) {
+						segments.push([]);
+						values.push(value[2] as string);
+					}
+				}
+				if (group.some((line) => WAIT_LINE.test(line))) {
+					segments.push([]);
+					values.push(null);
+				}
 			}
 			const name = `L${this.#generators++}`;
-			const params = `run, scope, out, ${loop.values}, ${loop.length}, ${loop.index}${loop.hasKeys ? `, ${loop.keys}` : ""}`;
+			const keys = loop.hasKeys ? `, ${loop.keys}` : "";
+			// The loop function runs passes up to `stop`; each function after a wait finishes one pass.
+			const params = `run, scope, out, ${loop.values}, ${loop.length}, ${loop.index}, stop${keys}`;
 			// A pass continues in the scope it started, so variables it set before waiting are still there.
 			const passScope = loop.scope ? `, ${loop.scope}` : "";
-			const call = (part: number, index: string) =>
-				`${name}${part === 0 ? "" : `_${part}`}(run, scope, out, ${loop.values}, ${loop.length}, ${index}${loop.hasKeys ? `, ${loop.keys}` : ""}${part === 0 ? "" : passScope})`;
-			// Each wait continues the pass in the function for the segments after it.
+			const partParams = `run, scope, out, ${loop.values}, ${loop.length}, ${loop.index}${keys}${passScope}`;
+			const call = (part: number, value?: string) =>
+				`${name}_${part}(${partParams}${value === undefined ? "" : `, ${value}`})`;
+			const one = `(run, out, j) => ${name}(run, scope, out, ${loop.values}, ${loop.length}, j, j + 1${keys})`;
+			const { sets, elsewhere } = this.#setsOf(statement);
+			// Each wait continues the pass in the function for the segments after it. The first wait in a pass, in the
+			// loop function, also starts the passes after it, ahead of it when they may. See `passAhead`.
+			const handOff = (from: number, tabs: string, rest: string) =>
+				from === 0
+					? `${tabs}return ${loop.index} + 1 < stop ? passAhead(run, scope, out, ${rest}, inl, ind, ${sets}, ${elsewhere}, ${loop.index} + 1, stop, ${one}, ${loop.span}) : ${rest};`
+					: `${tabs}return ${rest};`;
 			const continued = (from: number) =>
-				segments
-					.slice(from)
-					.flatMap((lines, offset) =>
-						this.#forgetLines(lines).map((line) =>
-							line.replace(
-								WAIT_LINE,
-								(_, tabs: string, result: string) =>
-									`${tabs}if (${result} !== undefined) return ${result}.then(() => ${call(from + offset + 1, loop.index)});`,
-							),
-						),
-					);
+				segments.slice(from).flatMap((lines, offset) =>
+					this.#forgetLines(lines).flatMap((line) => {
+						const next = from + offset + 1;
+						const value = VALUE_LINE.exec(line);
+						if (value) {
+							const [, tabs, result, span, fn] = value as unknown as string[];
+							return [
+								`${tabs}if (${result} instanceof Promise) {`,
+								// The text so far goes out first, so a streamed render can send it while this waits.
+								`${tabs}\twrite(run, out, s, ${span});`,
+								handOff(
+									from,
+									`${tabs}\t`,
+									`${result}.then((w) => ${call(next, "unhold(w)")}, (error) => { throw hostError(run, ${span}, ${fn}, error); })`,
+								),
+								`${tabs}}`,
+							];
+						}
+						const wait = WAIT_LINE.exec(line);
+						if (!wait) return [line];
+						const [, tabs, result] = wait as unknown as string[];
+						return [
+							`${tabs}if (${result} !== undefined) {`,
+							handOff(from, `${tabs}\t`, `${result}.then(() => ${call(next)})`),
+							`${tabs}}`,
+						];
+					}),
+				);
 			const start = this.#start(loop.span);
 			const end = ["state.steps = steps;", `write(run, out, s, ${loop.span});`];
 			this.#declarations.push(
@@ -1254,7 +1412,7 @@ class Generator {
 				...indent([
 					...start,
 					...this.#guard([
-						`for (; ${loop.index} < ${loop.length}; ${loop.index}++) {`,
+						`for (; ${loop.index} < stop; ${loop.index}++) {`,
 						...indent(this.#pass(loop, true)),
 						...indent(continued(0)),
 						`\tif (s.length > ${FLUSH_AT}) {`,
@@ -1268,21 +1426,120 @@ class Generator {
 				"}",
 			);
 			for (let part = 1; part < segments.length; part++) {
+				const value = values[part] ?? null;
 				this.#declarations.push(
-					`function ${name}_${part}(${params}${passScope}) {`,
+					`function ${name}_${part}(${partParams}${value === null ? "" : ", w"}) {`,
 					...indent([
 						...start,
+						...(value === null ? [] : [`${value} = w;`]),
 						...this.#guard([
 							...this.#pass(loop, false),
 							...continued(part),
 							...end,
-							`return ${call(0, `${loop.index} + 1`)};`,
 						]),
 					]),
 					"}",
 				);
 			}
 			return name;
+		} finally {
+			this.#fn = outer;
+		}
+	}
+
+	/**
+	 * The variables a loop's body sets, as a frozen list made once, and whether it places content from elsewhere, for
+	 * `passesAhead`.
+	 */
+	#setsOf(statement: Extract<Statement, { type: "For" }>): {
+		sets: string;
+		elsewhere: boolean;
+	} {
+		const effects = effectsOf(statement.body, this.#env);
+		const names = [...effects.sets];
+		const sets = this.#constant(
+			`sets:${JSON.stringify(names)}`,
+			"N",
+			`Object.freeze(${JSON.stringify(names)})`,
+		);
+		return { sets, elsewhere: effects.elsewhere };
+	}
+
+	/**
+	 * A loop whose passes may pause anywhere, such as at a call to one of your functions, as a generator of its own over
+	 * the index to start at. It is declared where the loop is, so it reads the locals around it, such as the loops
+	 * outside. When a pass pauses, the passes after it start at once in another run of the generator, when they may;
+	 * see `startAhead`. The loop then stops after that pass and waits for them. Returns the generator's lines, or null
+	 * when no pass waits.
+	 */
+	#loopGenerator(
+		statement: Extract<Statement, { type: "For" }>,
+		context: Context,
+		loop: LoopNames,
+	): string[] | null {
+		if (!effectsOf(statement.body, this.#env).waits) return null;
+		const outer = this.#fn;
+		const restore = this.#snapshot();
+		this.#fn = newFunction();
+		try {
+			const lines = this.#body(statement.body, { ...context, inLoop: true });
+			if (!this.#fn.waits) {
+				restore();
+				return null;
+			}
+			const name = `LG${loop.id}`;
+			const ahead = `a${loop.id}`;
+			const { index, span } = loop;
+			// Only the first run of the generator starts passes ahead. The ones it starts run one pass each.
+			const { sets, elsewhere } = this.#setsOf(statement);
+			const fork = `if (${ahead} === null && ${index} + 1 < stop) ${ahead} = startAhead(run, ${loop.outer}, out, inl, ind, ${sets}, ${elsewhere}, ${index} + 1, stop, (run, out, j) => drive(${name}(run, out, j, j + 1)), ${span});`;
+			const body = this.#forgetLines(this.#setFlags(lines)).flatMap((line) => {
+				if (line.trim() === FORK) return [line.replace(FORK, fork)];
+				const wait = WAIT_LINE.exec(line);
+				if (!wait) return [line];
+				const [, tabs, result] = wait as unknown as [string, string, string];
+				return [
+					`${tabs}if (${result} !== undefined) {`,
+					`${tabs}\t${fork}`,
+					`${tabs}\tyield ${result};`,
+					`${tabs}}`,
+				];
+			});
+			const pass = this.#pass(loop, true);
+			const reads = this.#fn.reads;
+			return [
+				`const ${name} = function* (run, out, ${index}, stop) {`,
+				...indent([
+					...this.#start(span),
+					`let ${ahead} = null;`,
+					...this.#guard([
+						"try {",
+						`\tfor (; ${index} < stop; ${index}++) {`,
+						...indent(indent([...pass, ...body])),
+						`\t\tif (${ahead} !== null) break;`,
+						`\t\tif (s.length > ${FLUSH_AT}) {`,
+						`\t\t\twrite(run, out, s, ${span});`,
+						'\t\t\ts = "";',
+						"\t\t}",
+						"\t}",
+						"} catch (error) {",
+						`\tif (${ahead} !== null) yield ${ahead}.fail(error);`,
+						"\tthrow error;",
+						"}",
+						`if (${ahead} !== null) {`,
+						`\twrite(run, out, s, ${span});`,
+						'\ts = "";',
+						"\tstate.steps = steps;",
+						// The passes ahead locate their own errors.
+						...(reads ? ["\tat = null;"] : []),
+						`\tyield ${ahead}.join();`,
+						"}",
+						"state.steps = steps;",
+						`write(run, out, s, ${span});`,
+					]),
+				]),
+				"};",
+			];
 		} finally {
 			this.#fn = outer;
 		}
@@ -1382,7 +1639,18 @@ class Generator {
 			...args.map((arg) => this.#expr(arg.value, context, false)),
 		];
 		this.#fn.waits = true;
+		if (context.pass) {
+			return [
+				this.#checkedStep(span),
+				"state.steps = steps;",
+				`${target} = callHost(run, ${span}, ${fn}, [${values.join(", ")}]);`,
+				`${VALUE}${target} ${span} ${fn}`,
+				"steps = state.steps;",
+				`signal !== undefined && signal.aborted && aborted(run, ${span});`,
+			];
+		}
 		this.#fn.waitsInside = true;
+		this.#fn.inner++;
 		return [
 			// An abort, perhaps from a getter in your data, stops the render before your function is called, as `step` does.
 			this.#checkedStep(span),
@@ -1392,6 +1660,7 @@ class Generator {
 			// The text so far goes out first, so a streamed render can send it while this waits.
 			`\twrite(run, out, s, ${span});`,
 			'\ts = "";',
+			`\t${FORK}`,
 			"\ttry {",
 			`\t\t${target} = yield ${target};`,
 			"\t} catch (error) {",
@@ -1592,7 +1861,7 @@ class Generator {
 			`${slots} = new Map();`,
 			...fills.map(
 				(fill) =>
-					`${slots}.set(${JSON.stringify(fill.name)}, { body: ${this.#nested(fill.body, statement.span, context)}, run, scope: ${context.scope}, sets: ${setsIn(fill.body).size > 0} });`,
+					`${slots}.set(${JSON.stringify(fill.name)}, { body: ${this.#nested(fill.body, statement.span, context)}, run, scope: ${context.scope}, sets: ${mayWrite(fill.body)} });`,
 			),
 			...variables.charge(span),
 			...this.#wait(
@@ -2020,6 +2289,16 @@ class Generator {
 		}
 		const span = this.#span(node.span);
 		const call = this.#builtin("test", name, node.args);
+		// `odd` and `even` never fail and count no steps of their own, so they are written out, after the call's step.
+		// The built-in is still looked up, so a module loaded where `odd` is something else fails as usual.
+		if ((name === "odd" || name === "even") && node.args.length === 0) {
+			const value = this.#temp();
+			const test =
+				name === "even"
+					? `${value} % 2 === 0`
+					: `(${value} % 2 === 1 || ${value} % 2 === -1)`;
+			return `(${this.#step(span)}, ${value} = ${this.#expr(input, context, false)}, ${negated ? "!" : ""}(typeof ${value} === "number" && ${test}))`;
+		}
 		const value = this.#invoke(span, call.fn, [
 			this.#expr(input, context, false),
 			...this.#arguments(call, context),

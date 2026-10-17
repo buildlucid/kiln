@@ -2,7 +2,7 @@ import type { Diagnostic, KilnSyntaxError } from "../errors.js";
 import type { EscapeStrategy, TemplateNode } from "../parser/ast.js";
 import type { Source, Span } from "../source.js";
 import type { IslandMode } from "./islands.js";
-import type { Addition, OutletMark } from "./outlets.js";
+import type { Addition, LateAddition, OutletMark } from "./outlets.js";
 import { childScope, isWithin, type Scope, sectionScope } from "./scope.js";
 import type { RenderStream } from "./stream.js";
 
@@ -29,10 +29,23 @@ export type Out = {
 	indent: string;
 	/** Content was inserted mid-line and nothing has been written since, so its first line start gets no indentation. */
 	inline: boolean;
+	/** For output that runs ahead of a part that waits, the buffer it ends up in; null otherwise. See `ahead.ts`. */
+	ahead: Ahead | null;
 };
 
+/**
+ * The buffers running ahead of the parts writing to `base`, a buffer that runs ahead of nothing, such as the render's
+ * output. `size` is their length together, which counts against `maxOutputLength` with the base's own.
+ */
+export type Ahead = { readonly base: Out; size: number };
+
 /** An empty output buffer. Captures start with one too, since what they capture is printed as a value. */
-export const emptyOut = (): Out => ({ s: "", indent: "", inline: false });
+export const emptyOut = (): Out => ({
+	s: "",
+	indent: "",
+	inline: false,
+	ahead: null,
+});
 
 /** A compiled statement. Returns a promise only when it had to wait for async data. */
 export type Stmt = (run: Run, scope: Scope, out: Out) => void | Promise<void>;
@@ -106,16 +119,21 @@ export type CompiledTemplate = {
 	parentSpan: Span;
 	blocks: Map<string, BlockDef>;
 	/** `blocks` as a list, made on first render, since a template's blocks never change once compiled. */
-	blockList?: readonly (readonly [string, BlockDef])[];
+	blockList: readonly (readonly [string, BlockDef])[] | undefined;
 	macros: Map<string, CompiledMacro>;
 	/** Resolved names of imported templates, by import slot. */
 	imports: { name: string; span: Span }[];
 	/** Templates this template's includes, components and layouts name, so each name is resolved once. */
 	resolved: Map<string, TemplateRef>;
 	/** For names made of a known prefix and a key, such as `"sections/" ~ type`: templates by prefix, then key. */
-	keyed?: Map<string, Map<string, TemplateRef>>;
+	keyed: Map<string, Map<string, TemplateRef>> | undefined;
 	/** Every slot name the template outputs, so `slots` always has a key for each. */
 	slotNames: string[];
+	/**
+	 * It extends nothing, defines no blocks and imports nothing, as most partials, so it renders without
+	 * `renderTemplate`.
+	 */
+	plain: boolean;
 };
 
 /**
@@ -223,8 +241,10 @@ export type RenderInfo<State = unknown> = {
 /** Counters and settings for one call to `render`. */
 export class RenderState {
 	steps = 0;
-	/** Nesting of `block()` and `parent()` calls, checked against `maxDepth`. */
-	blockDepth = 0;
+	/** Parts of the render running ahead of a part that waits, and not joined yet. See `ahead.ts`. */
+	ahead = 0;
+	/** `add to` tags that ran ahead, which a `flush` must check came after it. See `checkLate`. */
+	late: LateAddition[] | null = null;
 	/** Imports loaded so far this render, by importing template. Made when a template first imports. */
 	importsCache: Map<CompiledTemplate, CompiledTemplate[]> | null = null;
 	/** The render's output, where outlets mark their places. Captures such as `set` write elsewhere. */
@@ -260,6 +280,12 @@ export class RenderState {
 	) {}
 }
 
+/** A part of a render that others run ahead of, and the part before it, if that one is run ahead of too. */
+export type Behind = {
+	readonly part: Promise<void>;
+	readonly previous: Behind | null;
+};
+
 /** A cached section rendering: its scope, whose content can't change variables outside it, and the islands it deferred. */
 export type Section = { readonly scope: Scope; readonly deferred: string[] };
 
@@ -278,6 +304,11 @@ export class Capture {
 		readonly outer: (Addition | Capture)[],
 		/** The innermost cached section it is in, or null. */
 		readonly section: Section | null,
+		/**
+		 * For a capture that runs ahead of parts that wait, or is inside one: the last of those parts, whose promises
+		 * settle once every part of the render before it is done. Null otherwise. See `ahead.ts`.
+		 */
+		readonly behind: Behind | null,
 	) {}
 }
 
@@ -290,7 +321,11 @@ export const additionLog = (run: Run): (Addition | Capture)[] => {
 /** Starts a capture inside `run`'s. With `section`, it is a cached section. */
 export const startCapture = (run: Run, section?: Section): Capture => {
 	const outer = additionLog(run);
-	const capture = new Capture(outer, section ?? run.capture?.section ?? null);
+	const capture = new Capture(
+		outer,
+		section ?? run.capture?.section ?? null,
+		run.capture?.behind ?? null,
+	);
 	outer.push(capture);
 	return capture;
 };
@@ -327,14 +362,17 @@ export class Run {
 		readonly passed: readonly string[] | null,
 		/** The capture it renders in, or null. */
 		readonly capture: Capture | null = null,
+		/** Nesting of the `block()` and `parent()` calls this renders inside, checked against `maxDepth`. */
+		readonly blockDepth = 0,
 	) {}
 
 	/**
 	 * This render inside `capture`, for content that renders where a capture other than its own is open, such as a
-	 * block placed in a cached section or a fill in a macro.
+	 * block placed in a cached section or a fill in a macro. `blockDepth` is the nesting of `block()` calls where the
+	 * content is placed, since content from elsewhere carries on the chain of calls that placed it.
 	 */
-	within(capture: Capture | null): Run {
-		if (capture === this.capture) return this;
+	within(capture: Capture | null, blockDepth = this.blockDepth): Run {
+		if (capture === this.capture && blockDepth === this.blockDepth) return this;
 		const run = new Run(
 			this.state,
 			this.template,
@@ -342,6 +380,7 @@ export class Run {
 			this.slots,
 			this.passed,
 			capture,
+			blockDepth,
 		);
 		run.blocks = this.blocks;
 		run.imports = this.imports;

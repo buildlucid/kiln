@@ -1,5 +1,13 @@
 import { KilnRenderError } from "../errors.js";
 import type { EscapeStrategy } from "../parser/ast.js";
+import {
+	contentSets,
+	mayRunAhead,
+	type Pass,
+	passesAhead,
+	passesFrom,
+	runAhead,
+} from "../runtime/ahead.js";
 import { escapeHtml, escapeWith } from "../runtime/escape.js";
 import { Markup } from "../runtime/markup.js";
 import {
@@ -61,7 +69,7 @@ import {
 } from "./compiler.js";
 
 /** Changes whenever generated code or the runtime it calls changes shape, so old modules fail loudly. */
-export const PRECOMPILED_VERSION = 3;
+export const PRECOMPILED_VERSION = 4;
 
 /**
  * A template compiled to JavaScript at build time, the default export of a module `precompile` wrote. Loaders return
@@ -202,6 +210,16 @@ const resume = (
 	);
 };
 
+const NOTHING = (): void => {};
+
+/** What a generated loop that pauses inside a pass calls once the pass is done, after `startAhead`. */
+type Joining = {
+	/** The pass is done: joins the passes that ran ahead. */
+	join: () => Promise<void>;
+	/** The pass failed: lets the passes ahead finish, and waits for them without failing. */
+	fail: (error: unknown) => Promise<void>;
+};
+
 /** The names a `props` tag declares, and the last frozen list of passed names found to fit them. */
 type DeclaredProps = {
 	names: ReadonlySet<string>;
@@ -257,6 +275,108 @@ const runtime = {
 	},
 	write,
 	drive,
+	unhold,
+	/**
+	 * Continues a generated run after a statement that returned a promise, `pending`: the rest of the run starts at
+	 * once, ahead of it, when it may, or else once the statement is done. `inline` is `out.inline` from where the
+	 * function started. See `runAhead`.
+	 */
+	restAhead: (
+		run: Run,
+		out: Out,
+		pending: Promise<void>,
+		inline: boolean,
+		indent: string,
+		rest: (run: Run, out: Out) => void | Promise<void>,
+		span: Span,
+	): Promise<void> =>
+		mayRunAhead(run.state, inline)
+			? runAhead(run, out, pending, indent, rest, span)
+			: pending.then(() => rest(run, out)),
+	contentSets,
+	/**
+	 * Continues a generated loop after a pass that returned a promise, `pending`: passes `from` to `to` run one at a
+	 * time with `pass`, ahead of it when they may, see `passesAhead`. `sets` are the variables the loop's body sets,
+	 * and `elsewhere` whether it places content from elsewhere.
+	 */
+	passAhead: (
+		run: Run,
+		scope: Scope,
+		out: Out,
+		pending: Promise<void>,
+		inline: boolean,
+		indent: string,
+		sets: readonly string[],
+		elsewhere: boolean,
+		from: number,
+		to: number,
+		pass: Pass,
+		span: Span,
+	): Promise<void> =>
+		passesFrom(
+			run,
+			out,
+			pending,
+			inline,
+			from,
+			to,
+			indent,
+			pass,
+			span,
+			passesAhead(run, scope, sets, elsewhere),
+		),
+	/**
+	 * For a generated loop that pauses inside a pass: starts passes `from` to `to` ahead of it when they may, and returns
+	 * what the loop calls once the pass is done. Returns null when they may not, and the loop carries on as usual.
+	 */
+	startAhead: (
+		run: Run,
+		scope: Scope,
+		out: Out,
+		inline: boolean,
+		indent: string,
+		sets: readonly string[],
+		elsewhere: boolean,
+		from: number,
+		to: number,
+		pass: Pass,
+		span: Span,
+	): Joining | null => {
+		if (
+			!mayRunAhead(run.state, inline) ||
+			!passesAhead(run, scope, sets, elsewhere)
+		) {
+			return null;
+		}
+		let done = NOTHING;
+		let failed: (error: unknown) => void = NOTHING;
+		const pending = new Promise<void>((resolve, reject) => {
+			done = resolve;
+			failed = reject;
+		});
+		const joined = passesFrom(
+			run,
+			out,
+			pending,
+			false,
+			from,
+			to,
+			indent,
+			pass,
+			span,
+			true,
+		);
+		return {
+			join: () => {
+				done();
+				return joined;
+			},
+			fail: (error) => {
+				failed(error);
+				return joined.then(NOTHING, NOTHING);
+			},
+		};
+	},
 	startPlace,
 	endPlace,
 	indentText,
@@ -528,7 +648,7 @@ const runtime = {
 		try {
 			// The fill renders in the capture the slot is in, such as a cached section.
 			const result = fill.body(
-				fill.run.within(run.capture),
+				fill.run.within(run.capture, run.blockDepth),
 				fillScope(fill, run),
 				out,
 			);
@@ -553,7 +673,7 @@ const runtime = {
 		const entry = run.blocks.get(name)?.[0];
 		if (!entry) return;
 		// The block renders in the capture it is placed in, such as a cached section.
-		const blockRun = entry.run.within(run.capture);
+		const blockRun = entry.run.within(run.capture, run.blockDepth);
 		if (entry.run.template === run.template) {
 			return entry.def.body(blockRun, blockScope(entry.def, scope), out);
 		}

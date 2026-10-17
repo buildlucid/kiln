@@ -289,6 +289,14 @@ describe("block()", () => {
 		expect(await errorCode('{{ block("nope") }}')).toBe("unknown-block");
 	});
 
+	test("calls through a placed block count towards maxDepth", async () => {
+		expect(
+			await errorCode(
+				'{% block a %}A{{ block("b") }}{% endblock %}{% block b %}B{% block c %}{{ block("a") }}{% endblock %}{% endblock %}',
+			),
+		).toBe("limit-depth");
+	});
+
 	test("can read the loop it is called in", async () => {
 		const template =
 			'{% for x in [1, 2] %}{{ block("row") }}{% endfor %}{% if false %}{% block row %}{{ loop.index ?? "" }}{% endblock %}{% endif %}';
