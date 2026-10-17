@@ -8,7 +8,7 @@ describe("memoryCache", () => {
 
 	test("returns what was saved, and null otherwise", () => {
 		const cache = memoryCache();
-		cache.set({ key: "a", value: "<p>A</p>", seconds: null });
+		cache.set({ key: "a", value: "<p>A</p>", seconds: null, tags: [] });
 		expect(cache.get({ key: "a" })).toBe("<p>A</p>");
 		expect(cache.get({ key: "b" })).toBeNull();
 	});
@@ -16,7 +16,7 @@ describe("memoryCache", () => {
 	test("forgets a copy once its seconds have passed", () => {
 		vi.useFakeTimers();
 		const cache = memoryCache();
-		cache.set({ key: "a", value: "A", seconds: 60 });
+		cache.set({ key: "a", value: "A", seconds: 60, tags: [] });
 		vi.advanceTimersByTime(59_000);
 		expect(cache.get({ key: "a" })).toBe("A");
 		vi.advanceTimersByTime(1_000);
@@ -25,14 +25,34 @@ describe("memoryCache", () => {
 
 	test("drops the oldest copy when full", () => {
 		const cache = memoryCache({ max: 2 });
-		cache.set({ key: "a", value: "A", seconds: null });
-		cache.set({ key: "b", value: "B", seconds: null });
-		cache.set({ key: "a", value: "A2", seconds: null });
-		cache.set({ key: "c", value: "C", seconds: null });
+		cache.set({ key: "a", value: "A", seconds: null, tags: [] });
+		cache.set({ key: "b", value: "B", seconds: null, tags: [] });
+		cache.set({ key: "a", value: "A2", seconds: null, tags: [] });
+		cache.set({ key: "c", value: "C", seconds: null, tags: [] });
 		expect([
 			cache.get({ key: "a" }),
 			cache.get({ key: "b" }),
 			cache.get({ key: "c" }),
 		]).toEqual(["A2", null, "C"]);
+	});
+
+	test("clears every copy, or the copies with any of the tags", () => {
+		const cache = memoryCache();
+		cache.set({ key: "a", value: "A", seconds: null, tags: ["pages"] });
+		cache.set({
+			key: "b",
+			value: "B",
+			seconds: null,
+			tags: ["menus", "pages"],
+		});
+		cache.set({ key: "c", value: "C", seconds: null, tags: [] });
+		cache.clear({ tags: ["menus", "posts"] });
+		expect(["a", "b", "c"].map((key) => cache.get({ key }))).toEqual([
+			"A",
+			null,
+			"C",
+		]);
+		cache.clear();
+		expect(["a", "c"].map((key) => cache.get({ key }))).toEqual([null, null]);
 	});
 });

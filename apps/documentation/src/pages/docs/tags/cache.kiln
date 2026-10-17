@@ -56,6 +56,39 @@ const kiln = createKiln({
 		{% endverbatim %}
 	{% endapply %}
 
+	<h2>Tags</h2>
+
+	<p>A key works when the template knows what the section depends on. When the data comes from your functions, they can say instead. A function wrapped in <a href="/docs/api/extending/#request-data"><code>withRender</code></a> can tag the cached section it runs in, and your store can clear every copy with a tag when that data changes.</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { createKiln, memoryCache, withRender } from "@lucidkiln/core";
+
+const cache = memoryCache();
+
+const kiln = createKiln({
+	loader,
+	cache,
+	functions: {
+		documents: withRender((render, collection: string) => {
+			render.tagCache(`collection:${collection}`);
+			return db.list(collection);
+		}),
+	},
+});
+
+// Later, when a document in "pages" changes:
+cache.clear({ tags: ["collection:pages"] });
+		{% endverbatim %}
+	{% endapply %}
+
+	<ul>
+		<li><code>tagCache</code> tags the innermost cached section the call runs in, and every cached section around it. Outside a cached section it does nothing.</li>
+		<li>Tags are strings. A section has each tag once, however many calls add it.</li>
+		<li>A saved copy keeps its tags. When a section uses a saved copy of a section inside it, it gets that section's tags too.</li>
+		<li>Tags don't change the key. They tell the store which copies to clear.</li>
+	</ul>
+
 	<h2>Scope</h2>
 
 	<p>The section can read the variables around it. Variables set inside it stay inside it, even ones that already exist outside, so a saved copy leaves the same variables behind as a fresh render. That includes variables set by blocks the section places and by fills of components it renders.</p>
@@ -64,7 +97,7 @@ const kiln = createKiln({
 
 	<h2>Cache stores</h2>
 
-	<p>Pass a store as the <code>cache</code> option. <code>memoryCache</code> keeps copies in memory, which suits a long-running Node server. It holds 1,000 copies by default and drops the oldest first.</p>
+	<p>Pass a store as the <code>cache</code> option. <code>memoryCache</code> keeps copies in memory, which suits a long-running Node server. It holds 1,000 copies by default and drops the oldest first. Its <code>clear</code> method removes copies: <code>clear()</code> removes all of them, and <code>clear({ tags })</code> removes those with any of the <a href="#tags">tags</a>.</p>
 
 	{% apply highlight("ts") %}
 		{% verbatim %}
@@ -90,8 +123,9 @@ const kiln = createKiln({
 	{% endapply %}
 
 	<ul>
-		<li><code>set({ key, value, seconds })</code> saves a copy. <code>value</code> is a string Kiln makes, holding the HTML and anything the section <a href="/docs/tags/outlet/">added to an outlet</a>. Save it as it is. <code>seconds</code> is the value of <code>for</code>, or null.</li>
+		<li><code>set({ key, value, seconds, tags })</code> saves a copy. <code>value</code> is a string Kiln makes, holding the HTML and anything the section <a href="/docs/tags/outlet/">added to an outlet</a>. Save it as it is. <code>seconds</code> is the value of <code>for</code>, or null. <code>tags</code> lists the section's <a href="#tags">tags</a> in sorted order, and is empty when it has none.</li>
 		<li><code>get({ key })</code> returns the saved value, or null when there is none.</li>
+		<li>To clear copies by tag, keep the tags with each copy. A store that can't list its copies, such as Workers KV, can keep a version for each tag instead: save the versions with the copy, change a tag's version to clear it, and have <code>get</code> return null when a saved version is out of date.</li>
 		<li>Both take one object, so Kiln can pass more details later without breaking your store.</li>
 		<li>Either may return a promise. The render only waits when one does.</li>
 		<li>If either throws or rejects, the render stops with a <code>host-error</code>. Its <code>cause</code> holds the original error.</li>

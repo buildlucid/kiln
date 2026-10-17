@@ -208,12 +208,14 @@ export type KilnCache = {
 	}): string | null | undefined | Promise<string | null | undefined>;
 	/**
 	 * Saves `value` under `key`. The value is Kiln's own string, holding the HTML and what the section added to outlets,
-	 * to save as it is. `seconds` is the tag's `for` value, or null to let the store decide.
+	 * to save as it is. `seconds` is the tag's `for` value, or null to let the store decide. `tags` are the section's
+	 * tags from `RenderInfo.tagCache`, sorted, for a store that clears copies by tag.
 	 */
 	set(entry: {
 		key: string;
 		value: string;
 		seconds: number | null;
+		tags: string[];
 	}): void | Promise<void>;
 };
 
@@ -244,6 +246,11 @@ export type RenderInfo<State = unknown> = {
 	/** Resolved name of the template making the call. */
 	template: string;
 	signal: AbortSignalLike | undefined;
+	/**
+	 * Tags the cached section the call runs in, and every cached section around it, so a store can clear its copies
+	 * when that data changes. Does nothing outside a cached section.
+	 */
+	tagCache(...tags: string[]): void;
 };
 
 /** Counters and settings for one call to `render`. */
@@ -294,8 +301,15 @@ export type Behind = {
 	readonly previous: Behind | null;
 };
 
-/** A cached section rendering: its scope, whose content can't change variables outside it, and the islands it deferred. */
-export type Section = { readonly scope: Scope; readonly deferred: string[] };
+/**
+ * A cached section rendering: its scope, whose content can't change variables outside it, the islands it deferred, and
+ * its tags from `RenderInfo.tagCache`.
+ */
+export type Section = {
+	readonly scope: Scope;
+	readonly deferred: string[];
+	readonly tags: Set<string>;
+};
 
 /**
  * A part of a render that keeps the `add to` content it adds in a log of its own: a cached section, or a macro,
@@ -340,7 +354,7 @@ export const startCapture = (run: Run, section?: Section): Capture => {
 
 /**
  * Ends a capture that started inside `run`'s. One that added nothing leaves the log around it when it is last there,
- * as it is unless captures overlap, and a cached section's islands join the section around it.
+ * as it is unless captures overlap, and a cached section's islands and tags join the section around it.
  */
 export const endCapture = (run: Run, capture: Capture): void => {
 	const outer = capture.outer;
@@ -348,6 +362,7 @@ export const endCapture = (run: Run, capture: Capture): void => {
 	const section = run.capture?.section;
 	if (section && capture.section && capture.section !== section) {
 		for (const id of capture.section.deferred) section.deferred.push(id);
+		for (const tag of capture.section.tags) section.tags.add(tag);
 	}
 };
 
@@ -402,6 +417,15 @@ export class Run {
 			timeZone: this.state.timeZone,
 			template: this.template.name,
 			signal: this.state.signal,
+			tagCache: (...tags) => {
+				const section = this.capture?.section;
+				for (const tag of tags) {
+					if (typeof tag !== "string") {
+						throw new TypeError("Cache tags must be strings");
+					}
+					section?.tags.add(tag);
+				}
+			},
 		};
 		return this.#info;
 	}

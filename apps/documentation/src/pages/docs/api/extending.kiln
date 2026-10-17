@@ -92,6 +92,7 @@ await kiln.render("pages/page", context, {
 			<tr><td><code>timeZone</code></td><td>The render's time zone</td></tr>
 			<tr><td><code>template</code></td><td>The name of the template making the call</td></tr>
 			<tr><td><code>signal</code></td><td>The render's abort signal, if there is one</td></tr>
+			<tr><td><code>tagCache(...tags)</code></td><td>Tags the cached section the call runs in, so your store can clear it when that data changes. See <a href="/docs/tags/cache/#tags">Tags</a></td></tr>
 		</tbody>
 	</table>
 

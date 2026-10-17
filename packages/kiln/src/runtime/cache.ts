@@ -9,13 +9,15 @@ import { isPlainObject } from "./values.js";
  * again and the copy is replaced.
  */
 
-const VERSION = 2;
+const VERSION = 3;
 
 export type Saved = {
 	html: string;
 	additions: Addition[];
 	islands: IslandEntry[];
 	islandScript: boolean;
+	/** The section's tags, which a section around it gets when it uses this copy. */
+	tags: string[];
 };
 
 /** Makes the value a store saves. */
@@ -24,6 +26,7 @@ export const packSaved = ({
 	additions,
 	islands,
 	islandScript,
+	tags,
 }: Saved): string =>
 	JSON.stringify({
 		v: VERSION,
@@ -35,6 +38,7 @@ export const packSaved = ({
 		]),
 		isl: islands.map((island) => [island.template, island.props]),
 		scr: islandScript,
+		tag: tags,
 	});
 
 /** Reads a value a store returned, or returns null when it isn't one `packSaved` made. */
@@ -46,13 +50,15 @@ export const unpackSaved = (value: string): Saved | null => {
 		return null;
 	}
 	if (typeof parsed !== "object" || parsed === null) return null;
-	const { v, html, add, isl, scr } = parsed as Record<string, unknown>;
+	const { v, html, add, isl, scr, tag } = parsed as Record<string, unknown>;
 	if (
 		v !== VERSION ||
 		typeof html !== "string" ||
 		!Array.isArray(add) ||
 		!Array.isArray(isl) ||
-		typeof scr !== "boolean"
+		typeof scr !== "boolean" ||
+		!Array.isArray(tag) ||
+		tag.some((item) => typeof item !== "string")
 	) {
 		return null;
 	}
@@ -77,5 +83,11 @@ export const unpackSaved = (value: string): Saved | null => {
 		// Parsed JSON holds only JSON values.
 		islands.push({ template, props: props as Record<string, JsonValue> });
 	}
-	return { html, additions, islands, islandScript: scr };
+	return {
+		html,
+		additions,
+		islands,
+		islandScript: scr,
+		tags: tag as string[],
+	};
 };

@@ -981,14 +981,17 @@ export const memoryLoader = (
 
 /**
  * A store for the `cache` tag that keeps output in memory, for a long-running server. Holds up to `max` copies, 1,000
- * by default, and drops the oldest first.
+ * by default, and drops the oldest first. `clear` removes every copy, or those with any of the tags passed.
  *
  * ```ts
  * const kiln = createKiln({ loader, cache: memoryCache() });
  * ```
  */
 export const memoryCache = ({ max = 1000 }: { max?: number } = {}) => {
-	const entries = new Map<string, { value: string; expires: number }>();
+	const entries = new Map<
+		string,
+		{ value: string; expires: number; tags: string[] }
+	>();
 	// `satisfies` keeps the synchronous types, so callers can use the store without awaiting.
 	return {
 		get: ({ key }) => {
@@ -998,15 +1001,25 @@ export const memoryCache = ({ max = 1000 }: { max?: number } = {}) => {
 			entries.delete(key);
 			return null;
 		},
-		set: ({ key, value, seconds }) => {
+		set: ({ key, value, seconds, tags }) => {
 			// Deleting first moves the key to the end, so the oldest copy is always first.
 			entries.delete(key);
 			entries.set(key, {
 				value,
 				expires: seconds === null ? Infinity : Date.now() + seconds * 1000,
+				tags,
 			});
 			const oldest = entries.keys().next();
 			if (entries.size > max && !oldest.done) entries.delete(oldest.value);
 		},
-	} satisfies KilnCache;
+		/** Removes every copy, or with `tags`, the copies that have any of them. */
+		clear: ({ tags }: { tags?: readonly string[] } = {}) => {
+			if (!tags) return entries.clear();
+			for (const [key, entry] of entries) {
+				if (entry.tags.some((tag) => tags.includes(tag))) entries.delete(key);
+			}
+		},
+	} satisfies KilnCache & {
+		clear(options?: { tags?: readonly string[] }): void;
+	};
 };

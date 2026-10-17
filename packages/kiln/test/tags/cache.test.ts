@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { type KilnCache, memoryCache } from "../../src/index.js";
+import { type KilnCache, memoryCache, withRender } from "../../src/index.js";
 import { errorCode, lines, render, renderError, settle } from "../helpers.js";
 
 /** A store that records what it saves. */
@@ -307,5 +307,104 @@ describe("cache", () => {
 			"unexpected-token",
 		);
 		expect(await errorCode('{% cache "a" %}')).toBe("unclosed-block");
+	});
+});
+
+describe("cache tags", () => {
+	/** A function that tags the section it runs in with its collection, as a host's data function would. */
+	const functions = {
+		documents: withRender((render, collection: string) => {
+			render.tagCache(`collection:${collection}`);
+			return collection;
+		}),
+	};
+
+	/** A store that records each section's tags, by the key the template gave. */
+	const tagged = () => {
+		const values = new Map<string, string>();
+		const tags = new Map<string, string[]>();
+		const cache: KilnCache = {
+			get: ({ key }) => values.get(key) ?? null,
+			set: ({ key, value, tags: saved }) => {
+				values.set(key, value);
+				tags.set(key.slice(key.lastIndexOf("|") + 1), saved);
+			},
+		};
+		return { cache, tags };
+	};
+
+	test("passes a section's tags to the store, sorted and once each", async () => {
+		const { cache, tags } = tagged();
+		const output = await render(
+			'{% cache "a" %}{{ documents("pages") }}{{ documents("menus") }}{% include "part" %}{{ documents("pages") }}{% endcache %}{{ documents("posts") }}',
+			{ cache, functions, templates: { part: '{{ documents("blocks") }}' } },
+		);
+		expect(output).toBe("pagesmenusblockspagesposts");
+		expect(tags.get('["a"]')).toEqual([
+			"collection:blocks",
+			"collection:menus",
+			"collection:pages",
+		]);
+	});
+
+	test("gives a section the tags of sections inside it, rendered or saved", async () => {
+		const { cache, tags } = tagged();
+		const template =
+			'{% cache ["outer", v] %}{% cache "inner" %}{{ documents("pages") }}{% endcache %}{{ documents("menus") }}{% endcache %}';
+		await render(template, { cache, functions, context: { v: 1 } });
+		expect(tags.get('["inner"]')).toEqual(["collection:pages"]);
+		expect(tags.get('["outer",1]')).toEqual([
+			"collection:menus",
+			"collection:pages",
+		]);
+		// The inner section comes from the store this time, and still tags the outer one.
+		await render(template, { cache, functions, context: { v: 2 } });
+		expect(tags.get('["outer",2]')).toEqual([
+			"collection:menus",
+			"collection:pages",
+		]);
+	});
+
+	test("keeps the tags of sections that render at the same time apart", async () => {
+		const { cache, tags } = tagged();
+		const slow = withRender(async (render, collection: string, ms: number) => {
+			render.tagCache(`collection:${collection}`);
+			await new Promise((resolve) => setTimeout(resolve, ms));
+			render.tagCache(`late:${collection}`);
+			return collection;
+		});
+		const output = await render(
+			'{% cache "a" %}{{ slow("pages", 20) }}{% endcache %}{% cache "b" %}{{ slow("menus", 1) }}{% endcache %}',
+			{ cache, functions: { slow } },
+		);
+		expect(output).toBe("pagesmenus");
+		expect(tags.get('["a"]')).toEqual(["collection:pages", "late:pages"]);
+		expect(tags.get('["b"]')).toEqual(["collection:menus", "late:menus"]);
+	});
+
+	test("memoryCache clears the copies with a tag", async () => {
+		const cache = memoryCache();
+		const template =
+			'{% cache "a" %}{{ documents("pages") }}{{ n }}{% endcache %}';
+		const run = (n: number) =>
+			render(template, { cache, functions, context: { n } });
+		expect(await run(1)).toBe("pages1");
+		cache.clear({ tags: ["collection:menus"] });
+		expect(await run(2)).toBe("pages1");
+		cache.clear({ tags: ["collection:pages"] });
+		expect(await run(3)).toBe("pages3");
+	});
+
+	test("tags must be strings", async () => {
+		const tagNumber = withRender((render) => {
+			render.tagCache(1 as unknown as string);
+			return "";
+		});
+		expect(
+			await errorCode('{% cache "a" %}{{ tagNumber() }}{% endcache %}', {
+				cache: memoryCache(),
+				functions: { tagNumber },
+			}),
+		).toBe("host-error");
 	});
 });

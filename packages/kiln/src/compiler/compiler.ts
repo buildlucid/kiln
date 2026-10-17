@@ -1961,7 +1961,11 @@ class Compiler {
 			// It renders in a capture of its own, which keeps what it adds to outlets and the islands it defers.
 			const fresh = (): Capture | Promise<Capture> => {
 				const inner = sectionScope(scope);
-				const capture = startCapture(run, { scope: inner, deferred: [] });
+				const capture = startCapture(run, {
+					scope: inner,
+					deferred: [],
+					tags: new Set(),
+				});
 				return after(body(run.within(capture), inner, out), () => {
 					endCapture(run, capture);
 					return capture;
@@ -1977,6 +1981,9 @@ class Compiler {
 			return after(found, (value) => {
 				const saved = typeof value === "string" ? unpackSaved(value) : null;
 				if (saved) {
+					// The sections around this one depend on what it does.
+					const around = run.capture?.section;
+					if (around) for (const tag of saved.tags) around.tags.add(tag);
 					const replay = (front: boolean) => {
 						const islands = state.islands;
 						if (islands?.mode === "defer" && saved.islands.length > 0) {
@@ -2013,6 +2020,7 @@ class Compiler {
 				const start = out.s.length;
 				const hadScript = state.islandScript;
 				return after(fresh(), (capture) => {
+					const tags = [...(capture.section?.tags ?? [])].sort();
 					const manifest =
 						state.islands?.mode === "defer" ? state.islands.manifest : null;
 					const value = packSaved({
@@ -2024,11 +2032,12 @@ class Compiler {
 								)
 							: [],
 						islandScript: !hadScript && state.islandScript,
+						tags,
 					});
 					return locating(
 						run,
 						span,
-						() => store.set({ key: name, value, seconds: time }),
+						() => store.set({ key: name, value, seconds: time, tags }),
 						"The cache store",
 					);
 				});
