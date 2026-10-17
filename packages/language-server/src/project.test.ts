@@ -51,6 +51,7 @@ describe("projects", () => {
 			tests: [],
 			globals: [],
 			types: [],
+			htmlChecks: true,
 		});
 		await writeFile(join(dir, "kiln.json"), '{ "filters": "markdown" }');
 		await expect(readManifest(join(dir, "kiln.json"))).rejects.toThrow(
@@ -73,12 +74,29 @@ describe("projects", () => {
 		]);
 	});
 
-	test("without kiln.json, reports syntax errors only", async () => {
+	test("without kiln.json, reports syntax errors and HTML checks only", async () => {
 		const project = await openProject(null, dir, warn);
 		const codes = async (text: string) =>
 			(await diagnose(project, "home.kiln", text)).map((d) => d.code);
 		expect(await codes('{{ a|nope }}{% include "missing" %}')).toEqual([]);
 		expect(await codes("{% if %}")).toContain("unclosed-block");
+		expect(await codes("<center></center>")).toEqual(["html-obsolete-element"]);
+	});
+
+	test("uses the HTML check levels kiln.json gives", async () => {
+		await writeFile(
+			join(dir, "kiln.json"),
+			'{ "htmlChecks": { "html-img-alt": "error", "html-button-type": "off" } }',
+		);
+		const project = await openProject(join(dir, "kiln.json"), dir, warn);
+		const diagnostics = await diagnose(
+			project,
+			"home.kiln",
+			"<img src=x><button>Go</button>",
+		);
+		expect(diagnostics.map((d) => [d.code, d.severity])).toEqual([
+			["html-img-alt", "error"],
+		]);
 	});
 
 	test("warns about a broken kiln.json and carries on without it", async () => {

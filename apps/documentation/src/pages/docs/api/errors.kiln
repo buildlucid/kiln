@@ -75,7 +75,9 @@ for (const problem of diagnostics) {
 		<li>A warning, in the same templates, for a variable a macro reads that is neither one of its parameters nor a global. A macro can't see the template's variables.</li>
 	</ul>
 
-	<p>Apart from missing templates, these checks follow strict mode, so they are skipped when <code>strict</code> is off. <code>check</code> only knows what a template is passed when it can see the call, so it doesn't report unknown variables in templates without <code>props</code>.</p>
+	<p>It also warns about obsolete and inaccessible HTML, such as an image with no <code>alt</code>. See <a href="/docs/tooling/html-checks/">HTML checks</a>.</p>
+
+	<p>Apart from missing templates and HTML checks, these checks follow strict mode, so they are skipped when <code>strict</code> is off. <code>check</code> only knows what a template is passed when it can see the call, so it doesn't report unknown variables in templates without <code>props</code>.</p>
 
 	<p>Each diagnostic has a <code>code</code>, a <code>message</code>, a <code>severity</code> of <code>"error"</code> or <code>"warning"</code>, the <code>template</code>, and <code>start</code> and <code>end</code> positions with a line and column. Codes are stable, so tools can match them.</p>
 

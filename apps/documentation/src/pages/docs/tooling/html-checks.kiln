@@ -1,0 +1,150 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+	<p><a href="/docs/api/errors/#checking-templates"><code>check</code></a> warns about HTML that is obsolete or hard to use with assistive technology, such as an image with no <code>alt</code> or a <code>&lt;center&gt;</code> element. The language server reports the same warnings as you type. Nothing is checked while rendering, so pages render just as fast.</p>
+
+	<p>components/card.kiln:</p>
+
+	{% apply highlight("kiln") %}
+		{% verbatim %}
+<center>
+	<img src="{{ image.src }}">
+	<button>Read more</button>
+</center>
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>Warnings:</p>
+
+	{% apply highlight("text") %}
+		{% verbatim %}
+html-obsolete-element  1:1  <center> is obsolete. Use CSS instead
+html-img-alt           2:2  <img> has no alt attribute. Use alt="" if the image is decorative
+html-button-type       3:2  <button> has no type attribute, so it submits any form it is in. Add type="button" or type="submit"
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>Each warning is a normal <code>check</code> diagnostic, with a stable <code>code</code>, a <code>message</code>, a <code>severity</code> and a position.</p>
+
+	<h2>Rules</h2>
+
+	<table>
+		<thead><tr><th>Code</th><th>Reports</th></tr></thead>
+		<tbody>
+			<tr><td><code>html-obsolete-element</code></td><td>An element the HTML standard has made obsolete. See <a href="#obsolete-elements">Obsolete elements</a></td></tr>
+			<tr><td><code>html-img-alt</code></td><td>An <code>&lt;img&gt;</code> with no <code>alt</code> attribute</td></tr>
+			<tr><td><code>html-button-type</code></td><td>A <code>&lt;button&gt;</code> with no <code>type</code> attribute</td></tr>
+			<tr><td><code>html-lang</code></td><td>An <code>&lt;html&gt;</code> element with no <code>lang</code> attribute</td></tr>
+			<tr><td><code>html-tabindex</code></td><td>A <code>tabindex</code> above 0</td></tr>
+			<tr><td><code>html-aria-attribute</code></td><td>An <code>aria-</code> attribute that WAI-ARIA doesn't define, such as <code>aria-labeledby</code></td></tr>
+			<tr><td><code>html-role</code></td><td>A <code>role</code> that WAI-ARIA doesn't define, or an abstract role such as <code>widget</code> that pages must not use</td></tr>
+		</tbody>
+	</table>
+
+	<p>Element and attribute names match in any case, as they do in HTML, so <code>&lt;CENTER&gt;</code> is reported too.</p>
+
+	<h3>Images</h3>
+
+	<p>Screen readers read an image's <code>alt</code> text in its place. Without <code>alt</code>, many read out the file name instead. Describe what the image shows, or use an empty <code>alt</code> for an image that is only decoration:</p>
+
+	{% apply highlight("kiln") %}
+		{% verbatim %}
+<img src="{{ post.image }}" alt="{{ post.imageAlt }}">
+<img src="/images/divider.svg" alt="">
+		{% endverbatim %}
+	{% endapply %}
+
+	<h3>Buttons</h3>
+
+	<p>A <code>&lt;button&gt;</code> inside a form submits it unless it says otherwise. A button that opens a menu or a dialog then submits the form as well. Give every button a <code>type</code>, so moving it into a form later can't change what it does.</p>
+
+	<h3>Language</h3>
+
+	<p><code>lang</code> tells screen readers which voice and pronunciation to use, and tells browsers which language to translate from. Put it on <code>&lt;html&gt;</code>, such as <code>&lt;html lang="en-GB"&gt;</code>.</p>
+
+	<h3>Tab order</h3>
+
+	<p>A <code>tabindex</code> above 0 moves an element ahead of everything else when someone tabs through the page, so the order no longer follows what they see. Use <code>0</code> to make an element focusable in its normal place, or <code>-1</code> to focus it only from script. Only written-out numbers are checked.</p>
+
+	<h3>ARIA</h3>
+
+	<p>Browsers ignore an <code>aria-</code> attribute or a <code>role</code> they don't know, so a typo quietly does nothing. The rules follow WAI-ARIA 1.2, plus the attributes and roles the 1.3 draft adds, such as <code>aria-description</code>. Roles from DPUB-ARIA and Graphics-ARIA, which start with <code>doc-</code> and <code>graphics-</code>, are accepted.</p>
+
+	<p>A <code>role</code> may list several roles as fallbacks, such as <code>role="switch checkbox"</code>, and each one is checked. Roles match in any case. Only written-out values are checked.</p>
+
+	<h2>Obsolete elements</h2>
+
+	<p>These elements are obsolete in the HTML standard. Browsers may still show them, but they can't be relied on, and most have a better replacement.</p>
+
+	<table>
+		<thead><tr><th>Element</th><th>Use instead</th></tr></thead>
+		<tbody>
+			<tr><td><code>acronym</code></td><td><code>abbr</code></td></tr>
+			<tr><td><code>applet</code></td><td><code>object</code> or <code>embed</code></td></tr>
+			<tr><td><code>basefont</code>, <code>big</code>, <code>blink</code>, <code>center</code>, <code>font</code>, <code>marquee</code>, <code>multicol</code>, <code>nobr</code>, <code>spacer</code></td><td>CSS</td></tr>
+			<tr><td><code>bgsound</code></td><td><code>audio</code></td></tr>
+			<tr><td><code>dir</code></td><td><code>ul</code></td></tr>
+			<tr><td><code>frame</code>, <code>frameset</code>, <code>noframes</code></td><td><code>iframe</code>, or a layout with CSS</td></tr>
+			<tr><td><code>isindex</code></td><td>A form with a text field</td></tr>
+			<tr><td><code>keygen</code></td><td>The Web Crypto API</td></tr>
+			<tr><td><code>listing</code>, <code>plaintext</code>, <code>xmp</code></td><td><code>pre</code> and <code>code</code></td></tr>
+			<tr><td><code>menuitem</code></td><td>A <code>button</code> inside <code>menu</code></td></tr>
+			<tr><td><code>nextid</code></td><td>Nothing. Remove it</td></tr>
+			<tr><td><code>noembed</code></td><td>Fallback content inside <code>object</code></td></tr>
+			<tr><td><code>param</code></td><td>Attributes on <code>object</code></td></tr>
+			<tr><td><code>rb</code>, <code>rtc</code></td><td><code>ruby</code> with <code>rt</code></td></tr>
+			<tr><td><code>strike</code></td><td><code>s</code>, or <code>del</code> for removed text</td></tr>
+			<tr><td><code>tt</code></td><td><code>code</code>, <code>kbd</code> or <code>samp</code></td></tr>
+		</tbody>
+	</table>
+
+	<h2>What Kiln can see</h2>
+
+	<p>The rules read the HTML written in the template, not the page it renders. Kiln only warns when it is sure, so it may miss a problem but shouldn't report one that isn't there.</p>
+
+	<ul>
+		<li>An attribute whose value comes from <code>&#123;{ }}</code> counts as present. <code>alt="&#123;{ image.alt }}"</code> passes even if <code>image.alt</code> turns out empty.</li>
+		<li>When a tag or an output such as <code>attrs(...)</code> sits among an element's attributes, Kiln can't tell which attributes the element ends up with. It doesn't report a missing attribute on that element, but still checks the attributes it can see. A comment there makes no difference.</li>
+		<li>An attribute whose name is partly built at render time, such as <code>aria-&#123;{ name }}</code>, isn't checked.</li>
+		<li>An element whose name is built at render time, such as <code>&lt;&#123;{ tag }}&gt;</code>, isn't checked.</li>
+		<li>Content inside <code>&lt;svg&gt;</code> and <code>&lt;math&gt;</code> isn't checked. SVG and MathML have elements of their own, such as SVG's <code>&lt;font&gt;</code>.</li>
+		<li>Content inside elements that hold text rather than HTML, such as <code>&lt;script&gt;</code>, <code>&lt;style&gt;</code>, <code>&lt;textarea&gt;</code> and <code>&lt;title&gt;</code>, isn't checked. Nor are HTML comments, Kiln comments or <a href="/docs/tags/verbatim/"><code>verbatim</code></a>.</li>
+		<li>Each template is checked on its own. A template it includes is checked when you check that template.</li>
+		<li>A template that starts with an XML declaration, such as a feed or a sitemap, isn't checked.</li>
+	</ul>
+
+	{% apply highlight("kiln") %}
+		{% verbatim %}
+{# Not reported: the if may add alt #}
+<img src="{{ src }}" {% if alt %}alt="{{ alt }}"{% endif %}>
+
+{# Not reported: attrs may add type #}
+<button{{ attrs(attributes) }}>{{ label }}</button>
+
+{# Reported: aria-labeledby is a typo for aria-labelledby #}
+<nav aria-labeledby="site-nav-title"{{ attrs(attributes) }}>
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>Some problems need the whole rendered page, such as skipped heading levels, repeated <code>id</code> values or a form field without a label. Kiln doesn't check these. Run an HTML validator or an accessibility checker over your rendered pages for them.</p>
+
+	<h2>Turning rules off</h2>
+
+	<p>The rules are on by default, and each reports a warning. Use the <code>htmlChecks</code> option to change that. Give a rule <code>"off"</code>, <code>"warning"</code> or <code>"error"</code>. Rules you leave out stay as warnings.</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+const kiln = createKiln({
+	loader,
+	htmlChecks: {
+		"html-button-type": "off",
+		"html-img-alt": "error",
+	},
+});
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>Set <code>htmlChecks: false</code> to turn every rule off, such as for an environment that only renders plain-text emails. These rules don't depend on <a href="/docs/language/strict-mode/">strict mode</a>.</p>
+
+	<p>To give your editor the same settings, add <code>htmlChecks</code> to <a href="/docs/tooling/editors/#telling-the-editor-about-your-project"><code>kiln.json</code></a>. <code>generateManifest</code> copies it from your environment.</p>
+{% endblock %}

@@ -17,5 +17,5 @@ languages = ["Kiln"]
 # "https://github.com/buildlucid/kiln" with a pushed sha before publishing.
 [grammars.kiln]
 repository = "file:///Users/williamyallop/Documents/projects/protodigital/internal/kiln"
-rev = "4e7b97e0c54b25d4a4944c91a13ed0f9acc6978c"
+rev = "c668fa8e7c5d783b2fc52ef15bcd1b02dbbb1db6"
 path = "packages/tree-sitter-kiln"

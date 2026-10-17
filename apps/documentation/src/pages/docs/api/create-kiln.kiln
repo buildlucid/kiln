@@ -39,6 +39,7 @@ const html = await kiln.render("pages/home", { route: { path: "/" } });
 			<tr><td><code>locale</code></td><td><code>"en"</code></td><td>The locale for <code>formatNumber</code>, <code>plural</code> and <code>formatDate</code></td></tr>
 			<tr><td><code>timeZone</code></td><td><code>"UTC"</code></td><td>The time zone for <code>formatDate</code></td></tr>
 			<tr><td><code>cache</code></td><td>None</td><td>Where the <code>cache</code> tag saves output, such as <code>memoryCache()</code>. See <a href="/docs/tags/cache/#cache-stores">cache</a></td></tr>
+			<tr><td><code>htmlChecks</code></td><td><code>true</code></td><td>Which HTML rules <code>check</code> reports, and how. See <a href="/docs/tooling/html-checks/#turning-rules-off">HTML checks</a></td></tr>
 			<tr><td><code>debug</code></td><td><code>false</code></td><td>Turns on the <code>dump</code> function</td></tr>
 			<tr><td><code>limits</code></td><td>See <a href="/docs/api/safety/#limits">Limits</a></td><td>Caps on output size, steps and nesting</td></tr>
 		</tbody>

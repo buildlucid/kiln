@@ -126,10 +126,11 @@ npx kiln-language-server --stdio
 			<tr><td><code>functions</code>, <code>filters</code>, <code>tests</code></td><td>The names of the functions, filters and tests your project registers, on top of Kiln's own.</td></tr>
 			<tr><td><code>globals</code></td><td>The names of your globals.</td></tr>
 			<tr><td><code>types</code></td><td>The names of the prop types you register in the <code>types</code> option, such as <code>Post</code>.</td></tr>
+			<tr><td><code>htmlChecks</code></td><td>Your <a href="/docs/tooling/html-checks/#turning-rules-off"><code>htmlChecks</code></a> option. Default <code>true</code>.</td></tr>
 		</tbody>
 	</table>
 
-	<p>The editor never runs your code. It only needs the names. Without a <code>kiln.json</code>, the language server can't tell which names your project adds or where template names start, so it reports syntax errors only.</p>
+	<p>The editor never runs your code. It only needs the names. Without a <code>kiln.json</code>, the language server can't tell which names your project adds or where template names start, so it reports syntax errors and <a href="/docs/tooling/html-checks/">HTML checks</a> only.</p>
 
 	<h3>Generating kiln.json</h3>
 

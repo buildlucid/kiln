@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
-import { createKiln, generateManifest, memoryLoader } from "../../src/index.js";
+import {
+	createKiln,
+	generateManifest,
+	type HtmlChecks,
+	memoryLoader,
+} from "../../src/index.js";
 
 describe("generateManifest", () => {
 	test("lists the names the environment adds, sorted, with the root and strict mode", () => {
@@ -22,7 +27,23 @@ describe("generateManifest", () => {
 			tests: ["published"],
 			globals: ["menu", "site"],
 			types: ["Post"],
+			htmlChecks: true,
 		});
+	});
+
+	test("writes only the HTML check levels that differ from a warning", () => {
+		const manifest = (htmlChecks: HtmlChecks) =>
+			JSON.parse(
+				generateManifest(createKiln({ loader: memoryLoader({}), htmlChecks }), {
+					root: ".",
+				}),
+			).htmlChecks;
+		expect(
+			manifest({ "html-img-alt": "error", "html-lang": "warning" }),
+		).toEqual({
+			"html-img-alt": "error",
+		});
+		expect(manifest(false)).toBe(false);
 	});
 
 	test("leaves out Kiln's own functions, filters and tests", () => {

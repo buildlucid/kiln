@@ -126,15 +126,31 @@ export const readManifest = async (path: string): Promise<KilnManifest> => {
 		}
 		return value;
 	};
-	const { root = ".", strict = true } = data as Partial<KilnManifest>;
+	const {
+		root = ".",
+		strict = true,
+		htmlChecks = true,
+	} = data as Partial<KilnManifest>;
 	if (typeof root !== "string")
 		throw new Error('"root" in kiln.json must be a string');
 	if (typeof strict !== "boolean") {
 		throw new Error('"strict" in kiln.json must be true or false');
 	}
+	// createKiln checks the levels inside.
+	if (
+		typeof htmlChecks !== "boolean" &&
+		(typeof htmlChecks !== "object" ||
+			htmlChecks === null ||
+			Array.isArray(htmlChecks))
+	) {
+		throw new Error(
+			'"htmlChecks" in kiln.json must be true, false or an object',
+		);
+	}
 	return {
 		root,
 		strict,
+		htmlChecks,
 		functions: field("functions"),
 		filters: field("filters"),
 		tests: field("tests"),
@@ -222,6 +238,7 @@ export const openProject = async (
 					globals: stubs(manifest.globals, null),
 					types: stubs(manifest.types, () => true),
 					strict: manifest.strict,
+					htmlChecks: manifest.htmlChecks,
 				})
 			: createKiln(options);
 	} catch (error) {

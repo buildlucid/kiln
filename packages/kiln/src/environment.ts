@@ -15,6 +15,12 @@ import {
 	KilnRenderError,
 	KilnSyntaxError,
 } from "./errors.js";
+import {
+	checkHtml,
+	type HtmlCheckLevels,
+	type HtmlChecks,
+	resolveHtmlChecks,
+} from "./html.js";
 import { resolveTemplateName } from "./names.js";
 import type { EscapeStrategy } from "./parser/ast.js";
 import { ESCAPE_STRATEGIES } from "./parser/ast.js";
@@ -153,6 +159,8 @@ export type KilnOptions<State = undefined> = {
 	/** Where the `cache` tag saves output, such as `memoryCache()`. Without it, the tag renders every time. */
 	cache?: KilnCache;
 	limits?: Partial<Limits>;
+	/** Which HTML rules `check` reports, and at what level. Default `true`, every rule as a warning. */
+	htmlChecks?: HtmlChecks;
 };
 
 type BaseRenderOptions = {
@@ -352,6 +360,7 @@ class Environment<State> implements EnvironmentCore {
 	readonly locale: string;
 	readonly timeZone: string;
 	readonly cache: KilnCache | null;
+	readonly htmlChecks: HtmlCheckLevels;
 	readonly #loader: Loader;
 	readonly #cache = new Map<
 		string,
@@ -391,6 +400,7 @@ class Environment<State> implements EnvironmentCore {
 		this.locale = options.locale ?? "en";
 		this.timeZone = options.timeZone ?? "UTC";
 		this.limits = checkLimits(options.limits);
+		this.htmlChecks = resolveHtmlChecks(options.htmlChecks);
 		this.functions = registry("function", builtinFunctions, options.functions);
 		this.filters = registry("filter", builtinFilters, options.filters);
 		this.tests = registry("test", builtinTests, options.tests);
@@ -780,16 +790,16 @@ export const createKiln = <State = undefined>(
 	return kiln;
 };
 
+type ToolingEnvironment = EnvironmentCore & {
+	readonly globals: Scope;
+	readonly htmlChecks: HtmlCheckLevels;
+};
+
 /** The environment behind each object `createKiln` returns, for tools such as `generateManifest`. */
-const environments = new WeakMap<
-	object,
-	EnvironmentCore & { globals: Scope }
->();
+const environments = new WeakMap<object, ToolingEnvironment>();
 
 /** The environment behind a Kiln object. Throws for an object `createKiln` didn't make. */
-export const environmentOf = (
-	kiln: object,
-): EnvironmentCore & { globals: Scope } => {
+export const environmentOf = (kiln: object): ToolingEnvironment => {
 	const env = environments.get(kiln);
 	if (!env) throw new TypeError("Expected an environment made by createKiln");
 	return env;
@@ -839,7 +849,8 @@ const createApi = <State>(env: Environment<State>): Kiln<State> => {
 				];
 			}
 			const references = await checkReferences(env, template);
-			return [...template.diagnostics, ...references].sort(
+			const html = checkHtml(template, env.htmlChecks);
+			return [...template.diagnostics, ...references, ...html].sort(
 				(a, b) => a.start.offset - b.start.offset,
 			);
 		},

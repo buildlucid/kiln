@@ -250,6 +250,12 @@ export const navigation = [
 				url: "/docs/tooling/editors/",
 				description: "The language server and the Zed extension.",
 			},
+			{
+				title: "HTML checks",
+				url: "/docs/tooling/html-checks/",
+				description:
+					"Warnings for obsolete and inaccessible HTML, before you render.",
+			},
 		],
 	},
 	{

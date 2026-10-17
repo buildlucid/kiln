@@ -1,4 +1,5 @@
 import { environmentOf, type Kiln } from "./environment.js";
+import { type HtmlChecks, htmlChecksOption } from "./html.js";
 import { variableNames } from "./runtime/scope.js";
 import type { CallableEntry } from "./runtime/types.js";
 
@@ -12,6 +13,7 @@ export type KilnManifest = {
 	tests: string[];
 	globals: string[];
 	types: string[];
+	htmlChecks: HtmlChecks;
 };
 
 const hostNames = (registry: ReadonlyMap<string, CallableEntry>) =>
@@ -21,7 +23,7 @@ const hostNames = (registry: ReadonlyMap<string, CallableEntry>) =>
 		.sort();
 
 /**
- * Writes `kiln.json` for an environment: the names of its functions, filters, tests, globals and prop types, so editors can check templates without running your code. `root` is the template folder, relative to where you write the file.
+ * Writes `kiln.json` for an environment: the names of its functions, filters, tests, globals and prop types, and its HTML check levels, so editors can check templates without running your code. `root` is the template folder, relative to where you write the file.
  *
  * ```ts
  * await writeFile("kiln.json", generateManifest(kiln, { root: "src/templates" }));
@@ -40,6 +42,7 @@ export const generateManifest = <State>(
 		tests: hostNames(env.tests),
 		globals: variableNames(env.globals).sort(),
 		types: [...env.types.keys()].sort(),
+		htmlChecks: htmlChecksOption(env.htmlChecks),
 	};
 	return `${JSON.stringify(manifest, null, "\t")}\n`;
 };

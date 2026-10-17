@@ -1,5 +1,6 @@
 import {
 	createKiln,
+	type Diagnostic,
 	type IslandMode,
 	type KilnOptions,
 	KilnRenderError,
@@ -103,6 +104,18 @@ export const readParts = async (
 	const parts: string[] = [];
 	for await (const chunk of stream) parts.push(decoder.decode(chunk));
 	return parts;
+};
+
+/** Checks `template` as `index.kiln` with `check`. Templates stay as source, since `check` reads what was written. */
+export const check = (
+	template: string,
+	options: Omit<TestOptions, "context" | "islands" | "signal"> = {},
+): Promise<Diagnostic[]> => {
+	const { templates = {}, ...kilnOptions } = options;
+	return createKiln({
+		...kilnOptions,
+		loader: memoryLoader({ ...templates, index: template }),
+	}).check("index");
 };
 
 /** Renders a template that should fail, and returns its error. Fails the test if the render succeeds. */
