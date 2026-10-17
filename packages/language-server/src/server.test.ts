@@ -232,7 +232,7 @@ describe("language server", () => {
 		expect(hover.contents.value).toContain("MDN Reference");
 	});
 
-	test("hovers tags, with an end tag showing the tag it closes", async () => {
+	test("hovers tags with their syntax, with an end tag showing the tag it closes", async () => {
 		await open(
 			"templates/pages/tags.kiln",
 			"{% for post in posts %}{{ post }}{% endfor %}",
@@ -245,7 +245,9 @@ describe("language server", () => {
 				character,
 			);
 		const start = await hover(4);
-		expect(start.contents.value).toMatch(/^Loop over arrays/);
+		expect(start.contents.value).toMatch(
+			/^```kiln\n\{% for item in items %\}\n\t…\n\{% endfor %\}\n```\n\n---\n\nLoop over arrays/,
+		);
 		expect(start.contents.value).toContain("```kiln\n{% for post in posts %}");
 		expect(start.contents.value).toContain(
 			"[Kiln docs](https://kilnlang.com/docs/tags/for/)",

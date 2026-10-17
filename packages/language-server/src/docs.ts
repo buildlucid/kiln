@@ -4,7 +4,7 @@ import docs from "./docs.json" with { type: "json" };
 export type DocKind = "tags" | "filters" | "functions" | "tests";
 
 /**
- * What each built-in does, from its section of the docs site, up to its first example. The docs build writes
+ * What each built-in does, from its section of the docs site, up to the end of its first example. The docs build writes
  * `docs.json`; see `apps/documentation/src/editor-docs.ts`.
  */
 const DOCS: Record<
@@ -15,5 +15,5 @@ const DOCS: Record<
 /** A built-in's docs as Markdown, ending with a link to its section on the docs site. Null for names without docs. */
 export const docsFor = (kind: DocKind, name: string): string | null => {
 	const doc = DOCS[kind][name];
-	return doc ? `${doc.markdown}\n\n[Kiln docs](${doc.url})` : null;
+	return doc ? `${doc.markdown}\n\n---\n\n[Kiln docs](${doc.url})` : null;
 };

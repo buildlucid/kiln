@@ -265,6 +265,14 @@ const macrosIn = (text: string) =>
 
 const codeBlock = (code: string) => `\`\`\`kiln\n${code}\n\`\`\``;
 
+/** A hover's parts, such as a signature and its docs, with a rule between each. Missing parts are left out. */
+const sections = (...parts: (string | null | undefined)[]) =>
+	parts.filter(Boolean).join("\n\n---\n\n");
+
+/** A tag's syntax, from its completion snippet: named placeholders become their names, and the rest become `…`. */
+const tagSyntax = (snippet: string) =>
+	`{% ${snippet.replace(/\$\{\d+:([^}]*)\}/g, "$1").replace(/\$\{?\d+\}?/g, "…")}`;
+
 export const hover = async (
 	open: OpenTemplate,
 	offset: number,
@@ -287,16 +295,18 @@ export const hover = async (
 
 	/** A built-in's signature, then its docs. */
 	const builtin = (signature: string, kind: DocKind) =>
-		[codeBlock(signature), docsFor(kind, symbol.name)]
-			.filter(Boolean)
-			.join("\n");
+		sections(codeBlock(signature), docsFor(kind, symbol.name));
 
 	switch (symbol.kind) {
 		case "tag": {
 			// An end tag, such as `endfor`, shows the docs of the tag it closes.
 			const tag =
 				symbol.name in TAGS ? symbol.name : symbol.name.replace(/^end/, "");
-			value = docsFor("tags", tag);
+			const doc = TAGS[tag];
+			value = sections(
+				doc && codeBlock(tagSyntax(doc.snippet)),
+				docsFor("tags", tag),
+			);
 			break;
 		}
 		case "filter": {
@@ -316,7 +326,7 @@ export const hover = async (
 		case "loop": {
 			const description = LOOP_PROPERTIES[symbol.name];
 			value = description
-				? `${codeBlock(`loop.${symbol.name}`)}\n${description}`
+				? sections(codeBlock(`loop.${symbol.name}`), description)
 				: null;
 			break;
 		}
@@ -332,9 +342,15 @@ export const hover = async (
 			const analysis = name ? await analyse(project, name, text) : null;
 			const prop = analysis?.props.find((item) => item.name === symbol.name);
 			if (prop)
-				value = `${codeBlock(describeProp(prop))}\nA prop of this template.`;
+				value = sections(
+					codeBlock(describeProp(prop)),
+					"A prop of this template.",
+				);
 			else if (symbol.name === analysis?.rest) {
-				value = `${codeBlock(`...${symbol.name}`)}\nThe variables passed to this template that it doesn't declare.`;
+				value = sections(
+					codeBlock(`...${symbol.name}`),
+					"The variables passed to this template that it doesn't declare.",
+				);
 			} else if (project.manifest?.globals.includes(symbol.name)) {
 				value = "A global your project provides.";
 			}

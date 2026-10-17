@@ -9,14 +9,14 @@ describe("editor docs", () => {
 		);
 	}, 30_000);
 
-	test("takes each name's section up to its first example, with a link to the section", async () => {
+	test("takes each name's section up to the end of its first example, with a link to the section", async () => {
 		const docs = JSON.parse(await generateEditorDocs());
 		expect(docs.filters.lower).toEqual(docs.filters.upper);
 		expect(docs.filters.upper.url).toBe(
 			"https://kilnlang.com/docs/filters/strings/#upper-and-lower",
 		);
 		expect(docs.filters.truncate.markdown).toMatch(
-			/^Shortens text[\s\S]*```kiln\n[\s\S]*Output:\n\n```html\nKiln is a tem…\nShort\n```$/,
+			/^Shortens text[\s\S]*\n\n---\n\n\*page\.kiln\*\n\n```kiln\n[\s\S]*\*Output\*\n\n```html\nKiln is a tem…\nShort\n```$/,
 		);
 		expect(docs.tags.for.markdown).toMatch(/^Loop over arrays/);
 		expect(docs.tags.block.url).toBe(

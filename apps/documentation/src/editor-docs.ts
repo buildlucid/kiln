@@ -7,7 +7,7 @@ import { toMarkdown } from "../plugin/markdown.js";
 import { navigation, pageContext } from "./navigation.js";
 import { site } from "./site.js";
 
-/** One name's docs: Markdown from its section of the docs, up to its first example, and that section's URL. */
+/** One name's docs: Markdown from its section of the docs, up to the end of its first example, and that section's URL. */
 type EditorDoc = { markdown: string; url: string };
 type EditorDocs = Record<
 	"tags" | "filters" | "functions" | "tests",
@@ -78,13 +78,27 @@ const isFence = (block: string | undefined) =>
 /** A file name or "Output:" above a code block in an example. */
 const isLabel = (block: string | undefined) => /^\S+:$/.test(block ?? "");
 
-/** A section's blocks up to the end of its first example, including the example's other files and its output. */
+/** A label in italics, without its colon, so it reads as a caption in an editor's popover. */
+const caption = (block: string) =>
+	isLabel(block) ? `*${block.slice(0, -1)}*` : block;
+
+/**
+ * A section's blocks up to the end of its first example, including the example's other files and its output. A rule
+ * separates the description from the example.
+ */
 const excerpt = (blocks: string[]): string => {
 	const first = blocks.findIndex(isFence);
 	if (first === -1) return blocks.join("\n\n");
+	const start = isLabel(blocks[first - 1]) ? first - 1 : first;
 	let end = first;
 	while (isLabel(blocks[end + 1]) && isFence(blocks[end + 2])) end += 2;
-	return blocks.slice(0, end + 1).join("\n\n");
+	const example = blocks.slice(start, end + 1).map(caption);
+	const description = blocks.slice(0, start);
+	return [
+		...description,
+		...(description.length > 0 ? ["---"] : []),
+		...example,
+	].join("\n\n");
 };
 
 /** The names a heading such as "`upper` and `lower`" documents. */

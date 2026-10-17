@@ -5,11 +5,11 @@
 			"url": "https://kilnlang.com/docs/tags/outlet/#adding-content"
 		},
 		"apply": {
-			"markdown": "Run a section of output through filters.\n\n`apply` renders its content, then runs the result through one or more filters.\n\npage.kiln:\n\n```kiln\n{% apply upper|trim %}\n\tHello, {{ name }}\n{% endapply %}\n```\n\nOutput:\n\n```html\nHELLO, ADA\n```",
+			"markdown": "Run a section of output through filters.\n\n`apply` renders its content, then runs the result through one or more filters.\n\n---\n\n*page.kiln*\n\n```kiln\n{% apply upper|trim %}\n\tHello, {{ name }}\n{% endapply %}\n```\n\n*Output*\n\n```html\nHELLO, ADA\n```",
 			"url": "https://kilnlang.com/docs/tags/apply/"
 		},
 		"autoescape": {
-			"markdown": "Change how output is escaped for a section.\n\n`autoescape` changes how output is [escaped](https://kilnlang.com/docs/language/escaping/) inside a section.\n\npage.kiln:\n\n```kiln\n<script>\n{% autoescape \"js\" %}\n\tconst title = \"{{ page.title }}\";\n{% endautoescape %}\n</script>\n```\n\nOutput:\n\n```html\n<script>\nconst title = \"Tom\\u0027s\\u0020\\u0022best\\u0022\\u0020page\";\n</script>\n```",
+			"markdown": "Change how output is escaped for a section.\n\n`autoescape` changes how output is [escaped](https://kilnlang.com/docs/language/escaping/) inside a section.\n\n---\n\n*page.kiln*\n\n```kiln\n<script>\n{% autoescape \"js\" %}\n\tconst title = \"{{ page.title }}\";\n{% endautoescape %}\n</script>\n```\n\n*Output*\n\n```html\n<script>\nconst title = \"Tom\\u0027s\\u0020\\u0022best\\u0022\\u0020page\";\n</script>\n```",
 			"url": "https://kilnlang.com/docs/tags/autoescape/"
 		},
 		"block": {
@@ -17,231 +17,231 @@
 			"url": "https://kilnlang.com/docs/tags/extends/#blocks"
 		},
 		"cache": {
-			"markdown": "Save a section's output and reuse it in later renders.\n\n`cache` saves the output of a section, so later renders reuse it instead of rendering the section again. Use it for parts that are slow to build, such as long lists or sections that load data.\n\n```kiln\n{% cache [\"post\", post.id, post.updatedAt] for 600 %}\n\t<article>\n\t\t<h2>{{ post.title }}</h2>\n\t\t{{ post.body|raw }}\n\t</article>\n{% endcache %}\n```",
+			"markdown": "Save a section's output and reuse it in later renders.\n\n`cache` saves the output of a section, so later renders reuse it instead of rendering the section again. Use it for parts that are slow to build, such as long lists or sections that load data.\n\n---\n\n```kiln\n{% cache [\"post\", post.id, post.updatedAt] for 600 %}\n\t<article>\n\t\t<h2>{{ post.title }}</h2>\n\t\t{{ post.body|raw }}\n\t</article>\n{% endcache %}\n```",
 			"url": "https://kilnlang.com/docs/tags/cache/"
 		},
 		"component": {
-			"markdown": "Build reusable pieces of markup with props and slots.\n\nA component is a template that takes props and content from its caller. Use it for cards, buttons, dialogs and other reusable pieces with markup inside.\n\npage.kiln:\n\n```kiln\n{% component \"components/card\" with { title: post.title, href: post.url } %}\n\t<p>{{ post.excerpt }}</p>\n\t{% fill \"footer\" %}\n\t\t<a href=\"{{ post.url }}\">Read more</a>\n\t{% endfill %}\n{% endcomponent %}\n```\n\ncomponents/card.kiln:\n\n```kiln\n{% props title, href %}\n<article class=\"card\">\n\t<h2><a href=\"{{ href }}\">{{ title }}</a></h2>\n\t{% slot %}{% endslot %}\n\t{% if slots.footer %}\n\t\t<footer>\n\t\t\t{% slot \"footer\" %}{% endslot %}\n\t\t</footer>\n\t{% endif %}\n</article>\n```\n\nOutput:\n\n```html\n<article class=\"card\">\n\t<h2><a href=\"/blog/hello/\">Hello, world</a></h2>\n\t<p>Our first post.</p>\n\t<footer>\n\t\t<a href=\"/blog/hello/\">Read more</a>\n\t</footer>\n</article>\n```",
+			"markdown": "Build reusable pieces of markup with props and slots.\n\nA component is a template that takes props and content from its caller. Use it for cards, buttons, dialogs and other reusable pieces with markup inside.\n\n---\n\n*page.kiln*\n\n```kiln\n{% component \"components/card\" with { title: post.title, href: post.url } %}\n\t<p>{{ post.excerpt }}</p>\n\t{% fill \"footer\" %}\n\t\t<a href=\"{{ post.url }}\">Read more</a>\n\t{% endfill %}\n{% endcomponent %}\n```\n\n*components/card.kiln*\n\n```kiln\n{% props title, href %}\n<article class=\"card\">\n\t<h2><a href=\"{{ href }}\">{{ title }}</a></h2>\n\t{% slot %}{% endslot %}\n\t{% if slots.footer %}\n\t\t<footer>\n\t\t\t{% slot \"footer\" %}{% endslot %}\n\t\t</footer>\n\t{% endif %}\n</article>\n```\n\n*Output*\n\n```html\n<article class=\"card\">\n\t<h2><a href=\"/blog/hello/\">Hello, world</a></h2>\n\t<p>Our first post.</p>\n\t<footer>\n\t\t<a href=\"/blog/hello/\">Read more</a>\n\t</footer>\n</article>\n```",
 			"url": "https://kilnlang.com/docs/tags/component/"
 		},
 		"else": {
-			"markdown": "Render content only when a condition holds.\n\n`if` renders its content only when a condition is true. Add `elseif` and `else` for other cases.\n\npage.kiln:\n\n```kiln\n{% if page.hero %}\n\t<div class=\"hero\">{{ page.hero }}</div>\n{% elseif page.image %}\n\t<img src=\"{{ page.image }}\" alt=\"\">\n{% else %}\n\t<hr>\n{% endif %}\n```\n\nOutput:\n\n```html\n<img src=\"/img/cover.jpg\" alt=\"\">\n```",
+			"markdown": "Render content only when a condition holds.\n\n`if` renders its content only when a condition is true. Add `elseif` and `else` for other cases.\n\n---\n\n*page.kiln*\n\n```kiln\n{% if page.hero %}\n\t<div class=\"hero\">{{ page.hero }}</div>\n{% elseif page.image %}\n\t<img src=\"{{ page.image }}\" alt=\"\">\n{% else %}\n\t<hr>\n{% endif %}\n```\n\n*Output*\n\n```html\n<img src=\"/img/cover.jpg\" alt=\"\">\n```",
 			"url": "https://kilnlang.com/docs/tags/if/"
 		},
 		"elseif": {
-			"markdown": "Render content only when a condition holds.\n\n`if` renders its content only when a condition is true. Add `elseif` and `else` for other cases.\n\npage.kiln:\n\n```kiln\n{% if page.hero %}\n\t<div class=\"hero\">{{ page.hero }}</div>\n{% elseif page.image %}\n\t<img src=\"{{ page.image }}\" alt=\"\">\n{% else %}\n\t<hr>\n{% endif %}\n```\n\nOutput:\n\n```html\n<img src=\"/img/cover.jpg\" alt=\"\">\n```",
+			"markdown": "Render content only when a condition holds.\n\n`if` renders its content only when a condition is true. Add `elseif` and `else` for other cases.\n\n---\n\n*page.kiln*\n\n```kiln\n{% if page.hero %}\n\t<div class=\"hero\">{{ page.hero }}</div>\n{% elseif page.image %}\n\t<img src=\"{{ page.image }}\" alt=\"\">\n{% else %}\n\t<hr>\n{% endif %}\n```\n\n*Output*\n\n```html\n<img src=\"/img/cover.jpg\" alt=\"\">\n```",
 			"url": "https://kilnlang.com/docs/tags/if/"
 		},
 		"extends": {
-			"markdown": "Share a layout between pages.\n\nLayouts hold the markup that pages share. A layout defines named `block` sections, and a page `extends` the layout and fills them in.\n\npage.kiln:\n\n```kiln\n{% extends \"layouts/base\" %}\n\n{% block title %}{{ page.title }} | {{ parent() }}{% endblock %}\n\n{% block content %}\n\t<h1>{{ page.title }}</h1>\n{% endblock %}\n```\n\nlayouts/base.kiln:\n\n```kiln\n<title>{% block title %}{{ site.name }}{% endblock %}</title>\n<main>\n\t{% block content %}{% endblock %}\n</main>\n```\n\nOutput:\n\n```html\n<title>About us | Example</title>\n<main>\n\t<h1>About us</h1>\n</main>\n```",
+			"markdown": "Share a layout between pages.\n\nLayouts hold the markup that pages share. A layout defines named `block` sections, and a page `extends` the layout and fills them in.\n\n---\n\n*page.kiln*\n\n```kiln\n{% extends \"layouts/base\" %}\n\n{% block title %}{{ page.title }} | {{ parent() }}{% endblock %}\n\n{% block content %}\n\t<h1>{{ page.title }}</h1>\n{% endblock %}\n```\n\n*layouts/base.kiln*\n\n```kiln\n<title>{% block title %}{{ site.name }}{% endblock %}</title>\n<main>\n\t{% block content %}{% endblock %}\n</main>\n```\n\n*Output*\n\n```html\n<title>About us | Example</title>\n<main>\n\t<h1>About us</h1>\n</main>\n```",
 			"url": "https://kilnlang.com/docs/tags/extends/"
 		},
 		"fill": {
-			"markdown": "- `{% slot %}` outputs the caller's content. Content outside any `fill` goes into this default slot.\n- `{% fill \"name\" %}` in the caller provides content for a named slot, and `{% slot \"name\" %}` in the component outputs it.\n- Content inside `slot` is a fallback, shown when the caller didn't fill that slot. Variables first set in a fallback stay inside it.\n- `slots` is a hash that says which slots were filled, such as `slots.footer`. It includes slots declared by a layout the component extends.\n\n```kiln\n<h2>{% slot \"title\" %}Untitled{% endslot %}</h2>\n```",
+			"markdown": "- `{% slot %}` outputs the caller's content. Content outside any `fill` goes into this default slot.\n- `{% fill \"name\" %}` in the caller provides content for a named slot, and `{% slot \"name\" %}` in the component outputs it.\n- Content inside `slot` is a fallback, shown when the caller didn't fill that slot. Variables first set in a fallback stay inside it.\n- `slots` is a hash that says which slots were filled, such as `slots.footer`. It includes slots declared by a layout the component extends.\n\n---\n\n```kiln\n<h2>{% slot \"title\" %}Untitled{% endslot %}</h2>\n```",
 			"url": "https://kilnlang.com/docs/tags/component/#slots"
 		},
 		"flush": {
-			"markdown": "Close outlets so a streamed page can be sent so far.\n\n`flush` closes the [outlets](https://kilnlang.com/docs/tags/outlet/) above it. When you [stream](https://kilnlang.com/docs/api/streaming/) a page, everything up to `flush` can then be sent, instead of waiting for the render to end.\n\npage.kiln:\n\n```kiln\n<html>\n\t<head>\n\t\t{% outlet \"head\" %}\n\t\t{% add to \"head\" %}\n\t\t\t<title>Home</title>\n\t\t{% endadd %}\n\t</head>\n\t{% flush %}\n\t<body>\n\t\t<h1>Home</h1>\n\t</body>\n</html>\n```\n\nOutput:\n\n```html\n<html>\n\t<head>\n\t\t<title>Home</title>\n\t</head>\n\t<body>\n\t\t<h1>Home</h1>\n\t</body>\n</html>\n```",
+			"markdown": "Close outlets so a streamed page can be sent so far.\n\n`flush` closes the [outlets](https://kilnlang.com/docs/tags/outlet/) above it. When you [stream](https://kilnlang.com/docs/api/streaming/) a page, everything up to `flush` can then be sent, instead of waiting for the render to end.\n\n---\n\n*page.kiln*\n\n```kiln\n<html>\n\t<head>\n\t\t{% outlet \"head\" %}\n\t\t{% add to \"head\" %}\n\t\t\t<title>Home</title>\n\t\t{% endadd %}\n\t</head>\n\t{% flush %}\n\t<body>\n\t\t<h1>Home</h1>\n\t</body>\n</html>\n```\n\n*Output*\n\n```html\n<html>\n\t<head>\n\t\t<title>Home</title>\n\t</head>\n\t<body>\n\t\t<h1>Home</h1>\n\t</body>\n</html>\n```",
 			"url": "https://kilnlang.com/docs/tags/flush/"
 		},
 		"for": {
-			"markdown": "Loop over arrays, hashes and other collections.\n\n`for` renders its content once for each item in a collection. An `else` section renders when there are no items.\n\npage.kiln:\n\n```kiln\n{% for post in posts %}\n\t<h2>{{ loop.index }}. {{ post.title }}</h2>\n{% else %}\n\t<p>No posts yet.</p>\n{% endfor %}\n```\n\nOutput:\n\n```html\n<h2>1. Hello</h2>\n<h2>2. Second post</h2>\n```",
+			"markdown": "Loop over arrays, hashes and other collections.\n\n`for` renders its content once for each item in a collection. An `else` section renders when there are no items.\n\n---\n\n*page.kiln*\n\n```kiln\n{% for post in posts %}\n\t<h2>{{ loop.index }}. {{ post.title }}</h2>\n{% else %}\n\t<p>No posts yet.</p>\n{% endfor %}\n```\n\n*Output*\n\n```html\n<h2>1. Hello</h2>\n<h2>2. Second post</h2>\n```",
 			"url": "https://kilnlang.com/docs/tags/for/"
 		},
 		"from": {
-			"markdown": "`import` gives you all of a template's macros under one name. `from` imports chosen macros by name, optionally with an alias:\n\n```kiln\n{% import \"macros/forms\" as forms %}\n{% from \"macros/forms\" import input, textarea as area %}\n```",
+			"markdown": "`import` gives you all of a template's macros under one name. `from` imports chosen macros by name, optionally with an alias:\n\n---\n\n```kiln\n{% import \"macros/forms\" as forms %}\n{% from \"macros/forms\" import input, textarea as area %}\n```",
 			"url": "https://kilnlang.com/docs/tags/macro/#importing"
 		},
 		"if": {
-			"markdown": "Render content only when a condition holds.\n\n`if` renders its content only when a condition is true. Add `elseif` and `else` for other cases.\n\npage.kiln:\n\n```kiln\n{% if page.hero %}\n\t<div class=\"hero\">{{ page.hero }}</div>\n{% elseif page.image %}\n\t<img src=\"{{ page.image }}\" alt=\"\">\n{% else %}\n\t<hr>\n{% endif %}\n```\n\nOutput:\n\n```html\n<img src=\"/img/cover.jpg\" alt=\"\">\n```",
+			"markdown": "Render content only when a condition holds.\n\n`if` renders its content only when a condition is true. Add `elseif` and `else` for other cases.\n\n---\n\n*page.kiln*\n\n```kiln\n{% if page.hero %}\n\t<div class=\"hero\">{{ page.hero }}</div>\n{% elseif page.image %}\n\t<img src=\"{{ page.image }}\" alt=\"\">\n{% else %}\n\t<hr>\n{% endif %}\n```\n\n*Output*\n\n```html\n<img src=\"/img/cover.jpg\" alt=\"\">\n```",
 			"url": "https://kilnlang.com/docs/tags/if/"
 		},
 		"import": {
-			"markdown": "`import` gives you all of a template's macros under one name. `from` imports chosen macros by name, optionally with an alias:\n\n```kiln\n{% import \"macros/forms\" as forms %}\n{% from \"macros/forms\" import input, textarea as area %}\n```",
+			"markdown": "`import` gives you all of a template's macros under one name. `from` imports chosen macros by name, optionally with an alias:\n\n---\n\n```kiln\n{% import \"macros/forms\" as forms %}\n{% from \"macros/forms\" import input, textarea as area %}\n```",
 			"url": "https://kilnlang.com/docs/tags/macro/#importing"
 		},
 		"include": {
-			"markdown": "Render another template in place.\n\n`include` renders another template in place. Pass it variables with `with`.\n\npage.kiln:\n\n```kiln\n{% include \"partials/header\" with { title: page.title } %}\n```\n\npartials/header.kiln:\n\n```kiln\n<header>\n\t<a href=\"/\">{{ site.name }}</a>\n\t<span>{{ title }}</span>\n</header>\n```\n\nOutput:\n\n```html\n<header>\n\t<a href=\"/\">Example</a>\n\t<span>Pricing</span>\n</header>\n```",
+			"markdown": "Render another template in place.\n\n`include` renders another template in place. Pass it variables with `with`.\n\n---\n\n*page.kiln*\n\n```kiln\n{% include \"partials/header\" with { title: page.title } %}\n```\n\n*partials/header.kiln*\n\n```kiln\n<header>\n\t<a href=\"/\">{{ site.name }}</a>\n\t<span>{{ title }}</span>\n</header>\n```\n\n*Output*\n\n```html\n<header>\n\t<a href=\"/\">Example</a>\n\t<span>Pricing</span>\n</header>\n```",
 			"url": "https://kilnlang.com/docs/tags/include/"
 		},
 		"island": {
-			"markdown": "Load part of a page after the rest, for live or slow data.\n\nAn island is a component that can load after the rest of the page. Use islands in a site you build to static files, for the few parts that need live data, such as stock levels, a basket or a visitor's name. On a server, use them to send the page before its slowest parts are ready.\n\n```kiln\n{% island \"components/stock\" with { productId: product.id } %}\n\t<p>Checking stock…</p>\n{% endisland %}\n```",
+			"markdown": "Load part of a page after the rest, for live or slow data.\n\nAn island is a component that can load after the rest of the page. Use islands in a site you build to static files, for the few parts that need live data, such as stock levels, a basket or a visitor's name. On a server, use them to send the page before its slowest parts are ready.\n\n---\n\n```kiln\n{% island \"components/stock\" with { productId: product.id } %}\n\t<p>Checking stock…</p>\n{% endisland %}\n```",
 			"url": "https://kilnlang.com/docs/tags/island/"
 		},
 		"macro": {
-			"markdown": "Define small reusable snippets you call like functions.\n\nA macro is a small piece of markup you call like a function. Define macros in a template, then import them where you need them.\n\npage.kiln:\n\n```kiln\n{% import \"macros/forms\" as forms %}\n\n{{ forms.input(\"email\", type: \"email\") }}\n{{ forms.input(\"name\", \"Ada\") }}\n```\n\nmacros/forms.kiln:\n\n```kiln\n{% macro input(name, value = \"\", type = \"text\") -%}\n\t<input type=\"{{ type }}\" name=\"{{ name }}\" value=\"{{ value }}\">\n{%- endmacro %}\n```\n\nOutput:\n\n```html\n<input type=\"email\" name=\"email\" value=\"\">\n<input type=\"text\" name=\"name\" value=\"Ada\">\n```",
+			"markdown": "Define small reusable snippets you call like functions.\n\nA macro is a small piece of markup you call like a function. Define macros in a template, then import them where you need them.\n\n---\n\n*page.kiln*\n\n```kiln\n{% import \"macros/forms\" as forms %}\n\n{{ forms.input(\"email\", type: \"email\") }}\n{{ forms.input(\"name\", \"Ada\") }}\n```\n\n*macros/forms.kiln*\n\n```kiln\n{% macro input(name, value = \"\", type = \"text\") -%}\n\t<input type=\"{{ type }}\" name=\"{{ name }}\" value=\"{{ value }}\">\n{%- endmacro %}\n```\n\n*Output*\n\n```html\n<input type=\"email\" name=\"email\" value=\"\">\n<input type=\"text\" name=\"name\" value=\"Ada\">\n```",
 			"url": "https://kilnlang.com/docs/tags/macro/"
 		},
 		"outlet": {
-			"markdown": "Let components add styles and scripts to the page's head.\n\n`outlet` marks a place in the page that any template can add to, and `add to` adds content there. Use them so a component can bring its own styles and scripts, and they end up in the page's `<head>`.\n\npage.kiln:\n\n```kiln\n{% extends \"layouts/base\" %}\n{% set title = \"Home\" %}\n{% block content %}\n\t{% include \"components/card\" with { title: \"One\" } %}\n\t{% include \"components/card\" with { title: \"Two\" } %}\n{% endblock %}\n```\n\nlayouts/base.kiln:\n\n```kiln\n<html>\n\t<head>\n\t\t<title>{{ title }}</title>\n\t\t{% outlet \"head\" %}\n\t</head>\n\t<body>\n\t\t{% block content %}{% endblock %}\n\t</body>\n</html>\n```\n\ncomponents/card.kiln:\n\n```kiln\n{% props title %}\n{% add to \"head\" once %}\n\t<link rel=\"stylesheet\" href=\"/card.css\">\n{% endadd %}\n<article class=\"card\">{{ title }}</article>\n```\n\nOutput:\n\n```html\n<html>\n\t<head>\n\t\t<title>Home</title>\n\t\t<link rel=\"stylesheet\" href=\"/card.css\">\n\t</head>\n\t<body>\n\t\t<article class=\"card\">One</article>\n\t\t<article class=\"card\">Two</article>\n\t</body>\n</html>\n```",
+			"markdown": "Let components add styles and scripts to the page's head.\n\n`outlet` marks a place in the page that any template can add to, and `add to` adds content there. Use them so a component can bring its own styles and scripts, and they end up in the page's `<head>`.\n\n---\n\n*page.kiln*\n\n```kiln\n{% extends \"layouts/base\" %}\n{% set title = \"Home\" %}\n{% block content %}\n\t{% include \"components/card\" with { title: \"One\" } %}\n\t{% include \"components/card\" with { title: \"Two\" } %}\n{% endblock %}\n```\n\n*layouts/base.kiln*\n\n```kiln\n<html>\n\t<head>\n\t\t<title>{{ title }}</title>\n\t\t{% outlet \"head\" %}\n\t</head>\n\t<body>\n\t\t{% block content %}{% endblock %}\n\t</body>\n</html>\n```\n\n*components/card.kiln*\n\n```kiln\n{% props title %}\n{% add to \"head\" once %}\n\t<link rel=\"stylesheet\" href=\"/card.css\">\n{% endadd %}\n<article class=\"card\">{{ title }}</article>\n```\n\n*Output*\n\n```html\n<html>\n\t<head>\n\t\t<title>Home</title>\n\t\t<link rel=\"stylesheet\" href=\"/card.css\">\n\t</head>\n\t<body>\n\t\t<article class=\"card\">One</article>\n\t\t<article class=\"card\">Two</article>\n\t</body>\n</html>\n```",
 			"url": "https://kilnlang.com/docs/tags/outlet/"
 		},
 		"props": {
-			"markdown": "Declare the variables a template expects.\n\n`props` declares the variables a template expects, with optional types and defaults. It is most useful in components and included templates, where it documents and checks their inputs.\n\npage.kiln:\n\n```kiln\n{% include \"components/button\" with { label: \"Sign up\", href: \"/join\" } %}\n{% include \"components/button\" with { label: \"Cancel\", variant: \"secondary\" } %}\n```\n\ncomponents/button.kiln:\n\n```kiln\n{% props label: string, href: string | null = null, variant: \"primary\" | \"secondary\" = \"primary\" %}\n{% if href %}\n\t<a class=\"button button--{{ variant }}\" href=\"{{ href }}\">{{ label }}</a>\n{% else %}\n\t<button class=\"button button--{{ variant }}\">{{ label }}</button>\n{% endif %}\n```\n\nOutput:\n\n```html\n<a class=\"button button--primary\" href=\"/join\">Sign up</a>\n<button class=\"button button--secondary\">Cancel</button>\n```",
+			"markdown": "Declare the variables a template expects.\n\n`props` declares the variables a template expects, with optional types and defaults. It is most useful in components and included templates, where it documents and checks their inputs.\n\n---\n\n*page.kiln*\n\n```kiln\n{% include \"components/button\" with { label: \"Sign up\", href: \"/join\" } %}\n{% include \"components/button\" with { label: \"Cancel\", variant: \"secondary\" } %}\n```\n\n*components/button.kiln*\n\n```kiln\n{% props label: string, href: string | null = null, variant: \"primary\" | \"secondary\" = \"primary\" %}\n{% if href %}\n\t<a class=\"button button--{{ variant }}\" href=\"{{ href }}\">{{ label }}</a>\n{% else %}\n\t<button class=\"button button--{{ variant }}\">{{ label }}</button>\n{% endif %}\n```\n\n*Output*\n\n```html\n<a class=\"button button--primary\" href=\"/join\">Sign up</a>\n<button class=\"button button--secondary\">Cancel</button>\n```",
 			"url": "https://kilnlang.com/docs/tags/props/"
 		},
 		"set": {
-			"markdown": "Assign a value or captured markup to a variable.\n\n`set` assigns a value to a variable.\n\npage.kiln:\n\n```kiln\n{% set title = page.title ?? \"Untitled\" %}\n<h1>{{ title }}</h1>\n```\n\nOutput:\n\n```html\n<h1>Untitled</h1>\n```",
+			"markdown": "Assign a value or captured markup to a variable.\n\n`set` assigns a value to a variable.\n\n---\n\n*page.kiln*\n\n```kiln\n{% set title = page.title ?? \"Untitled\" %}\n<h1>{{ title }}</h1>\n```\n\n*Output*\n\n```html\n<h1>Untitled</h1>\n```",
 			"url": "https://kilnlang.com/docs/tags/set/"
 		},
 		"slot": {
-			"markdown": "- `{% slot %}` outputs the caller's content. Content outside any `fill` goes into this default slot.\n- `{% fill \"name\" %}` in the caller provides content for a named slot, and `{% slot \"name\" %}` in the component outputs it.\n- Content inside `slot` is a fallback, shown when the caller didn't fill that slot. Variables first set in a fallback stay inside it.\n- `slots` is a hash that says which slots were filled, such as `slots.footer`. It includes slots declared by a layout the component extends.\n\n```kiln\n<h2>{% slot \"title\" %}Untitled{% endslot %}</h2>\n```",
+			"markdown": "- `{% slot %}` outputs the caller's content. Content outside any `fill` goes into this default slot.\n- `{% fill \"name\" %}` in the caller provides content for a named slot, and `{% slot \"name\" %}` in the component outputs it.\n- Content inside `slot` is a fallback, shown when the caller didn't fill that slot. Variables first set in a fallback stay inside it.\n- `slots` is a hash that says which slots were filled, such as `slots.footer`. It includes slots declared by a layout the component extends.\n\n---\n\n```kiln\n<h2>{% slot \"title\" %}Untitled{% endslot %}</h2>\n```",
 			"url": "https://kilnlang.com/docs/tags/component/#slots"
 		},
 		"verbatim": {
-			"markdown": "Output Kiln syntax without running it.\n\n`verbatim` outputs its content as plain text, without running any Kiln syntax inside it.\n\npage.kiln:\n\n```kiln\n{% verbatim %}\n<p>Write {{ name }} to output a variable.</p>\n{% endverbatim %}\n```\n\nOutput:\n\n```html\n<p>Write {{ name }} to output a variable.</p>\n```",
+			"markdown": "Output Kiln syntax without running it.\n\n`verbatim` outputs its content as plain text, without running any Kiln syntax inside it.\n\n---\n\n*page.kiln*\n\n```kiln\n{% verbatim %}\n<p>Write {{ name }} to output a variable.</p>\n{% endverbatim %}\n```\n\n*Output*\n\n```html\n<p>Write {{ name }} to output a variable.</p>\n```",
 			"url": "https://kilnlang.com/docs/tags/verbatim/"
 		},
 		"with": {
-			"markdown": "Add variables for a section of a template.\n\n`with` adds variables for a section of a template. They disappear at `endwith`.\n\npage.kiln:\n\n```kiln\n{% with { heading: \"Latest\", items: posts|slice(0, 3) } %}\n\t<h2>{{ heading }}</h2>\n\t{% for item in items %}\n\t\t<p>{{ item.title }}</p>\n\t{% endfor %}\n{% endwith %}\n```\n\nOutput:\n\n```html\n<h2>Latest</h2>\n<p>One</p>\n<p>Two</p>\n<p>Three</p>\n```",
+			"markdown": "Add variables for a section of a template.\n\n`with` adds variables for a section of a template. They disappear at `endwith`.\n\n---\n\n*page.kiln*\n\n```kiln\n{% with { heading: \"Latest\", items: posts|slice(0, 3) } %}\n\t<h2>{{ heading }}</h2>\n\t{% for item in items %}\n\t\t<p>{{ item.title }}</p>\n\t{% endfor %}\n{% endwith %}\n```\n\n*Output*\n\n```html\n<h2>Latest</h2>\n<p>One</p>\n<p>Two</p>\n<p>Three</p>\n```",
 			"url": "https://kilnlang.com/docs/tags/with/"
 		}
 	},
 	"filters": {
 		"abs": {
-			"markdown": "Returns the absolute value of a number.\n\npage.kiln:\n\n```kiln\n{{ (-5)|abs }}\n```\n\nOutput:\n\n```html\n5\n```",
+			"markdown": "Returns the absolute value of a number.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ (-5)|abs }}\n```\n\n*Output*\n\n```html\n5\n```",
 			"url": "https://kilnlang.com/docs/filters/numbers-and-dates/#abs"
 		},
 		"batch": {
-			"markdown": "Splits an array into groups of a given size. Pass a second argument to fill up the last group.\n\npage.kiln:\n\n```kiln\n{% for row in [1, 2, 3, 4, 5]|batch(2, \"-\") %}\n\t<div>{{ row|join(\" \") }}</div>\n{% endfor %}\n```\n\nOutput:\n\n```html\n<div>1 2</div>\n<div>3 4</div>\n<div>5 -</div>\n```",
+			"markdown": "Splits an array into groups of a given size. Pass a second argument to fill up the last group.\n\n---\n\n*page.kiln*\n\n```kiln\n{% for row in [1, 2, 3, 4, 5]|batch(2, \"-\") %}\n\t<div>{{ row|join(\" \") }}</div>\n{% endfor %}\n```\n\n*Output*\n\n```html\n<div>1 2</div>\n<div>3 4</div>\n<div>5 -</div>\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#batch"
 		},
 		"capitalize": {
-			"markdown": "Makes the first character upper case and the rest lower case.\n\npage.kiln:\n\n```kiln\n{{ \"hELLO wORLD\"|capitalize }}\n```\n\nOutput:\n\n```html\nHello world\n```",
+			"markdown": "Makes the first character upper case and the rest lower case.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ \"hELLO wORLD\"|capitalize }}\n```\n\n*Output*\n\n```html\nHello world\n```",
 			"url": "https://kilnlang.com/docs/filters/strings/#capitalize"
 		},
 		"column": {
-			"markdown": "Reads one property from each item.\n\npage.kiln:\n\n```kiln\n{{ posts|column(\"author\")|join(\", \") }}\n```\n\nOutput:\n\n```html\nAda, Grace, Ada\n```",
+			"markdown": "Reads one property from each item.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ posts|column(\"author\")|join(\", \") }}\n```\n\n*Output*\n\n```html\nAda, Grace, Ada\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#column"
 		},
 		"default": {
-			"markdown": "Returns a fallback when the value is [empty](https://kilnlang.com/docs/language/values/#empty-values) or missing. In strict mode, it also stops a missing value from being an error.\n\npage.kiln:\n\n```kiln\n{{ page.subtitle|default(\"No subtitle\") }}\n```\n\nOutput:\n\n```html\nNo subtitle\n```",
+			"markdown": "Returns a fallback when the value is [empty](https://kilnlang.com/docs/language/values/#empty-values) or missing. In strict mode, it also stops a missing value from being an error.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ page.subtitle|default(\"No subtitle\") }}\n```\n\n*Output*\n\n```html\nNo subtitle\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#default"
 		},
 		"escape": {
-			"markdown": "Escapes a value with a strategy: `\"html\"` (the default), `\"attr\"`, `\"js\"`, `\"css\"` or `\"url\"`. See [Escaping](https://kilnlang.com/docs/language/escaping/).\n\npage.kiln:\n\n```kiln\n<a href=\"/tags/{{ \"a&b\"|escape(\"url\") }}\">Tag</a>\n```\n\nOutput:\n\n```html\n<a href=\"/tags/a%26b\">Tag</a>\n```",
+			"markdown": "Escapes a value with a strategy: `\"html\"` (the default), `\"attr\"`, `\"js\"`, `\"css\"` or `\"url\"`. See [Escaping](https://kilnlang.com/docs/language/escaping/).\n\n---\n\n*page.kiln*\n\n```kiln\n<a href=\"/tags/{{ \"a&b\"|escape(\"url\") }}\">Tag</a>\n```\n\n*Output*\n\n```html\n<a href=\"/tags/a%26b\">Tag</a>\n```",
 			"url": "https://kilnlang.com/docs/filters/strings/#escape"
 		},
 		"filter": {
-			"markdown": "Keeps the items for which the arrow function returns true.\n\npage.kiln:\n\n```kiln\n{{ posts|filter(p => p.author == \"Ada\")|column(\"title\")|join(\", \") }}\n```\n\nOutput:\n\n```html\nHello, Workers\n```",
+			"markdown": "Keeps the items for which the arrow function returns true.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ posts|filter(p => p.author == \"Ada\")|column(\"title\")|join(\", \") }}\n```\n\n*Output*\n\n```html\nHello, Workers\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#filter"
 		},
 		"find": {
-			"markdown": "Returns the first item for which the arrow function returns true, or null.\n\npage.kiln:\n\n```kiln\n{{ (posts|find(p => p.views > 200)).title }}\n```\n\nOutput:\n\n```html\nLayouts\n```",
+			"markdown": "Returns the first item for which the arrow function returns true, or null.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ (posts|find(p => p.views > 200)).title }}\n```\n\n*Output*\n\n```html\nLayouts\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#find"
 		},
 		"first": {
-			"markdown": "Return the first or last item, or null when there are none. On a string they return a character.\n\npage.kiln:\n\n```kiln\n{{ (posts|first).title }} and {{ (posts|last).title }}\n```\n\nOutput:\n\n```html\nHello and Workers\n```",
+			"markdown": "Return the first or last item, or null when there are none. On a string they return a character.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ (posts|first).title }} and {{ (posts|last).title }}\n```\n\n*Output*\n\n```html\nHello and Workers\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#first-and-last"
 		},
 		"formatDate": {
-			"markdown": "Formats a date with `Intl.DateTimeFormat`. It accepts a `Date`, an ISO 8601 string or milliseconds since 1970. A day past the end of its month, such as `2026-02-30`, is an error. Pass any of its options as named arguments, plus `locale` and `timeZone`. Option values must be strings, numbers or booleans. The default style is `dateStyle: \"medium\"`, unless you pass an option that chooses what to show, such as `timeStyle`, `month` or `hour`.\n\npage.kiln:\n\n```kiln\n{{ \"2026-10-15\"|formatDate }}\n{{ \"2026-10-15\"|formatDate(dateStyle: \"long\", locale: \"en-GB\") }}\n{{ \"2026-10-15T14:30:00Z\"|formatDate(timeStyle: \"short\", timeZone: \"Europe/London\") }}\n{{ \"2026-10-15\"|formatDate(weekday: \"long\", day: \"numeric\", month: \"long\") }}\n```\n\nOutput:\n\n```html\nOct 15, 2026\n15 October 2026\n3:30 PM\nThursday, October 15\n```",
+			"markdown": "Formats a date with `Intl.DateTimeFormat`. It accepts a `Date`, an ISO 8601 string or milliseconds since 1970. A day past the end of its month, such as `2026-02-30`, is an error. Pass any of its options as named arguments, plus `locale` and `timeZone`. Option values must be strings, numbers or booleans. The default style is `dateStyle: \"medium\"`, unless you pass an option that chooses what to show, such as `timeStyle`, `month` or `hour`.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ \"2026-10-15\"|formatDate }}\n{{ \"2026-10-15\"|formatDate(dateStyle: \"long\", locale: \"en-GB\") }}\n{{ \"2026-10-15T14:30:00Z\"|formatDate(timeStyle: \"short\", timeZone: \"Europe/London\") }}\n{{ \"2026-10-15\"|formatDate(weekday: \"long\", day: \"numeric\", month: \"long\") }}\n```\n\n*Output*\n\n```html\nOct 15, 2026\n15 October 2026\n3:30 PM\nThursday, October 15\n```",
 			"url": "https://kilnlang.com/docs/filters/numbers-and-dates/#formatdate"
 		},
 		"formatNumber": {
-			"markdown": "Formats a number with `Intl.NumberFormat`. Pass any of its options as named arguments, plus `locale`. Option values must be strings, numbers or booleans, and an option name `Intl` doesn't know is an error.\n\npage.kiln:\n\n```kiln\n{{ 1234567.891|formatNumber }}\n{{ 49.5|formatNumber(style: \"currency\", currency: \"GBP\") }}\n{{ 0.256|formatNumber(style: \"percent\") }}\n{{ 1234.5|formatNumber(locale: \"de-DE\", minimumFractionDigits: 2) }}\n```\n\nOutput:\n\n```html\n1,234,567.891\n£49.50\n26%\n1.234,50\n```",
+			"markdown": "Formats a number with `Intl.NumberFormat`. Pass any of its options as named arguments, plus `locale`. Option values must be strings, numbers or booleans, and an option name `Intl` doesn't know is an error.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ 1234567.891|formatNumber }}\n{{ 49.5|formatNumber(style: \"currency\", currency: \"GBP\") }}\n{{ 0.256|formatNumber(style: \"percent\") }}\n{{ 1234.5|formatNumber(locale: \"de-DE\", minimumFractionDigits: 2) }}\n```\n\n*Output*\n\n```html\n1,234,567.891\n£49.50\n26%\n1.234,50\n```",
 			"url": "https://kilnlang.com/docs/filters/numbers-and-dates/#formatnumber"
 		},
 		"join": {
-			"markdown": "Joins items into a string. A second separator goes between the last two items.\n\npage.kiln:\n\n```kiln\n{{ [\"tea\", \"coffee\", \"water\"]|join(\", \", \" and \") }}\n```\n\nOutput:\n\n```html\ntea, coffee and water\n```",
+			"markdown": "Joins items into a string. A second separator goes between the last two items.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ [\"tea\", \"coffee\", \"water\"]|join(\", \", \" and \") }}\n```\n\n*Output*\n\n```html\ntea, coffee and water\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#join"
 		},
 		"json": {
-			"markdown": "Turns a value into JSON. Pass a number to indent it. Sets, generators and other iterables become arrays. The output escapes `<`, `>` and `&`, so it is safe inside a `<script>` tag with `raw`.\n\npage.kiln:\n\n```kiln\n<script>const page = {{ { title: \"Home\", tags: [\"a\", \"b\"] }|json|raw }};</script>\n```\n\nOutput:\n\n```html\n<script>const page = {\"title\":\"Home\",\"tags\":[\"a\",\"b\"]};</script>\n```",
+			"markdown": "Turns a value into JSON. Pass a number to indent it. Sets, generators and other iterables become arrays. The output escapes `<`, `>` and `&`, so it is safe inside a `<script>` tag with `raw`.\n\n---\n\n*page.kiln*\n\n```kiln\n<script>const page = {{ { title: \"Home\", tags: [\"a\", \"b\"] }|json|raw }};</script>\n```\n\n*Output*\n\n```html\n<script>const page = {\"title\":\"Home\",\"tags\":[\"a\",\"b\"]};</script>\n```",
 			"url": "https://kilnlang.com/docs/filters/strings/#json"
 		},
 		"keys": {
-			"markdown": "Returns the keys of a hash or map, or the indexes of an array.\n\npage.kiln:\n\n```kiln\n{{ { a: 1, b: 2 }|keys|join(\", \") }}\n```\n\nOutput:\n\n```html\na, b\n```",
+			"markdown": "Returns the keys of a hash or map, or the indexes of an array.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ { a: 1, b: 2 }|keys|join(\", \") }}\n```\n\n*Output*\n\n```html\na, b\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#keys"
 		},
 		"last": {
-			"markdown": "Return the first or last item, or null when there are none. On a string they return a character.\n\npage.kiln:\n\n```kiln\n{{ (posts|first).title }} and {{ (posts|last).title }}\n```\n\nOutput:\n\n```html\nHello and Workers\n```",
+			"markdown": "Return the first or last item, or null when there are none. On a string they return a character.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ (posts|first).title }} and {{ (posts|last).title }}\n```\n\n*Output*\n\n```html\nHello and Workers\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#first-and-last"
 		},
 		"length": {
-			"markdown": "Counts the items in an array, the keys in a hash, or the characters in a string. A hash or map counts the entries a loop would see. Null has a length of 0.\n\npage.kiln:\n\n```kiln\n{{ posts|length }} posts, {{ \"héllo\"|length }} letters\n```\n\nOutput:\n\n```html\n3 posts, 5 letters\n```",
+			"markdown": "Counts the items in an array, the keys in a hash, or the characters in a string. A hash or map counts the entries a loop would see. Null has a length of 0.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ posts|length }} posts, {{ \"héllo\"|length }} letters\n```\n\n*Output*\n\n```html\n3 posts, 5 letters\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#length"
 		},
 		"lower": {
-			"markdown": "Change text to upper or lower case.\n\npage.kiln:\n\n```kiln\n{{ \"Hello\"|upper }} {{ \"Hello\"|lower }}\n```\n\nOutput:\n\n```html\nHELLO hello\n```",
+			"markdown": "Change text to upper or lower case.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ \"Hello\"|upper }} {{ \"Hello\"|lower }}\n```\n\n*Output*\n\n```html\nHELLO hello\n```",
 			"url": "https://kilnlang.com/docs/filters/strings/#upper-and-lower"
 		},
 		"map": {
-			"markdown": "Calls an arrow function for each item and returns the results. The function gets the value and the key.\n\npage.kiln:\n\n```kiln\n{{ posts|map(p => p.title|upper)|join(\", \") }}\n```\n\nOutput:\n\n```html\nHELLO, LAYOUTS, WORKERS\n```",
+			"markdown": "Calls an arrow function for each item and returns the results. The function gets the value and the key.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ posts|map(p => p.title|upper)|join(\", \") }}\n```\n\n*Output*\n\n```html\nHELLO, LAYOUTS, WORKERS\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#map"
 		},
 		"merge": {
-			"markdown": "Joins arrays together, or combines hashes. For hashes, later keys win. Mixing arrays and hashes is an error.\n\npage.kiln:\n\n```kiln\n{{ [1, 2]|merge([3], [4])|join(\", \") }}\n{{ ({ size: \"md\", tone: \"plain\" }|merge({ size: \"lg\" })).size }}\n```\n\nOutput:\n\n```html\n1, 2, 3, 4\nlg\n```",
+			"markdown": "Joins arrays together, or combines hashes. For hashes, later keys win. Mixing arrays and hashes is an error.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ [1, 2]|merge([3], [4])|join(\", \") }}\n{{ ({ size: \"md\", tone: \"plain\" }|merge({ size: \"lg\" })).size }}\n```\n\n*Output*\n\n```html\n1, 2, 3, 4\nlg\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#merge"
 		},
 		"nl2br": {
-			"markdown": "Escapes the text, then adds a `<br>` before each line break. Safe markup isn't escaped again. The result is safe HTML.\n\npage.kiln:\n\n```kiln\n{{ \"Line one\nLine two\"|nl2br }}\n```\n\nOutput:\n\n```html\nLine one<br>\nLine two\n```",
+			"markdown": "Escapes the text, then adds a `<br>` before each line break. Safe markup isn't escaped again. The result is safe HTML.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ \"Line one\nLine two\"|nl2br }}\n```\n\n*Output*\n\n```html\nLine one<br>\nLine two\n```",
 			"url": "https://kilnlang.com/docs/filters/strings/#nl2br"
 		},
 		"plural": {
-			"markdown": "Picks the word or phrase that fits a number, using the plural rules of the render's locale. Pass the forms as named arguments. Every `#` in the chosen form becomes the number, formatted for the locale.\n\npage.kiln:\n\n```kiln\n{{ 1|plural(one: \"# item\", other: \"# items\") }}\n{{ 1200|plural(one: \"# item\", other: \"# items\") }}\n{{ 3|plural(\"item\", \"items\") }}\n```\n\nOutput:\n\n```html\n1 item\n1,200 items\nitems\n```",
+			"markdown": "Picks the word or phrase that fits a number, using the plural rules of the render's locale. Pass the forms as named arguments. Every `#` in the chosen form becomes the number, formatted for the locale.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ 1|plural(one: \"# item\", other: \"# items\") }}\n{{ 1200|plural(one: \"# item\", other: \"# items\") }}\n{{ 3|plural(\"item\", \"items\") }}\n```\n\n*Output*\n\n```html\n1 item\n1,200 items\nitems\n```",
 			"url": "https://kilnlang.com/docs/filters/numbers-and-dates/#plural"
 		},
 		"raw": {
-			"markdown": "Marks a value as safe, so it is output without escaping. Only use it for HTML you trust. Put it after filters that return plain values, such as `split` and `join`.\n\npage.kiln:\n\n```kiln\n{{ html|raw }}\n```\n\nOutput:\n\n```html\n<em>Trusted</em>\n```",
+			"markdown": "Marks a value as safe, so it is output without escaping. Only use it for HTML you trust. Put it after filters that return plain values, such as `split` and `join`.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ html|raw }}\n```\n\n*Output*\n\n```html\n<em>Trusted</em>\n```",
 			"url": "https://kilnlang.com/docs/filters/strings/#raw"
 		},
 		"reduce": {
-			"markdown": "Combines the items into one value. The arrow function gets the running total, the value and the key. The second argument is the starting value. Without it, the total starts as null, which can't be added to, so pass 0 to add up numbers.\n\npage.kiln:\n\n```kiln\n{{ posts|reduce((total, p) => total + p.views, 0) }} views\n```\n\nOutput:\n\n```html\n550 views\n```",
+			"markdown": "Combines the items into one value. The arrow function gets the running total, the value and the key. The second argument is the starting value. Without it, the total starts as null, which can't be added to, so pass 0 to add up numbers.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ posts|reduce((total, p) => total + p.views, 0) }} views\n```\n\n*Output*\n\n```html\n550 views\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#reduce"
 		},
 		"replace": {
-			"markdown": "Replaces every match of a piece of text. Pass a hash to replace several at once, and the longest match wins at each position. It matches plain text, not regular expressions.\n\npage.kiln:\n\n```kiln\n{{ \"I like tea\"|replace(\"tea\", \"coffee\") }}\n{{ \"Hi NAME, welcome to PLACE\"|replace({ NAME: \"Ada\", PLACE: \"Kiln\" }) }}\n```\n\nOutput:\n\n```html\nI like coffee\nHi Ada, welcome to Kiln\n```",
+			"markdown": "Replaces every match of a piece of text. Pass a hash to replace several at once, and the longest match wins at each position. It matches plain text, not regular expressions.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ \"I like tea\"|replace(\"tea\", \"coffee\") }}\n{{ \"Hi NAME, welcome to PLACE\"|replace({ NAME: \"Ada\", PLACE: \"Kiln\" }) }}\n```\n\n*Output*\n\n```html\nI like coffee\nHi Ada, welcome to Kiln\n```",
 			"url": "https://kilnlang.com/docs/filters/strings/#replace"
 		},
 		"reverse": {
-			"markdown": "Reverses an array, string or hash. A hash keeps its keys.\n\npage.kiln:\n\n```kiln\n{{ [1, 2, 3]|reverse|join(\", \") }} {{ \"kiln\"|reverse }}\n```\n\nOutput:\n\n```html\n3, 2, 1 nlik\n```",
+			"markdown": "Reverses an array, string or hash. A hash keeps its keys.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ [1, 2, 3]|reverse|join(\", \") }} {{ \"kiln\"|reverse }}\n```\n\n*Output*\n\n```html\n3, 2, 1 nlik\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#reverse"
 		},
 		"round": {
-			"markdown": "Rounds to a number of decimal places, 0 by default. The second argument is the method: `\"common\"` (the default, which rounds halves away from zero), `\"ceil\"` or `\"floor\"`.\n\npage.kiln:\n\n```kiln\n{{ 3.14159|round(2) }}\n{{ 2.5|round }}\n{{ 2.1|round(0, \"ceil\") }}\n```\n\nOutput:\n\n```html\n3.14\n3\n3\n```",
+			"markdown": "Rounds to a number of decimal places, 0 by default. The second argument is the method: `\"common\"` (the default, which rounds halves away from zero), `\"ceil\"` or `\"floor\"`.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ 3.14159|round(2) }}\n{{ 2.5|round }}\n{{ 2.1|round(0, \"ceil\") }}\n```\n\n*Output*\n\n```html\n3.14\n3\n3\n```",
 			"url": "https://kilnlang.com/docs/filters/numbers-and-dates/#round"
 		},
 		"slice": {
-			"markdown": "Returns part of an array or string, from a start index up to, but not including, an end index. Negative numbers count from the end, as in JavaScript.\n\npage.kiln:\n\n```kiln\n{{ [1, 2, 3, 4, 5]|slice(1, 3)|join(\", \") }}\n{{ [1, 2, 3, 4, 5]|slice(-2)|join(\", \") }}\n```\n\nOutput:\n\n```html\n2, 3\n4, 5\n```",
+			"markdown": "Returns part of an array or string, from a start index up to, but not including, an end index. Negative numbers count from the end, as in JavaScript.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ [1, 2, 3, 4, 5]|slice(1, 3)|join(\", \") }}\n{{ [1, 2, 3, 4, 5]|slice(-2)|join(\", \") }}\n```\n\n*Output*\n\n```html\n2, 3\n4, 5\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#slice"
 		},
 		"sort": {
-			"markdown": "Returns a sorted copy. Without an argument, it sorts numbers, strings or dates in natural order. With a one-parameter arrow function, it sorts by the result. With a two-parameter one, it uses it to compare items, like JavaScript's `sort`. A hash keeps its keys, sorted by their values.\n\npage.kiln:\n\n```kiln\n{{ [3, 1, 2]|sort|join(\", \") }}\n{{ posts|sort(p => p.date)|column(\"title\")|join(\", \") }}\n{{ posts|sort((a, b) => b.views - a.views)|column(\"title\")|join(\", \") }}\n```\n\nOutput:\n\n```html\n1, 2, 3\nLayouts, Workers, Hello\nLayouts, Hello, Workers\n```",
+			"markdown": "Returns a sorted copy. Without an argument, it sorts numbers, strings or dates in natural order. With a one-parameter arrow function, it sorts by the result. With a two-parameter one, it uses it to compare items, like JavaScript's `sort`. A hash keeps its keys, sorted by their values.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ [3, 1, 2]|sort|join(\", \") }}\n{{ posts|sort(p => p.date)|column(\"title\")|join(\", \") }}\n{{ posts|sort((a, b) => b.views - a.views)|column(\"title\")|join(\", \") }}\n```\n\n*Output*\n\n```html\n1, 2, 3\nLayouts, Workers, Hello\nLayouts, Hello, Workers\n```",
 			"url": "https://kilnlang.com/docs/filters/lists/#sort"
 		},
 		"split": {
-			"markdown": "Splits text into an array. An optional limit caps the number of items. An empty separator splits into characters.\n\npage.kiln:\n\n```kiln\n{{ \"a,b,c\"|split(\",\")|join(\" / \") }}\n{{ \"a,b,c\"|split(\",\", 2)|join(\" / \") }}\n```\n\nOutput:\n\n```html\na / b / c\na / b\n```",
+			"markdown": "Splits text into an array. An optional limit caps the number of items. An empty separator splits into characters.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ \"a,b,c\"|split(\",\")|join(\" / \") }}\n{{ \"a,b,c\"|split(\",\", 2)|join(\" / \") }}\n```\n\n*Output*\n\n```html\na / b / c\na / b\n```",
 			"url": "https://kilnlang.com/docs/filters/strings/#split"
 		},
 		"stripTags": {
-			"markdown": "Removes HTML tags and comments. It doesn't decode entities such as `&amp;amp;`, and removing a tag never leaves a new one behind. Its result is still escaped, so don't mark it with `raw` to make it safe.\n\npage.kiln:\n\n```kiln\n{{ \"<p>Hello <b>world</b></p>\"|stripTags }}\n```\n\nOutput:\n\n```html\nHello world\n```",
+			"markdown": "Removes HTML tags and comments. It doesn't decode entities such as `&amp;amp;`, and removing a tag never leaves a new one behind. Its result is still escaped, so don't mark it with `raw` to make it safe.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ \"<p>Hello <b>world</b></p>\"|stripTags }}\n```\n\n*Output*\n\n```html\nHello world\n```",
 			"url": "https://kilnlang.com/docs/filters/strings/#striptags"
 		},
 		"title": {
-			"markdown": "Starts each word with an upper-case letter and makes the rest lower case. Accent marks and apostrophes belong to the word they are in, so \"o'neil\" becomes \"O'neil\".\n\npage.kiln:\n\n```kiln\n{{ \"the QUICK brown fox\"|title }}\n```\n\nOutput:\n\n```html\nThe Quick Brown Fox\n```",
+			"markdown": "Starts each word with an upper-case letter and makes the rest lower case. Accent marks and apostrophes belong to the word they are in, so \"o'neil\" becomes \"O'neil\".\n\n---\n\n*page.kiln*\n\n```kiln\n{{ \"the QUICK brown fox\"|title }}\n```\n\n*Output*\n\n```html\nThe Quick Brown Fox\n```",
 			"url": "https://kilnlang.com/docs/filters/strings/#title"
 		},
 		"trim": {
-			"markdown": "Removes whitespace from both ends. Pass characters to remove instead, and `\"start\"` or `\"end\"` to trim one side.\n\npage.kiln:\n\n```kiln\n{{ \"  hello  \"|trim }}|{{ \"--hello--\"|trim(\"-\", \"end\") }}\n```\n\nOutput:\n\n```html\nhello|--hello\n```",
+			"markdown": "Removes whitespace from both ends. Pass characters to remove instead, and `\"start\"` or `\"end\"` to trim one side.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ \"  hello  \"|trim }}|{{ \"--hello--\"|trim(\"-\", \"end\") }}\n```\n\n*Output*\n\n```html\nhello|--hello\n```",
 			"url": "https://kilnlang.com/docs/filters/strings/#trim"
 		},
 		"truncate": {
-			"markdown": "Shortens text to a length, trims trailing spaces and adds an ellipsis if it cut anything. Pass a different ending as the second argument. Given safe markup, it counts only the text and closes any tags the cut leaves open.\n\npage.kiln:\n\n```kiln\n{{ \"Kiln is a template language\"|truncate(13) }}\n{{ \"Short\"|truncate(13) }}\n```\n\nOutput:\n\n```html\nKiln is a tem…\nShort\n```",
+			"markdown": "Shortens text to a length, trims trailing spaces and adds an ellipsis if it cut anything. Pass a different ending as the second argument. Given safe markup, it counts only the text and closes any tags the cut leaves open.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ \"Kiln is a template language\"|truncate(13) }}\n{{ \"Short\"|truncate(13) }}\n```\n\n*Output*\n\n```html\nKiln is a tem…\nShort\n```",
 			"url": "https://kilnlang.com/docs/filters/strings/#truncate"
 		},
 		"upper": {
-			"markdown": "Change text to upper or lower case.\n\npage.kiln:\n\n```kiln\n{{ \"Hello\"|upper }} {{ \"Hello\"|lower }}\n```\n\nOutput:\n\n```html\nHELLO hello\n```",
+			"markdown": "Change text to upper or lower case.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ \"Hello\"|upper }} {{ \"Hello\"|lower }}\n```\n\n*Output*\n\n```html\nHELLO hello\n```",
 			"url": "https://kilnlang.com/docs/filters/strings/#upper-and-lower"
 		},
 		"urlEncode": {
-			"markdown": "Encodes a string for use in a URL, or turns a hash into a query string.\n\npage.kiln:\n\n```kiln\n/search?q={{ \"tea & cake\"|urlEncode }}\n/search?{{ { q: \"tea\", page: 2 }|urlEncode }}\n```\n\nOutput:\n\n```html\n/search?q=tea%20%26%20cake\n/search?q=tea&amp;page=2\n```",
+			"markdown": "Encodes a string for use in a URL, or turns a hash into a query string.\n\n---\n\n*page.kiln*\n\n```kiln\n/search?q={{ \"tea & cake\"|urlEncode }}\n/search?{{ { q: \"tea\", page: 2 }|urlEncode }}\n```\n\n*Output*\n\n```html\n/search?q=tea%20%26%20cake\n/search?q=tea&amp;page=2\n```",
 			"url": "https://kilnlang.com/docs/filters/strings/#urlencode"
 		}
 	},
 	"functions": {
 		"attrs": {
-			"markdown": "Builds HTML attributes from a hash. It handles the fiddly cases for you:\n\n- null and `false` leave the attribute out;\n- `true` writes the name on its own;\n- arrays are joined with spaces, skipping empty values;\n- everything else is escaped.\n\npage.kiln:\n\n```kiln\n<a{{ attrs({\n\thref: post.url,\n\tclass: [\"card\", featured ? \"card--featured\"],\n\thidden: false,\n\t\"aria-current\": current ? \"page\",\n}) }}>{{ post.title }}</a>\n```\n\nOutput:\n\n```html\n<a href=\"/blog/hello/\" class=\"card card--featured\">Hello</a>\n```",
+			"markdown": "Builds HTML attributes from a hash. It handles the fiddly cases for you:\n\n- null and `false` leave the attribute out;\n- `true` writes the name on its own;\n- arrays are joined with spaces, skipping empty values;\n- everything else is escaped.\n\n---\n\n*page.kiln*\n\n```kiln\n<a{{ attrs({\n\thref: post.url,\n\tclass: [\"card\", featured ? \"card--featured\"],\n\thidden: false,\n\t\"aria-current\": current ? \"page\",\n}) }}>{{ post.title }}</a>\n```\n\n*Output*\n\n```html\n<a href=\"/blog/hello/\" class=\"card card--featured\">Hello</a>\n```",
 			"url": "https://kilnlang.com/docs/functions/#attrs"
 		},
 		"block": {
@@ -249,23 +249,23 @@
 			"url": "https://kilnlang.com/docs/functions/#parent-and-block"
 		},
 		"cycle": {
-			"markdown": "Returns the item at a position, starting again from the beginning when it runs out. Useful for alternating classes.\n\npage.kiln:\n\n```kiln\n{% for item in [\"a\", \"b\", \"c\"] %}\n\t<li class=\"{{ cycle([\"odd\", \"even\"], loop.index0) }}\">{{ item }}</li>\n{% endfor %}\n```\n\nOutput:\n\n```html\n<li class=\"odd\">a</li>\n<li class=\"even\">b</li>\n<li class=\"odd\">c</li>\n```",
+			"markdown": "Returns the item at a position, starting again from the beginning when it runs out. Useful for alternating classes.\n\n---\n\n*page.kiln*\n\n```kiln\n{% for item in [\"a\", \"b\", \"c\"] %}\n\t<li class=\"{{ cycle([\"odd\", \"even\"], loop.index0) }}\">{{ item }}</li>\n{% endfor %}\n```\n\n*Output*\n\n```html\n<li class=\"odd\">a</li>\n<li class=\"even\">b</li>\n<li class=\"odd\">c</li>\n```",
 			"url": "https://kilnlang.com/docs/functions/#cycle"
 		},
 		"date": {
-			"markdown": "Returns a `Date` from a date, an ISO 8601 string or milliseconds. With no argument, it returns the current time. With null, it returns null, so a missing date never becomes today.\n\npage.kiln:\n\n```kiln\n{% if date(post.publishedAt) < date(\"2026-06-01\") %}Older post{% endif %}\n```\n\nOutput:\n\n```html\nOlder post\n```",
+			"markdown": "Returns a `Date` from a date, an ISO 8601 string or milliseconds. With no argument, it returns the current time. With null, it returns null, so a missing date never becomes today.\n\n---\n\n*page.kiln*\n\n```kiln\n{% if date(post.publishedAt) < date(\"2026-06-01\") %}Older post{% endif %}\n```\n\n*Output*\n\n```html\nOlder post\n```",
 			"url": "https://kilnlang.com/docs/functions/#date"
 		},
 		"dump": {
-			"markdown": "Outputs a readable view of its arguments, for debugging. It only works when the environment has `debug: true`. Otherwise it outputs nothing, so a forgotten `dump` never leaks data.\n\n```kiln\n{{ dump(page, route) }}\n```",
+			"markdown": "Outputs a readable view of its arguments, for debugging. It only works when the environment has `debug: true`. Otherwise it outputs nothing, so a forgotten `dump` never leaks data.\n\n---\n\n```kiln\n{{ dump(page, route) }}\n```",
 			"url": "https://kilnlang.com/docs/functions/#dump"
 		},
 		"max": {
-			"markdown": "Return the largest or smallest argument, the largest or smallest item of one array, or the largest or smallest value of one hash. Null can't be compared, so it is an error.\n\npage.kiln:\n\n```kiln\n{{ max(3, 8, 1) }} {{ min([4, 2, 9]) }}\n```\n\nOutput:\n\n```html\n8 2\n```",
+			"markdown": "Return the largest or smallest argument, the largest or smallest item of one array, or the largest or smallest value of one hash. Null can't be compared, so it is an error.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ max(3, 8, 1) }} {{ min([4, 2, 9]) }}\n```\n\n*Output*\n\n```html\n8 2\n```",
 			"url": "https://kilnlang.com/docs/functions/#max-and-min"
 		},
 		"min": {
-			"markdown": "Return the largest or smallest argument, the largest or smallest item of one array, or the largest or smallest value of one hash. Null can't be compared, so it is an error.\n\npage.kiln:\n\n```kiln\n{{ max(3, 8, 1) }} {{ min([4, 2, 9]) }}\n```\n\nOutput:\n\n```html\n8 2\n```",
+			"markdown": "Return the largest or smallest argument, the largest or smallest item of one array, or the largest or smallest value of one hash. Null can't be compared, so it is an error.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ max(3, 8, 1) }} {{ min([4, 2, 9]) }}\n```\n\n*Output*\n\n```html\n8 2\n```",
 			"url": "https://kilnlang.com/docs/functions/#max-and-min"
 		},
 		"parent": {
@@ -273,37 +273,37 @@
 			"url": "https://kilnlang.com/docs/functions/#parent-and-block"
 		},
 		"range": {
-			"markdown": "Returns an array of numbers from a start to an end, including both. The optional third argument is the step. A fractional step, such as 0.1, still reaches the end.\n\npage.kiln:\n\n```kiln\n{{ range(1, 5)|join(\", \") }}\n{{ range(0, 10, 5)|join(\", \") }}\n{{ range(3, 1)|join(\", \") }}\n{{ range(0, 0.3, 0.1)|join(\", \") }}\n```\n\nOutput:\n\n```html\n1, 2, 3, 4, 5\n0, 5, 10\n3, 2, 1\n0, 0.1, 0.2, 0.3\n```",
+			"markdown": "Returns an array of numbers from a start to an end, including both. The optional third argument is the step. A fractional step, such as 0.1, still reaches the end.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ range(1, 5)|join(\", \") }}\n{{ range(0, 10, 5)|join(\", \") }}\n{{ range(3, 1)|join(\", \") }}\n{{ range(0, 0.3, 0.1)|join(\", \") }}\n```\n\n*Output*\n\n```html\n1, 2, 3, 4, 5\n0, 5, 10\n3, 2, 1\n0, 0.1, 0.2, 0.3\n```",
 			"url": "https://kilnlang.com/docs/functions/#range"
 		}
 	},
 	"tests": {
 		"defined": {
-			"markdown": "True when a variable or property exists. It never raises a [strict mode](https://kilnlang.com/docs/language/strict-mode/) error, so it is the safe way to check for optional data.\n\npage.kiln:\n\n```kiln\n{% if page.subtitle is defined %}{{ page.subtitle }}{% else %}No subtitle{% endif %}\n```\n\nOutput:\n\n```html\nNo subtitle\n```",
+			"markdown": "True when a variable or property exists. It never raises a [strict mode](https://kilnlang.com/docs/language/strict-mode/) error, so it is the safe way to check for optional data.\n\n---\n\n*page.kiln*\n\n```kiln\n{% if page.subtitle is defined %}{{ page.subtitle }}{% else %}No subtitle{% endif %}\n```\n\n*Output*\n\n```html\nNo subtitle\n```",
 			"url": "https://kilnlang.com/docs/tests/#defined"
 		},
 		"divisible by": {
-			"markdown": "True when the value is a multiple of the argument.\n\npage.kiln:\n\n```kiln\n{% for n in 1..6 %}{{ n }}{% if n is divisible by(3) %} |{% endif %} {% endfor %}\n```\n\nOutput:\n\n```html\n1 2 3 | 4 5 6 |\n```",
+			"markdown": "True when the value is a multiple of the argument.\n\n---\n\n*page.kiln*\n\n```kiln\n{% for n in 1..6 %}{{ n }}{% if n is divisible by(3) %} |{% endif %} {% endfor %}\n```\n\n*Output*\n\n```html\n1 2 3 | 4 5 6 |\n```",
 			"url": "https://kilnlang.com/docs/tests/#divisible-by"
 		},
 		"empty": {
-			"markdown": "True when the value is [empty](https://kilnlang.com/docs/language/values/#empty-values): null, `false`, an empty string, array, hash, set or map. `0` is not empty.\n\npage.kiln:\n\n```kiln\n{{ [] is empty }} {{ 0 is empty }}\n```\n\nOutput:\n\n```html\ntrue false\n```",
+			"markdown": "True when the value is [empty](https://kilnlang.com/docs/language/values/#empty-values): null, `false`, an empty string, array, hash, set or map. `0` is not empty.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ [] is empty }} {{ 0 is empty }}\n```\n\n*Output*\n\n```html\ntrue false\n```",
 			"url": "https://kilnlang.com/docs/tests/#empty"
 		},
 		"even": {
-			"markdown": "True when the value is an even or odd whole number.\n\npage.kiln:\n\n```kiln\n{% for n in 1..4 %}{{ n }} is {{ n is even ? \"even\" : \"odd\" }}. {% endfor %}\n```\n\nOutput:\n\n```html\n1 is odd. 2 is even. 3 is odd. 4 is even.\n```",
+			"markdown": "True when the value is an even or odd whole number.\n\n---\n\n*page.kiln*\n\n```kiln\n{% for n in 1..4 %}{{ n }} is {{ n is even ? \"even\" : \"odd\" }}. {% endfor %}\n```\n\n*Output*\n\n```html\n1 is odd. 2 is even. 3 is odd. 4 is even.\n```",
 			"url": "https://kilnlang.com/docs/tests/#even-and-odd"
 		},
 		"iterable": {
-			"markdown": "True for arrays, hashes, sets, maps and other values `for` can loop over. Strings are not iterable.\n\npage.kiln:\n\n```kiln\n{{ [1, 2] is iterable }} {{ \"abc\" is iterable }}\n```\n\nOutput:\n\n```html\ntrue false\n```",
+			"markdown": "True for arrays, hashes, sets, maps and other values `for` can loop over. Strings are not iterable.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ [1, 2] is iterable }} {{ \"abc\" is iterable }}\n```\n\n*Output*\n\n```html\ntrue false\n```",
 			"url": "https://kilnlang.com/docs/tests/#iterable"
 		},
 		"null": {
-			"markdown": "True when the value is null or undefined.\n\npage.kiln:\n\n```kiln\n{{ page.image is null ? \"No image\" : \"Has image\" }}\n```\n\nOutput:\n\n```html\nNo image\n```",
+			"markdown": "True when the value is null or undefined.\n\n---\n\n*page.kiln*\n\n```kiln\n{{ page.image is null ? \"No image\" : \"Has image\" }}\n```\n\n*Output*\n\n```html\nNo image\n```",
 			"url": "https://kilnlang.com/docs/tests/#null"
 		},
 		"odd": {
-			"markdown": "True when the value is an even or odd whole number.\n\npage.kiln:\n\n```kiln\n{% for n in 1..4 %}{{ n }} is {{ n is even ? \"even\" : \"odd\" }}. {% endfor %}\n```\n\nOutput:\n\n```html\n1 is odd. 2 is even. 3 is odd. 4 is even.\n```",
+			"markdown": "True when the value is an even or odd whole number.\n\n---\n\n*page.kiln*\n\n```kiln\n{% for n in 1..4 %}{{ n }} is {{ n is even ? \"even\" : \"odd\" }}. {% endfor %}\n```\n\n*Output*\n\n```html\n1 is odd. 2 is even. 3 is odd. 4 is even.\n```",
 			"url": "https://kilnlang.com/docs/tests/#even-and-odd"
 		}
 	}
