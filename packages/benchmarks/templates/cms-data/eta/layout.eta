@@ -6,10 +6,11 @@
 	<link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-	<%~ await includeAsync("@partials/header", { site: it.site, current: it.current }) %>
+	<% const [header, footer] = await Promise.all([includeAsync("@partials/header", { site: it.site, current: it.current }), includeAsync("@partials/footer", { site: it.site })]) %>
+	<%~ header %>
 	<main>
 		<%~ it.body %>
 	</main>
-	<%~ await includeAsync("@partials/footer", { site: it.site }) %>
+	<%~ footer %>
 </body>
 </html>

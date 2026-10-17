@@ -1,6 +1,5 @@
 <% layout("@layout") %>
-<% const post = await document("blog", it.slug) %>
-<% const latest = await documents("blog", 3) %>
+<% const [post, latest] = await Promise.all([document("blog", it.slug), documents("blog", 3)]) %>
 <% block("title", () => { %><%= post.title %> · <%= it.site.name %><% }) %>
 <article>
 	<h1><%= post.title %></h1>
