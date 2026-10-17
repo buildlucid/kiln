@@ -424,6 +424,101 @@ describe("running at the same time", () => {
 	});
 });
 
+describe("running at the same time with layouts", () => {
+	test("a layout starts while the page's top-level sets wait", async () => {
+		const { calls, load } = tracked();
+		const template = lines(
+			'{% extends "layout" %}',
+			'{% set post = load("post", 10) %}',
+			"{% block content %}[{{ post }}]{% endblock %}",
+		);
+		const templates = {
+			layout:
+				'{{ load("header") }}|{% block content %}{% endblock %}|{{ load("footer") }}',
+		};
+		expect(await render(template, { functions: { load }, templates })).toBe(
+			"header|[post]|footer",
+		);
+		expect(calls.started).toEqual(["post", "header", "footer"]);
+		expect(calls.most).toBe(3);
+	});
+
+	test("layout parts that use the page's variables wait for them", async () => {
+		const { calls, load } = tracked();
+		const template = lines(
+			'{% extends "layout" %}',
+			'{% set title = load("Title", 10) %}',
+		);
+		const templates = {
+			layout: '{{ load(title ~ "!") }}|{{ load("header") }}',
+		};
+		expect(await render(template, { functions: { load }, templates })).toBe(
+			"Title!|header",
+		);
+		expect(calls.started).toEqual(["Title", "header", "Title!"]);
+	});
+
+	test("a layout sets a variable after the page does", async () => {
+		const template = lines(
+			'{% extends "layout" %}',
+			'{% set title = later("Page", 10) %}',
+		);
+		const templates = { layout: '{% set title = "Layout" %}{{ title }}' };
+		expect(await render(template, { functions: { later }, templates })).toBe(
+			"Layout",
+		);
+	});
+
+	test("a layout named by a top-level set waits for it", async () => {
+		const template = lines(
+			"{% extends name %}",
+			'{% set name = later("layout", 5) %}',
+		);
+		const templates = { layout: "in layout" };
+		expect(await render(template, { functions: { later }, templates })).toBe(
+			"in layout",
+		);
+	});
+
+	test("every layout in a chain starts while the pages below it wait", async () => {
+		const { calls, load } = tracked();
+		const template = lines(
+			'{% extends "section" %}',
+			'{% set post = load("post", 10) %}',
+			"{% block content %}{{ post }}/{{ side }}{% endblock %}",
+		);
+		const templates = {
+			section: lines(
+				'{% extends "base" %}',
+				'{% set side = load("side", 10) %}',
+			),
+			base: '{{ load("header") }}|{% block content %}{% endblock %}',
+		};
+		expect(await render(template, { functions: { load }, templates })).toBe(
+			"header|post/side",
+		);
+		expect(calls.most).toBe(3);
+	});
+
+	test("the page's error wins over its layout's", async () => {
+		const fail = (message: string, ms: number) =>
+			later(null, ms).then(() => {
+				throw new Error(message);
+			});
+		const template = lines(
+			'{% extends "layout" %}',
+			'{% set post = fail("page", 10) %}',
+		);
+		const templates = { layout: '{{ fail("layout", 1) }}' };
+		const error = await renderError(template, {
+			functions: { fail },
+			templates,
+		});
+		expect((error.cause as Error).message).toBe("page");
+		await settle();
+	});
+});
+
 describe("running at the same time with outlets", () => {
 	test("outlets get content in the page's order", async () => {
 		const template =

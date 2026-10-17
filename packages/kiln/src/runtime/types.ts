@@ -1,6 +1,8 @@
+import type { Effects } from "../compiler/effects.js";
 import type { Diagnostic, KilnSyntaxError } from "../errors.js";
 import type { EscapeStrategy, TemplateNode } from "../parser/ast.js";
 import type { Source, Span } from "../source.js";
+import type { Sequence } from "./ahead.js";
 import type { IslandMode } from "./islands.js";
 import type { Addition, LateAddition, OutletMark } from "./outlets.js";
 import { childScope, isWithin, type Scope, sectionScope } from "./scope.js";
@@ -134,6 +136,10 @@ export type CompiledTemplate = {
 	 * `renderTemplate`.
 	 */
 	plain: boolean;
+	/** The top-level statements, which a page's top-level statements may gate while they wait. See `Gate`. */
+	top: Sequence | null;
+	/** For a page, what its top-level statements read and set, or null when its layout must wait for them. */
+	early: (() => Effects | null) | null;
 };
 
 /**

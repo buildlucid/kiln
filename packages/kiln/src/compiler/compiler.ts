@@ -129,7 +129,7 @@ import {
 import { Source, type Span } from "../source.js";
 import { suggest } from "../suggest.js";
 import { constant, evalAll, map1, map2 } from "./combinators.js";
-import { type Effects, effectsOf, planOf } from "./effects.js";
+import { type Effects, effectsOf, independent, planOf } from "./effects.js";
 
 /** Marks a short-circuited optional chain while it is being evaluated. */
 export const SHORT: unique symbol = Symbol("kiln.short");
@@ -564,6 +564,8 @@ class Compiler {
 			keyed: undefined,
 			slotNames: [],
 			plain: false,
+			top: null,
+			early: null,
 		};
 		this.#template = template;
 	}
@@ -596,9 +598,10 @@ class Compiler {
 					this.#defineBlock(statement);
 				}
 			});
-			template.body = this.#sequence(statements, body, ranges);
+			template.body = this.#sequence(statements, body, ranges, true);
+			template.early = this.#early(body, extendsNode);
 		} else {
-			template.body = this.#body(body);
+			template.body = this.#body(body, true);
 		}
 
 		// Lexer, parser and compiler problems are found in separate passes. Report them in source order.
@@ -609,6 +612,32 @@ class Compiler {
 			template.blocks.size === 0 &&
 			template.imports.length === 0;
 		return template;
+	}
+
+	/**
+	 * What a page's top-level statements read and set, so its layout can start while they wait, or null when the name
+	 * of the layout depends on them. Found the first time they wait.
+	 */
+	#early(body: Statement[], extendsNode: Statement): () => Effects | null {
+		const env = this.#env;
+		let found: Effects | null | undefined;
+		return () => {
+			if (found === undefined) {
+				const top = effectsOf(
+					body.filter(
+						(statement) =>
+							statement.type === "Set" ||
+							statement.type === "SetBlock" ||
+							statement.type === "Props",
+					),
+					env,
+				);
+				found = independent(top, effectsOf([extendsNode], env), false)
+					? top
+					: null;
+			}
+			return found;
+		};
 	}
 
 	// Diagnostics
@@ -958,12 +987,14 @@ class Compiler {
 
 	/**
 	 * Statements in order. Statement `i` compiled from `source[ranges[2i]]` up to `source[ranges[2i + 1]]`, which
-	 * decide what may start early while it waits; see `runSequence`. They are only read the first time one waits.
+	 * decide what may start early while it waits; see `runSequence`. They are only read the first time one waits. With
+	 * `top`, the sequence is the template's top level, kept so a page's top-level statements can gate it; see `Gate`.
 	 */
 	#sequence(
 		statements: Stmt[],
 		source: readonly Statement[],
 		ranges: readonly number[],
+		top = false,
 	): Stmt {
 		const list: Stmt[] = [];
 		const kept: number[] = [];
@@ -973,41 +1004,57 @@ class Compiler {
 			kept.push(ranges[2 * index] as number, ranges[2 * index + 1] as number);
 		});
 		if (list.length === 0) return NOOP;
-		if (list.length === 1) return list[0] as Stmt;
+		if (list.length === 1 && !top) return list[0] as Stmt;
 		const env = this.#env;
-		// Effects and plans are only found the first time a statement waits. The strict plan is for renders whose
-		// blocks or fills set variables; see `contentSets`.
+		// Effects and plans are only found the first time a statement waits. The strict plans are for renders whose
+		// blocks or fills set variables; see `contentSets`. The gated plans count every statement as one that waits.
 		let effects: Effects[] | null = null;
 		let spans: Span[] = [];
 		let elsewhere = false;
-		let loose: ReturnType<Sequence["plan"]> | null = null;
-		let strict: ReturnType<Sequence["plan"]> | null = null;
+		const plans: (ReturnType<Sequence["plan"]> | undefined)[] = [];
+		const effectsFor = (): Effects[] => {
+			if (effects === null) {
+				const groups = list.map((_, i) =>
+					source.slice(kept[2 * i] as number, kept[2 * i + 1] as number),
+				);
+				effects = groups.map((group) => effectsOf(group, env));
+				spans = groups.map((group) => ({
+					start: (group[0] as Statement).span.start,
+					end: (group.at(-1) as Statement).span.end,
+				}));
+				elsewhere = effects.some((part) => part.elsewhere);
+			}
+			return effects;
+		};
 		const sequence: Sequence = {
 			statements: list,
-			plan: (run) => {
-				if (effects === null) {
-					const groups = list.map((_, i) =>
-						source.slice(kept[2 * i] as number, kept[2 * i + 1] as number),
-					);
-					effects = groups.map((group) => effectsOf(group, env));
-					spans = groups.map((group) => ({
-						start: (group[0] as Statement).span.start,
-						end: (group.at(-1) as Statement).span.end,
-					}));
-					elsewhere = effects.some((part) => part.elsewhere);
-				}
-				if (elsewhere && contentSets(run)) {
-					return (strict ??= { ...planOf(effects, true), spans });
-				}
-				return (loose ??= { ...planOf(effects, false), spans });
+			plan: (run, gated) => {
+				const found = effectsFor();
+				const strict = elsewhere && contentSets(run);
+				const key = (strict ? 1 : 0) + (gated ? 2 : 0);
+				return (plans[key] ??= {
+					...planOf(
+						gated ? found.map((part) => ({ ...part, waits: true })) : found,
+						strict,
+					),
+					spans,
+				});
 			},
+			clear: (run, index, other) =>
+				independent(effectsFor()[index] as Effects, other, contentSets(run)),
 		};
+		if (top) this.#template.top = sequence;
+		if (list.length === 1) return list[0] as Stmt;
 		const last = list.length - 1;
-		return (run, scope, out) => runSequence(sequence, 0, last, run, scope, out);
+		return (run, scope, out) =>
+			runSequence(sequence, 0, last, run, scope, out, null);
 	}
 
-	/** Compiles statements in order. Runs of text and outputs that never wait become one statement, see `printParts`. */
-	#body(statements: Statement[]): Stmt {
+	/**
+	 * Compiles statements in order. Runs of text and outputs that never wait become one statement, see `printParts`.
+	 * With `top`, they are the template's top level; see `#sequence`.
+	 */
+	#body(statements: Statement[], top = false): Stmt {
 		const compiled: Stmt[] = [];
 		// The statements each compiled statement covers, as start and end indexes into `statements`.
 		const ranges: number[] = [];
@@ -1067,7 +1114,7 @@ class Compiler {
 			ranges.push(i, i + 1);
 		}
 		flush(statements.length);
-		return this.#sequence(compiled, statements, ranges);
+		return this.#sequence(compiled, statements, ranges, top);
 	}
 
 	/**

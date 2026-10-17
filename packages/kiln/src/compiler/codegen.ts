@@ -464,7 +464,7 @@ class Generator {
 		const child = this.#ast.body.some(
 			(statement) => statement.type === "Extends",
 		);
-		this.#list(this.#ast.body, this.#env.autoescape, child);
+		this.#list(this.#ast.body, this.#env.autoescape, child, true);
 		for (let next = this.#pending.shift(); next; next = this.#pending.shift()) {
 			this.#list(next[0], next[1], false);
 		}
@@ -493,11 +493,13 @@ class Generator {
 	/**
 	 * Finds runs of statements to generate in a list. A statement that can't be generated stays with the closure
 	 * compiler, and the lists inside it are searched in turn. With `searchOnly`, only the lists inside are searched.
+	 * `top` is set for the template's top level.
 	 */
 	#list(
 		list: Statement[],
 		strategy: EscapeStrategy | false,
 		searchOnly: boolean,
+		top = false,
 	): void {
 		const context: Context = {
 			bindings: new Map(),
@@ -516,6 +518,13 @@ class Generator {
 		const strict = planOf(effects, true);
 		// Statements a run must end at, so the closures' sequence can start the statements after them early.
 		const stops: number[] = [];
+		// A layout's blocks get runs of their own. While the page's top-level statements wait, a block waits for them,
+		// and the runs between blocks can start; see `Gate`.
+		if (top) {
+			list.forEach((statement, index) => {
+				if (statement.type === "Block") stops.push(index - 1, index);
+			});
+		}
 		const stopFrom = (index: number) =>
 			Math.min(list.length - 1, ...stops.filter((stop) => stop >= index));
 		let i = 0;

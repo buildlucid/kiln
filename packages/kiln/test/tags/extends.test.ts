@@ -41,6 +41,20 @@ describe("extends", () => {
 		expect(await render('{% extends "base" %}', { templates })).toBe("AB");
 	});
 
+	test("a page that overrides no blocks shows its own layout's blocks", async () => {
+		const page = '{% extends "layout" %}';
+		expect(
+			await render(page, {
+				templates: { layout: "{% block main %}A{% endblock %}" },
+			}),
+		).toBe("A");
+		expect(
+			await render(page, {
+				templates: { layout: "{% block main %}B{% endblock %}" },
+			}),
+		).toBe("B");
+	});
+
 	test("the layout name can be an expression", async () => {
 		const templates = { "layouts/default": "[{% block body %}{% endblock %}]" };
 		const page = lines(

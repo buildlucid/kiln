@@ -49,6 +49,7 @@
 	<ul>
 		<li>A part depends on an earlier one when it reads or sets a variable the earlier one sets, or sets a variable the earlier one reads. It waits for that part to finish first.</li>
 		<li>A <a href="/docs/tags/extends/">block</a> or <a href="/docs/tags/component/">slot</a> can read any variable, so it waits for earlier parts that set one, and later parts that set one wait for it. If the content of any block or fill in the page sets a variable, a block or slot also waits for earlier parts that read one, and later parts that read one wait for it.</li>
+		<li>A page's top-level <code>set</code> tags don't hold up its <a href="/docs/tags/extends/">layout</a>. While they wait, the parts of the layout that don't use their variables start, such as a header that loads its own menu. Blocks wait for them.</li>
 		<li>The items of a loop run at the same time when the loop body only sets variables that don't exist outside the loop. Otherwise each item waits for the one before it.</li>
 		<li>Outlets, <a href="/docs/tags/flush/"><code>flush</code></a> and islands wait for every part before them, so they behave as if nothing ran early.</li>
 		<li>Up to 64 parts of a render run early at once. Beyond that, parts wait their turn.</li>

@@ -1,3 +1,4 @@
+import type { Effects } from "../compiler/effects.js";
 import type { Span } from "../source.js";
 import { moveOutlets } from "./outlets.js";
 import { write } from "./render.js";
@@ -26,6 +27,9 @@ import {
  *
  * What depends on everything before it in the page waits until all of that is done: an outlet's place, a `flush`,
  * an island and whether it brings the island script. See `atFront`.
+ *
+ * A page's layout starts while the page's top-level statements wait, and its top-level statements that touch their
+ * variables wait for them. See `Gate`.
  */
 
 /** The most parts of one render that run ahead at once. Beyond it, parts wait their turn as they would otherwise. */
@@ -130,17 +134,67 @@ export type Plan = {
 /**
  * A list of statements, each of which may let others start early while it waits. `plan` gives the plan for a render,
  * with each statement's span, for errors where parts join. It is only worked out the first time a statement waits, so
- * renders that never wait spend no time on it.
+ * renders that never wait spend no time on it. With `gated`, the plan counts every statement as one that may wait,
+ * since any may wait for a `Gate`. `clear` is whether a statement can run in either order with statements that have
+ * `effects`.
  */
 export type Sequence = {
 	readonly statements: readonly Stmt[];
-	readonly plan: (run: Run) => Plan & { readonly spans: readonly Span[] };
+	readonly plan: (
+		run: Run,
+		gated: boolean,
+	) => Plan & { readonly spans: readonly Span[] };
+	readonly clear: (run: Run, index: number, effects: Effects) => boolean;
+};
+
+/**
+ * A page's top-level statements, still waiting while its layout starts: their promise, and what they read and set. A
+ * top-level statement of the layout that touches their variables waits for `part`. `previous` is the gate of the page
+ * below, when the page is a layout itself. `done` once `part` fulfils.
+ */
+export type Gate = {
+	readonly part: Promise<void>;
+	readonly effects: Effects;
+	readonly previous: Gate | null;
+	done: boolean;
+};
+
+/** A gate for `part`, which marks itself done once `part` fulfils. */
+export const gateFor = (
+	part: Promise<void>,
+	effects: Effects,
+	previous: Gate | null,
+): Gate => {
+	const gate: Gate = { part, effects, previous, done: false };
+	part.then(() => {
+		gate.done = true;
+	}, NOTHING);
+	return gate;
+};
+
+/** Runs statement `index` of a sequence, once the gates whose statements it touches are done. */
+const runGated = (
+	sequence: Sequence,
+	index: number,
+	gate: Gate,
+	run: Run,
+	scope: Scope,
+	out: Out,
+): void | Promise<void> => {
+	const statement = sequence.statements[index] as Stmt;
+	let waits: Promise<unknown> | null = null;
+	for (let at: Gate | null = gate; at !== null; at = at.previous) {
+		if (at.done || sequence.clear(run, index, at.effects)) continue;
+		waits = waits === null ? at.part : Promise.all([waits, at.part]);
+	}
+	if (waits === null) return statement(run, scope, out);
+	return waits.then(() => statement(run, scope, out));
 };
 
 /**
  * Runs a sequence's statements `index` to `last` in order, waiting only when one returns a promise. While one waits,
  * the statements its plan lets start early run ahead of it, see `runAhead`, while the ones that depend on it run once
- * it is done. The rest run once those are done.
+ * it is done. The rest run once those are done. With a `gate`, each statement first waits for the gates it touches.
  */
 export const runSequence = (
 	sequence: Sequence,
@@ -149,21 +203,25 @@ export const runSequence = (
 	run: Run,
 	scope: Scope,
 	out: Out,
+	gate: Gate | null,
 ): void | Promise<void> => {
 	const statements = sequence.statements;
 	const indent = out.indent;
 	for (let i = index; i <= last; i++) {
 		const inline = out.inline;
-		const result = (statements[i] as Stmt)(run, scope, out);
+		const result =
+			gate === null
+				? (statements[i] as Stmt)(run, scope, out)
+				: runGated(sequence, i, gate, run, scope, out);
 		if (result === undefined) continue;
-		const plan = sequence.plan(run);
+		const plan = sequence.plan(run, gate !== null);
 		const after = Math.min(plan.after[i] as number, last);
 		const end = Math.min(plan.reach[i] as number, last);
 		if (end > after && mayRunAhead(run.state, inline)) {
 			const pending =
 				after > i
 					? result.then(() =>
-							runSequence(sequence, i + 1, after, run, scope, out),
+							runSequence(sequence, i + 1, after, run, scope, out, gate),
 						)
 					: result;
 			const joined = runAhead(
@@ -172,17 +230,17 @@ export const runSequence = (
 				pending,
 				indent,
 				(ahead, aheadOut) =>
-					runSequence(sequence, after + 1, end, ahead, scope, aheadOut),
+					runSequence(sequence, after + 1, end, ahead, scope, aheadOut, gate),
 				plan.spans[i] as Span,
 			);
 			return end === last
 				? joined
 				: joined.then(() =>
-						runSequence(sequence, end + 1, last, run, scope, out),
+						runSequence(sequence, end + 1, last, run, scope, out, gate),
 					);
 		}
 		return result.then(() =>
-			runSequence(sequence, i + 1, last, run, scope, out),
+			runSequence(sequence, i + 1, last, run, scope, out, gate),
 		);
 	}
 };

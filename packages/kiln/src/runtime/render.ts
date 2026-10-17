@@ -7,6 +7,13 @@ import {
 import { resolveTemplateName } from "../names.js";
 import type { Span } from "../source.js";
 import { suggest } from "../suggest.js";
+import {
+	type Gate,
+	gateFor,
+	mayRunAhead,
+	runAhead,
+	runSequence,
+} from "./ahead.js";
 import { Markup } from "./markup.js";
 import { childScope } from "./scope.js";
 import {
@@ -725,7 +732,7 @@ export const isolatedScope = (
  * Renders a template into `out`, following `extends` and sharing `scope` along the inheritance chain. `inherited` is
  * the block table of the child templates below it, and `caller` the render that asked for it, for depth errors and the
  * capture it renders in: null for the outermost render. `block`, for `renderBlock`, is the block to render once the top-most template is reached,
- * instead of its content.
+ * instead of its content. `gate`, for a layout, holds the page's top-level statements while they wait.
  */
 export const renderTemplate = (
 	state: RenderState,
@@ -739,6 +746,7 @@ export const renderTemplate = (
 	caller: Run | null,
 	callerSpan: Span,
 	block?: string,
+	gate: Gate | null = null,
 ): void | Promise<void> => {
 	if (caller && depth > state.maxDepth) {
 		throw fail(
@@ -765,7 +773,8 @@ export const renderTemplate = (
 	);
 
 	// Every template in an inheritance chain shares one block table, most derived definition first, so `parent()` can find the next one from any level.
-	if (inherited || template.blocks.size > 0) {
+	// A page that defines no blocks still needs a table of its own, for its layout's blocks.
+	if (inherited || template.blocks.size > 0 || template.parent !== null) {
 		const blocks = inherited ?? new Map<string, BlockEntry[]>();
 		template.blockList ??= [...template.blocks];
 		const defined = template.blockList;
@@ -781,18 +790,24 @@ export const renderTemplate = (
 
 	const imports = importsFor(run, template);
 	if (imports instanceof Promise) {
-		return imports.then((list) => renderBody(run, scope, out, list, block));
+		return imports.then((list) =>
+			renderBody(run, scope, out, list, block, gate),
+		);
 	}
-	return renderBody(run, scope, out, imports, block);
+	return renderBody(run, scope, out, imports, block, gate);
 };
 
-/** Renders a template's own content once its imports are loaded, then its layout if it extends one. */
+/**
+ * Renders a template's own content once its imports are loaded, then its layout if it extends one. While a page's
+ * top-level statements wait, its layout starts, behind a gate for them; see `Gate`.
+ */
 const renderBody = (
 	run: Run,
 	scope: Scope,
 	out: Out,
 	imports: readonly CompiledTemplate[],
 	block: string | undefined,
+	gate: Gate | null,
 ): void | Promise<void> => {
 	run.imports = imports;
 	const { template, state } = run;
@@ -800,10 +815,52 @@ const renderBody = (
 	if (!parent && block !== undefined) {
 		return renderOnlyBlock(run, scope, out, block);
 	}
-	const result = template.body(run, scope, out);
+	const { indent, inline } = out;
+	const top = template.top;
+	const result =
+		gate === null || top === null
+			? template.body(run, scope, out)
+			: runSequence(top, 0, top.statements.length - 1, run, scope, out, gate);
 	if (!parent) return result;
 
 	const span = template.parentSpan;
+	if (
+		result !== undefined &&
+		!parent.async &&
+		block === undefined &&
+		mayRunAhead(state, inline)
+	) {
+		const effects = template.early?.() ?? null;
+		if (effects !== null) {
+			const next = gateFor(result, effects, gate);
+			return runAhead(
+				run,
+				out,
+				result,
+				indent,
+				(ahead, aheadOut) =>
+					after(loadTemplate(ahead, parent.ev(ahead, scope), span), (layout) =>
+						withCaller(ahead, span, () =>
+							renderTemplate(
+								state,
+								layout as CompiledTemplate,
+								scope,
+								aheadOut,
+								run.depth + 1,
+								run.slots,
+								null,
+								run.blocks,
+								ahead,
+								span,
+								undefined,
+								next,
+							),
+						),
+					),
+				span,
+			);
+		}
+	}
 	// Usually nothing waits: the layout is found and rendered without callbacks.
 	if (result === undefined && !parent.async) {
 		const loaded = loadTemplate(run, parent.ev(run, scope), span);
@@ -822,6 +879,7 @@ const renderBody = (
 					run,
 					span,
 					block,
+					gate,
 				);
 				if (layout instanceof Promise) {
 					return layout.catch((error: unknown) => {
@@ -847,6 +905,7 @@ const renderBody = (
 					run,
 					span,
 					block,
+					gate,
 				),
 			),
 		);
@@ -868,6 +927,7 @@ const renderBody = (
 						run,
 						span,
 						block,
+						gate,
 					),
 				),
 			),

@@ -29,7 +29,7 @@
 		<li><code>extends</code> must be the first tag in the template.</li>
 		<li>The name can be any expression, such as <code>layout ?? "layouts/base"</code>.</li>
 		<li>Outside blocks, a page can only contain <code>set</code>, <code>props</code>, <code>import</code>, <code>from</code>, <code>macro</code> and comments. Anything else is an error, because it would never be shown.</li>
-		<li>Top-level <code>set</code> tags run before the layout renders. The layout and every block can use their variables.</li>
+		<li>Top-level <code>set</code> tags run before the layout renders. The layout and every block can use their variables. When they wait for <a href="/docs/language/async-data/#running-at-the-same-time">async data</a>, the parts of the layout that don't use them start straight away.</li>
 	</ul>
 
 	<h2>Blocks</h2>
