@@ -36,7 +36,7 @@ describe("island", () => {
 					"components/stock": "{% props id %}<p>\n\t{{ id }}\n</p>\n",
 				},
 			}),
-		).toBe(lines("<main>", "\t<p>", "\t\t7", "\t</p>", "</main>"));
+		).toBe(lines("<main>", "<p>", "\t7", "</p>", "</main>"));
 	});
 
 	test("defers into a kiln-island element around its fallback, with the script before the first", async () => {

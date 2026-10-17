@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { errorCode, lines, render } from "../helpers.js";
+import { errorCode, render } from "../helpers.js";
 
 describe("include", () => {
 	test("renders another template in place", async () => {
@@ -84,24 +84,6 @@ describe("include", () => {
 
 	test("cannot recurse forever", async () => {
 		expect(await errorCode('{% include "index" %}')).toBe("limit-depth");
-	});
-
-	test("an included template that starts with calls to your functions lines up too", async () => {
-		const template = lines("<ul>", '\t{% include "row" %}', "</ul>");
-		const templates = { row: '{{ name("a") }}{{ name("b") }}\n' };
-		const functions = { name: (value: string) => value };
-		expect(await render(template, { templates, functions })).toBe(
-			lines("<ul>", "\tab", "</ul>"),
-		);
-	});
-
-	test("on a line of its own, every included line lines up with it", async () => {
-		const part = lines("<p>a</p>", "<p>b</p>", "");
-		expect(
-			await render(lines("<div>", '\t{% include "part" %}', "</div>"), {
-				templates: { part },
-			}),
-		).toBe(lines("<div>", "\t<p>a</p>", "\t<p>b</p>", "</div>"));
 	});
 });
 

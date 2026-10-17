@@ -201,29 +201,6 @@ describe("cache", () => {
 		expect(await render(template, options)).toBe(first);
 	});
 
-	test("a copy is saved for each indentation the section is placed at", async () => {
-		const templates = {
-			list: lines(
-				'{% cache "list" %}',
-				"<li>a</li>",
-				"<li>b</li>",
-				"{% endcache %}",
-			),
-		};
-		const template = lines(
-			"<ul>",
-			'  {% include "list" %}',
-			"</ul>",
-			"<ol>",
-			'    {% include "list" %}',
-			"</ol>",
-		);
-		const fresh = await render(template, { templates });
-		const cache = memoryCache();
-		expect(await render(template, { cache, templates })).toBe(fresh);
-		expect(await render(template, { cache, templates })).toBe(fresh);
-	});
-
 	test("saves what the section adds to outlets, and adds it again", async () => {
 		const cache = memoryCache();
 		const templates = {

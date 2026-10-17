@@ -119,6 +119,19 @@ export const dedent = (source: string): string => {
 };
 
 /**
+ * Indents rendered HTML to match its elements, so example output reads well. Kiln doesn't indent the content it inserts,
+ * so output from includes, components and blocks would otherwise sit at the margin. Output the formatter can't read,
+ * such as Kiln code printed as text, is shown as it is.
+ */
+const tidyOutput = (html: string): string => {
+	try {
+		return format(`${html}\n`).replace(/\n$/, "");
+	} catch {
+		return html;
+	}
+};
+
+/**
  * Fails the build when a Kiln snippet isn't laid out as `kiln format` would, so the docs teach the house style.
  * Snippets that aren't whole templates, such as a lone `{% if %}` tag, can't be formatted and are skipped.
  */
@@ -168,7 +181,10 @@ type ExampleOptions = {
 	error?: boolean;
 	/** Set to `false` to show only the output, when the page already shows the templates. */
 	source?: boolean;
-	/** Set to `false` when the templates are deliberately not formatted, such as to show how whitespace works. */
+	/**
+	 * Set to `false` when the templates are deliberately not formatted, such as to show how whitespace works. The output
+	 * is then shown exactly as rendered too.
+	 */
 	format?: boolean;
 };
 
@@ -272,6 +288,7 @@ export const createCodeFilters = async (render: RenderTemplate) => {
 			let failed = false;
 			try {
 				output = dedent(await kiln.render(name, options.context));
+				if (options.format !== false) output = tidyOutput(output);
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
 				if (!options.error)

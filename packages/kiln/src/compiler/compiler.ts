@@ -49,7 +49,6 @@ import {
 	additionsIn,
 	checkLate,
 	closeOutlets,
-	OUTLET_INDENT,
 	recordAddition,
 } from "../runtime/outlets.js";
 import {
@@ -60,18 +59,13 @@ import {
 	embed,
 	fail,
 	holdData,
-	type IndentedText,
-	indentedText,
-	indentText,
 	isPromise,
 	loadTemplate,
 	locate,
 	locating,
 	markCaller,
-	endPlace,
 	passData,
 	silence,
-	startPlace,
 	step,
 	unhold,
 	withCaller,
@@ -226,7 +220,7 @@ export const emitter = (
 
 /** Text, or an output whose expression never waits, in a run that `printParts` prints. */
 type Part =
-	| { text: string; lines: readonly number[] | undefined; span: Span }
+	| { text: string; span: Span }
 	| {
 			text: null;
 			compiled: Compiled;
@@ -252,13 +246,8 @@ const printParts = (list: Part[]): Stmt => {
 	for (const part of list) {
 		const last = parts.at(-1);
 		if (part.text !== null && last && last.text !== null) {
-			const offset = last.text.length;
-			const lines = part.lines
-				? [...(last.lines ?? []), ...part.lines.map((start) => start + offset)]
-				: last.lines;
 			parts[parts.length - 1] = {
 				text: last.text + part.text,
-				lines,
 				span: { start: last.span.start, end: part.span.end },
 			};
 		} else parts.push(part);
@@ -270,27 +259,13 @@ const printParts = (list: Part[]): Stmt => {
 	};
 	if (parts.length === 1 && first.text !== null) {
 		const text = first.text;
-		if (!first.lines) {
-			return (run, _scope, out) => {
-				write(run, out, text, span);
-			};
-		}
-		const entry = indentedText(text, first.lines);
 		return (run, _scope, out) => {
-			const indent = out.indent;
-			write(
-				run,
-				out,
-				indent === "" ? text : indentText(entry, indent, out.inline),
-				span,
-			);
+			write(run, out, text, span);
 		};
 	}
 
 	const count = parts.length;
 	const texts: (string | null)[] = [];
-	// Text with line starts, which take the indentation of where it is inserted.
-	const indented: (IndentedText | null)[] = [];
 	const reads: Read[] = [];
 	const evs: (Ev | null)[] = [];
 	const emits: (((value: unknown) => string) | null)[] = [];
@@ -308,11 +283,6 @@ const printParts = (list: Part[]): Stmt => {
 		const root = compiled?.variable ?? path?.root.variable ?? null;
 		const choice = compiled?.choice ? emitChoice(compiled.choice, emit) : null;
 		texts.push(part.text);
-		indented.push(
-			part.text !== null && part.lines
-				? indentedText(part.text, part.lines)
-				: null,
-		);
 		reads.push(root !== null ? "path" : choice ? "choice" : "other");
 		evs.push(compiled?.ev ?? null);
 		emits.push(emit);
@@ -325,18 +295,11 @@ const printParts = (list: Part[]): Stmt => {
 	}
 
 	return (run, scope, out) => {
-		const indent = out.indent;
 		let text = "";
 		for (let i = 0; i < count; i++) {
 			const part = texts[i];
 			if (part !== null) {
-				const entry = indented[i];
-				text +=
-					indent === "" || !entry
-						? part
-						: entry.indent === indent && !out.inline
-							? entry.indented
-							: indentText(entry, indent, text === "" && out.inline);
+				text += part;
 				continue;
 			}
 			const at = spans[i] as Span;
@@ -1085,11 +1048,7 @@ class Compiler {
 			}
 			if (statement.type === "Text") {
 				if (parts.length === 0) partsStart = i;
-				parts.push({
-					text: statement.value,
-					lines: statement.lines,
-					span: statement.span,
-				});
+				parts.push({ text: statement.value, span: statement.span });
 				continue;
 			}
 			if (statement.type === "Output") {
@@ -1269,8 +1228,7 @@ class Compiler {
 
 		/**
 		 * Runs passes `index` to `end`. When a pass waits, the passes after it run as `passesFrom` runs them: ahead of
-		 * it when they may. `ahead` is whether they may, found the first time a pass waits, and `indent` is the
-		 * output's indentation when the loop started.
+		 * it when they may. `ahead` is whether they may, found the first time a pass waits.
 		 */
 		const iterate = (
 			run: Run,
@@ -1281,14 +1239,12 @@ class Compiler {
 			index: number,
 			end: number,
 			reused: Scope | null,
-			indent: string,
 			ahead: boolean | null,
 		): void | Promise<void> => {
 			const length = values.length;
 			for (let i = index; i < end; i++) {
 				step(run, span);
 				const inner = reused ?? childScope(scope);
-				const inline = out.inline;
 				inner[valueName] = values[i] ?? null;
 				if (keyName !== null) inner[keyName] = keys ? (keys[i] ?? null) : i;
 				if (usesLoop) {
@@ -1321,10 +1277,8 @@ class Compiler {
 					run,
 					out,
 					result,
-					inline,
 					i + 1,
 					end,
-					indent,
 					(aheadRun, aheadOut, at) =>
 						iterate(
 							aheadRun,
@@ -1335,7 +1289,6 @@ class Compiler {
 							at,
 							at + 1,
 							shared ? childScope(scope) : null,
-							indent,
 							may,
 						),
 					span,
@@ -1357,7 +1310,6 @@ class Compiler {
 				0,
 				values.length,
 				reused,
-				out.indent,
 				null,
 			);
 		};
@@ -1556,7 +1508,7 @@ class Compiler {
 
 	#blockStatement(node: Extract<Statement, { type: "Block" }>): Stmt {
 		this.#defineBlock(node);
-		const { name, span, indent } = node;
+		const { name, span } = node;
 		return (run, scope, out) => {
 			const entry = run.blocks.get(name)?.[0];
 			if (!entry) return;
@@ -1568,47 +1520,25 @@ class Compiler {
 					out,
 				);
 			// A block defined in another template records where it was placed.
-			const own = entry.run.template === run.template;
-			if (indent === "") {
-				return own ? render() : withCaller(run, span, render);
-			}
-			const saved = out.indent;
-			const inline = out.inline;
-			startPlace(out, indent);
-			return endPlace(
-				out,
-				saved,
-				inline,
-				own ? render() : withCaller(run, span, render),
-			);
+			return entry.run.template === run.template
+				? render()
+				: withCaller(run, span, render);
 		};
 	}
 
 	#include(node: Extract<Statement, { type: "Include" }>): Stmt {
-		const { ignoreMissing, span, indent } = node;
+		const { ignoreMissing, span } = node;
 		return this.#embedding(
 			node.template,
 			node.with,
 			span,
-			(run, out, name, variables) => {
-				if (indent === "") {
-					return embed(run, out, span, name, variables, null, ignoreMissing);
-				}
-				const saved = out.indent;
-				const inline = out.inline;
-				startPlace(out, indent);
-				return endPlace(
-					out,
-					saved,
-					inline,
-					embed(run, out, span, name, variables, null, ignoreMissing),
-				);
-			},
+			(run, out, name, variables) =>
+				embed(run, out, span, name, variables, null, ignoreMissing),
 		);
 	}
 
 	#component(node: Extract<Statement, { type: "Component" }>): Stmt {
-		const { span, indent } = node;
+		const { span } = node;
 		const fills = node.fills.map((fill) => ({
 			name: fill.name,
 			body: this.#body(fill.body),
@@ -1643,18 +1573,7 @@ class Compiler {
 						sets: fill.sets,
 					});
 				}
-				if (indent === "") {
-					return embed(run, out, span, name, variables, slots, false);
-				}
-				const saved = out.indent;
-				const inline = out.inline;
-				startPlace(out, indent);
-				return endPlace(
-					out,
-					saved,
-					inline,
-					embed(run, out, span, name, variables, slots, false),
-				);
+				return embed(run, out, span, name, variables, slots, false);
 			},
 		);
 	}
@@ -1681,18 +1600,17 @@ class Compiler {
 				// A capture may never be output, so an island in one brings its own script.
 				if (isRoot(state, out)) state.islandScript = true;
 			}
-			const lead = (at: string) => (out.inline ? "" : out.indent) + at;
 			write(
 				run,
 				out,
 				indent === undefined
 					? opening
-					: `${lead(indent)}${opening}${closing?.indent === null ? "" : "\n"}`,
+					: `${indent}${opening}${closing?.indent === null ? "" : "\n"}`,
 				span,
 			);
 			return after(fallback(run, childScope(scope), out), () => {
 				if (!closing) return write(run, out, ISLAND_CLOSING, span);
-				const start = closing.indent === null ? "" : lead(closing.indent);
+				const start = closing.indent ?? "";
 				const end = closing.newline ? "\n" : "";
 				return write(run, out, `${start}${ISLAND_CLOSING}${end}`, span);
 			});
@@ -1747,18 +1665,7 @@ class Compiler {
 						: undefined,
 				);
 			}
-			if (indent === "") {
-				return embed(run, out, span, name, props, null, false);
-			}
-			const saved = out.indent;
-			const inline = out.inline;
-			startPlace(out, indent);
-			return endPlace(
-				out,
-				saved,
-				inline,
-				embed(run, out, span, name, props, null, false),
-			);
+			return embed(run, out, span, name, props, null, false);
 		};
 		return this.#embedding(
 			node.template,
@@ -1810,8 +1717,8 @@ class Compiler {
 
 	#slot(node: Extract<Statement, { type: "Slot" }>): Stmt {
 		const fallback = this.#body(node.body);
-		const { name, span, indent } = node;
-		const render = (run: Run, scope: Scope, out: Out) => {
+		const { name, span } = node;
+		return (run, scope, out) => {
 			const fill = run.slots?.get(name);
 			if (!fill) return fallback(run, childScope(scope), out);
 			try {
@@ -1830,13 +1737,6 @@ class Compiler {
 			} catch (error) {
 				throw markCaller(run, span, error);
 			}
-		};
-		if (indent === "") return render;
-		return (run, scope, out) => {
-			const saved = out.indent;
-			const inline = out.inline;
-			startPlace(out, indent);
-			return endPlace(out, saved, inline, render(run, scope, out));
 		};
 	}
 
@@ -1917,17 +1817,13 @@ class Compiler {
 			);
 		};
 		// The template, the section's content, locale and time zone are part of every key, since the output depends on
-		// them. So is how islands render, when they are deferred. Streamed islands render in place inside the section. So
-		// is the indentation the section is placed at, which its lines are saved with.
-		const fullKey = (run: Run, out: Out, value: unknown) => {
+		// them. So is how islands render, when they are deferred. Streamed islands render in place inside the section.
+		const fullKey = (run: Run, value: unknown) => {
 			const parts = Array.isArray(value)
 				? value.map((item) => part(run, item))
 				: [part(run, value)];
 			const { locale, timeZone, islands } = run.state;
-			let key = `${JSON.stringify(run.state.env.cacheNamespace)}|${templateName}|${locale}|${timeZone}|${JSON.stringify(parts)}`;
-			if (out.indent !== "") {
-				key += `|indent|${JSON.stringify([out.indent, out.inline])}`;
-			}
+			const key = `${JSON.stringify(run.state.env.cacheNamespace)}|${templateName}|${locale}|${timeZone}|${JSON.stringify(parts)}`;
 			return islands?.mode === "defer"
 				? `${key}|islands|${JSON.stringify([islands.url, islands.script])}`
 				: key;
@@ -1952,11 +1848,10 @@ class Compiler {
 			keyValue: unknown,
 			secondsValue: unknown,
 		): void | Promise<void> => {
-			const name = fullKey(run, out, keyValue);
+			const name = fullKey(run, keyValue);
 			const time = lifetime(run, secondsValue);
 			const state = run.state;
 			const store = state.env.cache;
-			// The body writes straight to `out`, so its indentation is the same as without the cache.
 			// The body sets variables in a section scope, so setting one never changes a variable outside. See `assign`.
 			// It renders in a capture of its own, which keeps what it adds to outlets and the islands it defers.
 			const fresh = (): Capture | Promise<Capture> => {
@@ -2085,7 +1980,7 @@ class Compiler {
 	 * so the outlet must write to that output, not to a capture or a cached section.
 	 */
 	#outlet(node: Extract<Statement, { type: "Outlet" }>): Stmt {
-		const { name, span, indent } = node;
+		const { name, span } = node;
 		const mark = (run: Run, out: Out) => {
 			const state = run.state;
 			if (!isRoot(state, out) || run.capture?.section) {
@@ -2105,14 +2000,7 @@ class Compiler {
 					`Outlet "${name}" is used more than once in this render`,
 				);
 			}
-			// Without `indent` the tag shares its line, as `startPlace` treats it.
-			state.outlets.set(name, {
-				out,
-				offset: out.s.length,
-				indent: indent === undefined ? out.indent : out.indent + indent,
-				inline: indent === undefined,
-				content: null,
-			});
+			state.outlets.set(name, { out, offset: out.s.length, content: null });
 		};
 		// Outlets are marked in the order of the page, so one running ahead waits for the parts before it.
 		return (run, _scope, out) => {
@@ -2149,9 +2037,8 @@ class Compiler {
 	}
 
 	/**
-	 * `add to`: renders its content and records it for the outlet. The content takes the outlet's indentation when the
-	 * outlet has been reached. A `once` tag that already added doesn't render again, but is still recorded, so a cached
-	 * section saves it.
+	 * `add to`: renders its content and records it for the outlet. A `once` tag that already added doesn't render again,
+	 * but is still recorded, so a cached section saves it.
 	 */
 	#add(node: Extract<Statement, { type: "Add" }>): Stmt {
 		const body = this.#body(node.body);
@@ -2167,12 +2054,7 @@ class Compiler {
 				recordAddition(run, span, { outlet, html: first, once }, front);
 				return;
 			}
-			const capture: Out = {
-				s: "",
-				indent: OUTLET_INDENT,
-				inline: false,
-				ahead: null,
-			};
+			const capture = emptyOut();
 			return after(body(run, childScope(scope), capture), () =>
 				recordAddition(run, span, { outlet, html: capture.s, once }, front),
 			);

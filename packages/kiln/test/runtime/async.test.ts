@@ -338,29 +338,6 @@ describe("running at the same time", () => {
 		expect(calls.most).toBe(65);
 	});
 
-	test("indentation is the same as when parts wait their turn", async () => {
-		const template = lines(
-			"<ul>",
-			'\t{% include "a" %}',
-			'\t{% include "b" %}',
-			"</ul>",
-		);
-		const templates = {
-			a: lines("<li>{{ later('a', 10) }}</li>", "<li>a2</li>", ""),
-			b: lines("<li>{{ later('b') }}</li>", "<li>b2</li>", ""),
-		};
-		expect(await render(template, { functions: { later }, templates })).toBe(
-			lines(
-				"<ul>",
-				"\t<li>a</li>",
-				"\t<li>a2</li>",
-				"\t<li>b</li>",
-				"\t<li>b2</li>",
-				"</ul>",
-			),
-		);
-	});
-
 	test("parts that depend on a part run once, after it", async () => {
 		const { calls, load } = tracked();
 		const template = lines(

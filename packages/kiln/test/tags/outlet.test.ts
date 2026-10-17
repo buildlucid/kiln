@@ -23,7 +23,7 @@ const card = lines(
 );
 
 describe("outlet", () => {
-	test("holds content added after it, at its indentation", async () => {
+	test("holds content added after it", async () => {
 		const page = lines(
 			'{% extends "layouts/base" %}',
 			'{% set title = "Home" %}',
@@ -41,11 +41,11 @@ describe("outlet", () => {
 				"<html>",
 				"	<head>",
 				"		<title>Home</title>",
-				'		<link rel="stylesheet" href="/card.css">',
+				'<link rel="stylesheet" href="/card.css">',
 				"	</head>",
 				"	<body>",
-				'		<article class="card">One</article>',
-				'		<article class="card">Two</article>',
+				'<article class="card">One</article>',
+				'<article class="card">Two</article>',
 				"	</body>",
 				"</html>",
 			),
@@ -58,14 +58,6 @@ describe("outlet", () => {
 				'{% add to "end" %}a{% endadd %}[{% outlet "end" %}]{% add to "end" %}b{% endadd %}',
 			),
 		).toBe("[ab]");
-	});
-
-	test("content lines up the same whether it is added before or after the outlet", async () => {
-		const add = lines('{% add to "head" %}', "<a>", "  <b>", "{% endadd %}");
-		const page = lines("<head>", '	{% outlet "head" %}', "</head>");
-		const expected = lines("<head>", "	<a>", "	  <b>", "</head>");
-		expect(await render(lines(add, page))).toBe(expected);
-		expect(await render(lines(page, add))).toBe(`${expected}\n`);
 	});
 
 	test("outputs nothing when nothing was added", async () => {
@@ -82,33 +74,6 @@ describe("outlet", () => {
 			"{% endadd %}",
 		);
 		expect(await render(template)).toBe("<head><link>\n</head>\n");
-	});
-
-	test("leaves its indentation marker alone in added data", async () => {
-		const add = lines(
-			'{% add to "head" %}',
-			"<meta content={{ v }}>",
-			"{% endadd %}",
-		);
-		const page = lines("<head>", '	{% outlet "head" %}', "</head>");
-		expect(await render(lines(page, add), { context: { v: "a\uFDD0b" } })).toBe(
-			lines("<head>", "	<meta content=a\uFDD0b>", "</head>", ""),
-		);
-	});
-
-	test("indents added lines that continue a line", async () => {
-		// The include lines are standalone, so their line endings are removed and the second include continues the
-		// first's line. Each include still starts with the outlet's indentation, as it would without an outlet.
-		const add = lines(
-			'{% add to "head" %}',
-			'{% include "p" with { v: 1 } %}',
-			'{% include "p" with { v: 2 } %}',
-			"{% endadd %}",
-		);
-		const page = lines("<head>", '	{% outlet "head" %}', "</head>");
-		expect(
-			await render(lines(page, add), { templates: { p: "<{{ v }}>" } }),
-		).toBe(lines("<head>", "	<1>	<2></head>", ""));
 	});
 
 	test("can only be used once per render", async () => {

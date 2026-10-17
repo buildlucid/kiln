@@ -238,7 +238,6 @@ export const checkLength = (run: Run, text: string): string => {
  */
 export const write = (run: Run, out: Out, text: string, span: Span): void => {
 	out.s += text;
-	if (out.inline && text !== "") out.inline = false;
 	const state = run.state;
 	const ahead = out.ahead;
 	if (
@@ -253,73 +252,6 @@ export const write = (run: Run, out: Out, text: string, span: Span): void => {
 			`Render stopped after ${state.maxSize} characters of output`,
 		);
 	}
-};
-
-/**
- * Starts inserting content for an include, component, slot or block. `at` is the tag's `indent` when it stands on a
- * line of its own, which the content's lines get on top of the current indentation. Without it, the tag shares its
- * line, so the content's first line carries on from it. Tags at the start of a line, with `indent` empty, need
- * nothing.
- *
- * Callers keep `out.indent` and `out.inline` from before, and pass them to `endPlace` with the render's result. A
- * render that throws stops, so nothing needs restoring then.
- */
-export const startPlace = (out: Out, at: string | undefined): void => {
-	if (at === undefined) out.inline = true;
-	else out.indent += at;
-};
-
-/** Ends `startPlace` once `result` settles. */
-export const endPlace = (
-	out: Out,
-	indent: string,
-	inline: boolean,
-	result: void | Promise<void>,
-): void | Promise<void> => {
-	if (result instanceof Promise) {
-		return result.then(() => endPlace(out, indent, inline, undefined));
-	}
-	out.indent = indent;
-	if (out.inline) out.inline = inline;
-};
-
-/** Text whose lines start at `lines`, with the last indentation `indentText` gave it. */
-export type IndentedText = {
-	readonly text: string;
-	readonly lines: readonly number[];
-	indent: string;
-	indented: string;
-};
-
-export const indentedText = (
-	text: string,
-	lines: readonly number[],
-): IndentedText => ({ text, lines, indent: "", indented: text });
-
-/**
- * The text with `indent` at the start of each line. `inline` is set when it is the first thing written since content
- * was inserted mid-line, so a line starting straight away gets no indentation. Remembers the last result, since text
- * is usually inserted at the same indentation each time.
- */
-export const indentText = (
-	entry: IndentedText,
-	indent: string,
-	inline: boolean,
-): string => {
-	if (entry.indent !== indent) {
-		const { text, lines } = entry;
-		let result = "";
-		let at = 0;
-		for (const start of lines) {
-			result += text.slice(at, start) + indent;
-			at = start;
-		}
-		entry.indented = result + text.slice(at);
-		entry.indent = indent;
-	}
-	return inline && entry.lines[0] === 0
-		? entry.indented.slice(indent.length)
-		: entry.indented;
 };
 
 /** Records the caller's location on a render error that passes through an include, component or `extends`. */
@@ -815,7 +747,6 @@ const renderBody = (
 	if (!parent && block !== undefined) {
 		return renderOnlyBlock(run, scope, out, block);
 	}
-	const { indent, inline } = out;
 	const top = template.top;
 	const result =
 		gate === null || top === null
@@ -828,7 +759,7 @@ const renderBody = (
 		result !== undefined &&
 		!parent.async &&
 		block === undefined &&
-		mayRunAhead(state, inline)
+		mayRunAhead(state)
 	) {
 		const effects = template.early?.() ?? null;
 		if (effects !== null) {
@@ -837,7 +768,6 @@ const renderBody = (
 				run,
 				out,
 				result,
-				indent,
 				(ahead, aheadOut) =>
 					after(loadTemplate(ahead, parent.ev(ahead, scope), span), (layout) =>
 						withCaller(ahead, span, () =>

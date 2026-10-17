@@ -41,7 +41,7 @@
 			<tr><td>Method calls</td><td>Any public method</td><td>Only methods a class <a href="/docs/api/safe-markup/#class-instances">exposes</a></td></tr>
 			<tr><td>Timestamps</td><td>Seconds</td><td>Milliseconds, like JavaScript</td></tr>
 			<tr><td><code>slice</code></td><td>Start and length</td><td>Start and end, like JavaScript</td></tr>
-			<tr><td>Whitespace</td><td>Removes the first newline after a tag</td><td>Removes lines that only hold tags, and the extra indentation inside tags. Indents inserted content to line up with its tag</td></tr>
+			<tr><td>Whitespace</td><td>Removes the first newline after a tag</td><td>Removes lines that only hold tags, and the extra indentation inside tags</td></tr>
 			<tr><td>Async</td><td>Not supported</td><td>Any call can return a promise</td></tr>
 			<tr><td><code>flush</code></td><td>Sends the output so far</td><td>Closes the outlets above it, so a <a href="/docs/api/streaming/">streamed</a> page can be sent up to it</td></tr>
 		</tbody>

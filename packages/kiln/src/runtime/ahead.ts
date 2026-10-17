@@ -37,26 +37,19 @@ export const MAX_AHEAD = 64;
 
 const NOTHING = (): void => {};
 
-/**
- * Whether parts may start early ahead of a part that waits: the render runs fewer parts ahead than it may, and the
- * part didn't start where content was inserted mid-line with nothing written since. `inline` is `out.inline` from
- * before the part started. If it was set, whether the line the part started goes on depends on what the part writes,
- * and so does the indentation of what comes after it. Check before starting anything that waits for the part.
- */
-export const mayRunAhead = (state: RenderState, inline: boolean): boolean =>
-	state.ahead < MAX_AHEAD && !inline;
+/** Whether parts may start early ahead of a part that waits: the render runs fewer parts ahead than it may. */
+export const mayRunAhead = (state: RenderState): boolean =>
+	state.ahead < MAX_AHEAD;
 
 /**
- * Starts `rest` while `pending`, the promise of the part before it, waits, and returns a promise for both. `indent` is
- * the indentation `out` had before the part started, which `rest` writes at. Rejects with the part's error when it
- * fails, or else with the rest's, after both settle, so a failed render has nothing still running. Only call it when
- * `mayRunAhead` allows.
+ * Starts `rest` while `pending`, the promise of the part before it, waits, and returns a promise for both. Rejects with
+ * the part's error when it fails, or else with the rest's, after both settle, so a failed render has nothing still
+ * running. Only call it when `mayRunAhead` allows.
  */
 export const runAhead = (
 	run: Run,
 	out: Out,
 	pending: Promise<void>,
-	indent: string,
 	rest: (run: Run, out: Out) => void | Promise<void>,
 	span: Span,
 ): Promise<void> => {
@@ -68,12 +61,7 @@ export const runAhead = (
 		part: pending,
 		previous: outer?.behind ?? null,
 	});
-	const ahead: Out = {
-		s: "",
-		indent,
-		inline: false,
-		ahead: out.ahead ?? { base: out, size: 0 },
-	};
+	const ahead: Out = { s: "", ahead: out.ahead ?? { base: out, size: 0 } };
 	return new Promise<void>((resolve, reject) => {
 		let left = 2;
 		let failure: { error: unknown } | null = null;
@@ -206,9 +194,7 @@ export const runSequence = (
 	gate: Gate | null,
 ): void | Promise<void> => {
 	const statements = sequence.statements;
-	const indent = out.indent;
 	for (let i = index; i <= last; i++) {
-		const inline = out.inline;
 		const result =
 			gate === null
 				? (statements[i] as Stmt)(run, scope, out)
@@ -217,7 +203,7 @@ export const runSequence = (
 		const plan = sequence.plan(run, gate !== null);
 		const after = Math.min(plan.after[i] as number, last);
 		const end = Math.min(plan.reach[i] as number, last);
-		if (end > after && mayRunAhead(run.state, inline)) {
+		if (end > after && mayRunAhead(run.state)) {
 			const pending =
 				after > i
 					? result.then(() =>
@@ -228,7 +214,6 @@ export const runSequence = (
 				run,
 				out,
 				pending,
-				indent,
 				(ahead, aheadOut) =>
 					runSequence(sequence, after + 1, end, ahead, scope, aheadOut, gate),
 				plan.spans[i] as Span,
@@ -257,56 +242,38 @@ export const runPasses = (
 	out: Out,
 	from: number,
 	to: number,
-	indent: string,
 	pass: Pass,
 	span: Span,
 	ahead: boolean,
 ): void | Promise<void> => {
 	for (let index = from; index < to; index++) {
-		const inline = out.inline;
 		const result = pass(run, out, index);
 		if (result === undefined) continue;
 		return index + 1 < to
-			? passesFrom(
-					run,
-					out,
-					result,
-					inline,
-					index + 1,
-					to,
-					indent,
-					pass,
-					span,
-					ahead,
-				)
+			? passesFrom(run, out, result, index + 1, to, pass, span, ahead)
 			: result;
 	}
 };
 
 /**
- * Runs passes `from` to `to` of a loop, which come after `pending`, a pass that waits, and started with `out.inline`
- * as `inline`. When `ahead`, they start at once: each pass that waits lets the passes after it start in a buffer and
- * capture of their own, and every buffer joins `out` in order once all the passes are done. Otherwise, or when
- * `mayRunAhead` refuses, they run once the pass is done. Rejects with the first error in the loop's order, once every
- * pass started is done.
+ * Runs passes `from` to `to` of a loop, which come after `pending`, a pass that waits. When `ahead`, they start at
+ * once: each pass that waits lets the passes after it start in a buffer and capture of their own, and every buffer
+ * joins `out` in order once all the passes are done. Otherwise, or when `mayRunAhead` refuses, they run once the pass
+ * is done. Rejects with the first error in the loop's order, once every pass started is done.
  */
 export const passesFrom = (
 	run: Run,
 	out: Out,
 	pending: Promise<void>,
-	inline: boolean,
 	from: number,
 	to: number,
-	indent: string,
 	pass: Pass,
 	span: Span,
 	ahead: boolean,
 ): Promise<void> => {
 	const state = run.state;
-	if (!ahead || !mayRunAhead(state, inline)) {
-		return pending.then(() =>
-			runPasses(run, out, from, to, indent, pass, span, ahead),
-		);
+	if (!ahead || !mayRunAhead(state)) {
+		return pending.then(() => runPasses(run, out, from, to, pass, span, ahead));
 	}
 	const log = additionLog(run);
 	const outer = run.capture;
@@ -367,7 +334,7 @@ export const passesFrom = (
 		const at = segments.length + 1;
 		state.ahead++;
 		const capture = new Capture(log, section, behind);
-		const segment: Out = { s: "", indent, inline: false, ahead: group };
+		const segment: Out = { s: "", ahead: group };
 		const segmentRun = run.within(capture);
 		segments.push(segment);
 		captures.push(capture);
@@ -389,7 +356,7 @@ export const passesFrom = (
 			// No more parts may run ahead, so the rest of the passes run in this segment once its pass is done.
 			const next = index;
 			waiting = waiting.then(() =>
-				runPasses(segmentRun, segment, next, to, indent, pass, span, true),
+				runPasses(segmentRun, segment, next, to, pass, span, true),
 			);
 			index = to;
 		}

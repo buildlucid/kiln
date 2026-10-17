@@ -178,10 +178,6 @@ const HELPERS = [
 	"contentSets",
 	"passAhead",
 	"startAhead",
-	"startPlace",
-	"endPlace",
-	"indentText",
-	"indentedText",
 	"truthy",
 	"isEmpty",
 	"equals",
@@ -645,7 +641,7 @@ class Generator {
 						WAIT_LINE,
 						(_, tabs: string, result: string, ahead?: string) => {
 							const then = `${result}.then(() => ${next})`;
-							const rest = `restAhead(run, out, ${result}, inl, ind, (run, out) => ${next}, ${span})`;
+							const rest = `restAhead(run, out, ${result}, (run, out) => ${next}, ${span})`;
 							return `${tabs}if (${result} !== undefined) return ${
 								ahead === AHEAD
 									? rest
@@ -739,8 +735,6 @@ class Generator {
 			"let steps = state.steps;",
 			"const signal = state.signal;",
 			`signal !== undefined && signal.aborted && aborted(run, ${span});`,
-			"const ind = out.indent;",
-			"const inl = out.inline;",
 			'let s = "";',
 			`let ${["q", "b", ...declared].join(", ")};`,
 			...(fn.reads ? ["let at = null;"] : []),
@@ -911,7 +905,7 @@ class Generator {
 	#statement(statement: Statement, context: Context): string[] {
 		switch (statement.type) {
 			case "Text":
-				return [this.#text(statement)];
+				return [`s += ${JSON.stringify(statement.value)};`];
 			case "Output":
 				return this.#output(statement.expression, statement.span, context);
 			case "If":
@@ -938,34 +932,6 @@ class Generator {
 			default:
 				return unsupported();
 		}
-	}
-
-	/** Text, with its lines indented to where it is inserted. See `indentText`. */
-	#text(statement: Extract<Statement, { type: "Text" }>): string {
-		const text = JSON.stringify(statement.value);
-		if (!statement.lines) return `s += ${text};`;
-		const lines = JSON.stringify(statement.lines);
-		const entry = this.#constant(
-			`text:${statement.span.start}:${statement.span.end}`,
-			"T",
-			`indentedText(${text}, ${lines})`,
-		);
-		// The text indented last time is read here, so the usual case makes no call.
-		return `s += ind === "" ? ${text} : ${entry}.indent === ind && !out.inline ? ${entry}.indented : indentText(${entry}, ind, s === "" && out.inline);`;
-	}
-
-	/**
-	 * Inserts content at the indentation of the tag that inserts it, with `startPlace` and `endPlace`. Tags at the start
-	 * of a line need nothing. Saved values go in temporaries rather than a closure, so the function's locals stay fast.
-	 */
-	#place(at: string | undefined, call: string): string {
-		if (at === "") return call;
-		const [saved, inline] = [this.#temp(), this.#temp()];
-		return `(${saved} = out.indent, ${inline} = out.inline, startPlace(out, ${this.#at(at)}), endPlace(out, ${saved}, ${inline}, ${call}))`;
-	}
-
-	#at(at: string | undefined): string {
-		return at === undefined ? "undefined" : JSON.stringify(at);
 	}
 
 	/** Statements inside another, such as a loop's body. */
@@ -1383,7 +1349,7 @@ class Generator {
 			// loop function, also starts the passes after it, ahead of it when they may. See `passAhead`.
 			const handOff = (from: number, tabs: string, rest: string) =>
 				from === 0
-					? `${tabs}return ${loop.index} + 1 < stop ? passAhead(run, scope, out, ${rest}, inl, ind, ${sets}, ${elsewhere}, ${loop.index} + 1, stop, ${one}, ${loop.span}) : ${rest};`
+					? `${tabs}return ${loop.index} + 1 < stop ? passAhead(run, scope, out, ${rest}, ${sets}, ${elsewhere}, ${loop.index} + 1, stop, ${one}, ${loop.span}) : ${rest};`
 					: `${tabs}return ${rest};`;
 			const continued = (from: number) =>
 				segments.slice(from).flatMap((lines, offset) =>
@@ -1501,7 +1467,7 @@ class Generator {
 			const { index, span } = loop;
 			// Only the first run of the generator starts passes ahead. The ones it starts run one pass each.
 			const { sets, elsewhere } = this.#setsOf(statement);
-			const fork = `if (${ahead} === null && ${index} + 1 < stop) ${ahead} = startAhead(run, ${loop.outer}, out, inl, ind, ${sets}, ${elsewhere}, ${index} + 1, stop, (run, out, j) => drive(${name}(run, out, j, j + 1)), ${span});`;
+			const fork = `if (${ahead} === null && ${index} + 1 < stop) ${ahead} = startAhead(run, ${loop.outer}, out, ${sets}, ${elsewhere}, ${index} + 1, stop, (run, out, j) => drive(${name}(run, out, j, j + 1)), ${span});`;
 			const body = this.#forgetLines(this.#setFlags(lines)).flatMap((line) => {
 				if (line.trim() === FORK) return [line.replace(FORK, fork)];
 				const wait = WAIT_LINE.exec(line);
@@ -1740,10 +1706,7 @@ class Generator {
 			...variables.charge(span),
 			...this.#wait(
 				span,
-				this.#place(
-					statement.indent,
-					variables.embed(span, target.name, "null", statement.ignoreMissing),
-				),
+				variables.embed(span, target.name, "null", statement.ignoreMissing),
 				context.top,
 			),
 		];
@@ -1875,10 +1838,7 @@ class Generator {
 			...variables.charge(span),
 			...this.#wait(
 				span,
-				this.#place(
-					statement.indent,
-					variables.embed(span, target.name, slots, false),
-				),
+				variables.embed(span, target.name, slots, false),
 				context.top,
 			),
 			// Fills render in this scope, and may set variables in it, as may a block they place.
@@ -1899,7 +1859,6 @@ class Generator {
 	): string[] {
 		const span = this.#span(statement.span);
 		const fill = this.#temp();
-		const at = statement.indent;
 		// The fallback renders in a scope of its own, so variables it declares stay inside it.
 		const sets = [...setsIn(statement.body)];
 		const scope = sets.length > 0 ? this.#temp() : context.scope;
@@ -1911,29 +1870,11 @@ class Generator {
 				...sets.flatMap((name) => this.#forget(name)),
 			];
 		}
-		if (at !== "" && !statement.body.every(isBlank)) {
-			// The fallback's text reads a new `ind`, inside a block of its own.
-			const [saved, inline] = [this.#temp(), this.#temp()];
-			fallback = [
-				`${saved} = out.indent;`,
-				`${inline} = out.inline;`,
-				`startPlace(out, ${this.#at(at)});`,
-				"{",
-				...indent(["const ind = out.indent;", ...fallback]),
-				"}",
-				`out.indent = ${saved};`,
-				`if (out.inline) out.inline = ${inline};`,
-			];
-		}
 		return [
 			`${fill} = run.slots === null ? undefined : run.slots.get(${JSON.stringify(statement.name)});`,
 			`if (${fill} !== undefined) {`,
 			...indent(
-				this.#wait(
-					span,
-					this.#place(at, `fillSlot(run, ${span}, ${fill}, out)`),
-					context.top,
-				),
+				this.#wait(span, `fillSlot(run, ${span}, ${fill}, out)`, context.top),
 			),
 			"} else {",
 			...indent(fallback),
@@ -1955,10 +1896,7 @@ class Generator {
 		return [
 			...this.#wait(
 				span,
-				this.#place(
-					statement.indent,
-					`placeBlock(run, ${span}, ${JSON.stringify(statement.name)}, ${context.scope}, out)`,
-				),
+				`placeBlock(run, ${span}, ${JSON.stringify(statement.name)}, ${context.scope}, out)`,
 				context.top,
 			),
 			...this.#afterBlocks(),

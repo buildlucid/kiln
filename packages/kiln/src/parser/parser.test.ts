@@ -9,8 +9,7 @@ describe("parser", () => {
 	test("expressions follow Kiln precedence, with spans", () => {
 		const { ast, problems } = parse('{{ "T: " ~ a + b * 2 }}', options);
 		expect(problems).toEqual([]);
-		// After the empty text that marks where the line starts.
-		expect(ast.body[1]).toMatchInlineSnapshot(`
+		expect(ast.body[0]).toMatchInlineSnapshot(`
 			{
 			  "expression": {
 			    "left": {
@@ -79,7 +78,7 @@ describe("parser", () => {
 
 	test("two-word tests and negation", () => {
 		const { ast } = parse("{{ n is not divisible by(3) }}", options);
-		const output = ast.body[1];
+		const output = ast.body[0];
 		expect(output?.type === "Output" && output.expression).toMatchObject({
 			type: "Test",
 			name: "divisible by",
@@ -90,7 +89,7 @@ describe("parser", () => {
 
 	test("optional chains wrap the whole member chain, and filters end it", () => {
 		const { ast } = parse("{{ a?.b.c|upper }}", options);
-		const output = ast.body[1];
+		const output = ast.body[0];
 		expect(output?.type === "Output" && output.expression).toMatchObject({
 			type: "Filter",
 			name: "upper",

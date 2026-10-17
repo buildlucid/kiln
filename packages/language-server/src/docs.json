@@ -1,7 +1,7 @@
 {
 	"tags": {
 		"add": {
-			"markdown": "- Content goes to the outlet with the same name, in the order it was added. It doesn't matter whether `add to` runs before or after the outlet.\n- The content lines up with the outlet's indentation.\n- The content can read the variables around it. Variables you `set` inside it stay inside it.\n- Content for an outlet the page doesn't have is dropped. A component still works on a page without that outlet, and when you [render one block](https://kilnlang.com/docs/api/rendering/#rendering-one-block).",
+			"markdown": "- Content goes to the outlet with the same name, in the order it was added. It doesn't matter whether `add to` runs before or after the outlet.\n- The content can read the variables around it. Variables you `set` inside it stay inside it.\n- Content for an outlet the page doesn't have is dropped. A component still works on a page without that outlet, and when you [render one block](https://kilnlang.com/docs/api/rendering/#rendering-one-block).",
 			"url": "https://kilnlang.com/docs/tags/outlet/#adding-content"
 		},
 		"apply": {

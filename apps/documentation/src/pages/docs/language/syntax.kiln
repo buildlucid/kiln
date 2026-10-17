@@ -77,7 +77,7 @@
 		<li>It happens when the template is compiled, so rendering is no slower.</li>
 	</ul>
 
-	<p>When an <code>include</code>, <code>component</code>, <code>slot</code> or <code>block</code> is on a line of its own, Kiln indents every line it inserts to line up with the tag.</p>
+	<p>Kiln doesn't indent the content that an <code>include</code>, <code>component</code>, <code>slot</code> or <code>block</code> inserts. Each line keeps the indentation it has in its own template, so inserted content starts at the margin.</p>
 
 	{% set card %}
 		{% verbatim %}
@@ -87,7 +87,7 @@
 </article>
 		{% endverbatim %}
 	{% endset %}
-	{% apply example(templates: { "components/card.kiln": card }) %}
+	{% apply example(templates: { "components/card.kiln": card }, format: false) %}
 		{% verbatim %}
 <main>
 	{% component "components/card" with { title: "Hello" } %}
@@ -97,14 +97,9 @@
 		{% endverbatim %}
 	{% endapply %}
 
-	<ul>
-		<li>It applies to the template that an include or component renders, the content passed to a slot, and the blocks a child template fills.</li>
-		<li>Nested insertions add up. A slot inside a component inside an include lines up with all three.</li>
-		<li>When the tag shares its line with other text, the inserted content is not indented any further.</li>
-		<li>Only text in templates is indented. Values you output keep their own whitespace, including what a macro returns and what <code>set</code> and <code>apply</code> capture.</li>
-	</ul>
+	<p>Browsers ignore this whitespace, and indenting every inserted line would slow down every render. To read the HTML of a page, use your browser's developer tools, which show it indented.</p>
 
-	<p>Kiln never changes the indentation of lines inside a <code>&lt;pre&gt;</code> or <code>&lt;textarea&gt;</code>, because there the whitespace is part of the content. Content an <code>include</code> or <code>component</code> inserts there is not indented either. A <code>&lt;pre&gt;</code> inside an HTML comment, script or style doesn't count.</p>
+	<p>Kiln never changes the indentation of lines inside a <code>&lt;pre&gt;</code> or <code>&lt;textarea&gt;</code>, because there the whitespace is part of the content. A <code>&lt;pre&gt;</code> inside an HTML comment, script or style doesn't count.</p>
 
 	<h2>Strings</h2>
 

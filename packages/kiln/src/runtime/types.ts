@@ -27,10 +27,6 @@ export type { Scope };
  */
 export type Out = {
 	s: string;
-	/** Indentation that each line of template text gets, from the tags that inserted it. See `startPlace`. */
-	indent: string;
-	/** Content was inserted mid-line and nothing has been written since, so its first line start gets no indentation. */
-	inline: boolean;
 	/** For output that runs ahead of a part that waits, the buffer it ends up in; null otherwise. See `ahead.ts`. */
 	ahead: Ahead | null;
 };
@@ -42,12 +38,7 @@ export type Out = {
 export type Ahead = { readonly base: Out; size: number };
 
 /** An empty output buffer. Captures start with one too, since what they capture is printed as a value. */
-export const emptyOut = (): Out => ({
-	s: "",
-	indent: "",
-	inline: false,
-	ahead: null,
-});
+export const emptyOut = (): Out => ({ s: "", ahead: null });
 
 /** A compiled statement. Returns a promise only when it had to wait for async data. */
 export type Stmt = (run: Run, scope: Scope, out: Out) => void | Promise<void>;

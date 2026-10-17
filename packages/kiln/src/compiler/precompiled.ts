@@ -22,12 +22,8 @@ import {
 	embedKeyed,
 	embedScope,
 	fail,
-	indentedText,
-	indentText,
 	locate,
-	endPlace,
 	markCaller,
-	startPlace,
 	step,
 	unhold,
 	write,
@@ -69,7 +65,7 @@ import {
 } from "./compiler.js";
 
 /** Changes whenever generated code or the runtime it calls changes shape, so old modules fail loudly. */
-export const PRECOMPILED_VERSION = 4;
+export const PRECOMPILED_VERSION = 5;
 
 /**
  * A template compiled to JavaScript at build time, the default export of a module `precompile` wrote. Loaders return
@@ -278,20 +274,17 @@ const runtime = {
 	unhold,
 	/**
 	 * Continues a generated run after a statement that returned a promise, `pending`: the rest of the run starts at
-	 * once, ahead of it, when it may, or else once the statement is done. `inline` is `out.inline` from where the
-	 * function started. See `runAhead`.
+	 * once, ahead of it, when it may, or else once the statement is done. See `runAhead`.
 	 */
 	restAhead: (
 		run: Run,
 		out: Out,
 		pending: Promise<void>,
-		inline: boolean,
-		indent: string,
 		rest: (run: Run, out: Out) => void | Promise<void>,
 		span: Span,
 	): Promise<void> =>
-		mayRunAhead(run.state, inline)
-			? runAhead(run, out, pending, indent, rest, span)
+		mayRunAhead(run.state)
+			? runAhead(run, out, pending, rest, span)
 			: pending.then(() => rest(run, out)),
 	contentSets,
 	/**
@@ -304,8 +297,6 @@ const runtime = {
 		scope: Scope,
 		out: Out,
 		pending: Promise<void>,
-		inline: boolean,
-		indent: string,
 		sets: readonly string[],
 		elsewhere: boolean,
 		from: number,
@@ -317,10 +308,8 @@ const runtime = {
 			run,
 			out,
 			pending,
-			inline,
 			from,
 			to,
-			indent,
 			pass,
 			span,
 			passesAhead(run, scope, sets, elsewhere),
@@ -333,8 +322,6 @@ const runtime = {
 		run: Run,
 		scope: Scope,
 		out: Out,
-		inline: boolean,
-		indent: string,
 		sets: readonly string[],
 		elsewhere: boolean,
 		from: number,
@@ -342,10 +329,7 @@ const runtime = {
 		pass: Pass,
 		span: Span,
 	): Joining | null => {
-		if (
-			!mayRunAhead(run.state, inline) ||
-			!passesAhead(run, scope, sets, elsewhere)
-		) {
+		if (!mayRunAhead(run.state) || !passesAhead(run, scope, sets, elsewhere)) {
 			return null;
 		}
 		let done = NOTHING;
@@ -354,18 +338,7 @@ const runtime = {
 			done = resolve;
 			failed = reject;
 		});
-		const joined = passesFrom(
-			run,
-			out,
-			pending,
-			false,
-			from,
-			to,
-			indent,
-			pass,
-			span,
-			true,
-		);
+		const joined = passesFrom(run, out, pending, from, to, pass, span, true);
 		return {
 			join: () => {
 				done();
@@ -377,10 +350,6 @@ const runtime = {
 			},
 		};
 	},
-	startPlace,
-	endPlace,
-	indentText,
-	indentedText,
 	embed,
 	embedScope,
 	embedKeyed,

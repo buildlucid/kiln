@@ -649,13 +649,7 @@ const normaliseTree = (value: unknown): unknown => {
 	if (typeof value !== "object" || value === null) return value;
 	const copy: Record<string, unknown> = {};
 	for (const [key, item] of Object.entries(value)) {
-		if (
-			key === "span" ||
-			key === "nameSpan" ||
-			key === "lines" ||
-			key === "indent"
-		)
-			continue;
+		if (key === "span" || key === "nameSpan" || key === "indent") continue;
 		copy[key] =
 			key === "value" && (value as { type?: unknown }).type === "Text"
 				? normaliseText(item as string)

@@ -20,26 +20,12 @@ import {
  */
 
 /**
- * Stands for the outlet's indentation in added content, which is rendered before the outlet may be reached. The
- * outlet puts its own indentation in place when it closes, so content lines up the same whichever runs first, and a
- * cached section's additions line up wherever they are replayed. Two Unicode noncharacters, meant for uses like
- * this. Indentation can land mid-line, where a tag's line ending was removed, so the marker is replaced wherever it
- * is. Data holding one of the characters on its own is left alone.
- */
-export const OUTLET_INDENT = "\uFDD0\uFDD1";
-
-const INDENT_MARKERS = /\uFDD0\uFDD1/g;
-
-/**
- * Where an outlet stands in the render's output, and the indentation its content takes. An outlet reached in output
- * running ahead stands in that buffer until it joins the render's; see `ahead.ts`.
+ * Where an outlet stands in the render's output. An outlet reached in output running ahead stands in that buffer until
+ * it joins the render's; see `ahead.ts`.
  */
 export type OutletMark = {
 	out: Out;
 	offset: number;
-	readonly indent: string;
-	/** The outlet shares its line, so the content's first line gets no indentation. */
-	readonly inline: boolean;
 	/** The outlet's content once it is closed, or null while content can still be added. */
 	content: string | null;
 };
@@ -140,16 +126,12 @@ const closedError = (run: Run, span: Span, outlet: string) =>
 export const closeOutlets = (state: RenderState): void => {
 	if (state.outlets === null) return;
 	for (const [name, mark] of state.outlets) {
-		if (mark.content === null) mark.content = contentFor(state, name, mark);
+		if (mark.content === null) mark.content = contentFor(state, name);
 	}
 };
 
 /** An outlet's content: what was added to it, in order, without repeats of `once` tags. */
-const contentFor = (
-	state: RenderState,
-	name: string,
-	mark: OutletMark,
-): string => {
+const contentFor = (state: RenderState, name: string): string => {
 	const seen = new Set<string>();
 	let content = "";
 	for (const addition of additionsIn(state.additions ?? [])) {
@@ -158,12 +140,7 @@ const contentFor = (
 			if (seen.has(addition.once)) continue;
 			seen.add(addition.once);
 		}
-		// The outlet shares its line, so the first line of its content needs no indentation.
-		const html =
-			content === "" && mark.inline && addition.html.startsWith(OUTLET_INDENT)
-				? addition.html.slice(OUTLET_INDENT.length)
-				: addition.html;
-		content += html.replace(INDENT_MARKERS, mark.indent);
+		content += addition.html;
 	}
 	return content;
 };

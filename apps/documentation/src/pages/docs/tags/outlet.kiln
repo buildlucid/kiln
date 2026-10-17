@@ -40,7 +40,6 @@
 
 	<ul>
 		<li>Content goes to the outlet with the same name, in the order it was added. It doesn't matter whether <code>add to</code> runs before or after the outlet.</li>
-		<li>The content lines up with the outlet's indentation.</li>
 		<li>The content can read the variables around it. Variables you <code>set</code> inside it stay inside it.</li>
 		<li>Content for an outlet the page doesn't have is dropped. A component still works on a page without that outlet, and when you <a href="/docs/api/rendering/#rendering-one-block">render one block</a>.</li>
 	</ul>

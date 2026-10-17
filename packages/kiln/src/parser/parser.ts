@@ -14,7 +14,7 @@ import {
 	type FilterCall,
 	type HashEntry,
 	type Param,
-	type PlacedStatement,
+	type IslandStatement,
 	type PropParam,
 	type PropType,
 	type ShapeKey,
@@ -24,7 +24,7 @@ import {
 	TYPE_NAMES,
 	type TypeName,
 } from "./ast.js";
-import { arrangeIndentation } from "./indent.js";
+import { removeIndentation } from "./indent.js";
 
 const isTypeName = (name: string): name is TypeName =>
 	(TYPE_NAMES as readonly string[]).includes(name);
@@ -55,7 +55,7 @@ export const parse = (text: string, options: ParseOptions): ParseResult => {
 	const lexed = lex(text);
 	const parser = new Parser(lexed.tokens, options);
 	const ast = parser.parseTemplate(text.length);
-	arrangeIndentation(ast, text, lexed, parser.placed);
+	removeIndentation(ast, text, lexed, parser.islands);
 	return { ast, problems: [...lexed.problems, ...parser.problems] };
 };
 
@@ -112,8 +112,8 @@ const describeToken = (token: Token): string => {
 
 class Parser {
 	readonly problems: LexProblem[] = [];
-	/** Every tag that inserts content, for `arrangeIndentation`. */
-	readonly placed: PlacedStatement[] = [];
+	/** Every island, for `removeIndentation`. */
+	readonly islands: IslandStatement[] = [];
 	readonly #tokens: Token[];
 	readonly #options: ParseOptions;
 	#index = 0;
@@ -429,11 +429,11 @@ class Parser {
 			case "outlet": {
 				const name = this.#parseStringLiteral("an outlet name");
 				const close = this.#expectTagEnd();
-				return this.#placed({
+				return {
 					type: "Outlet",
 					name,
 					span: { start: open.start, end: close.end },
-				});
+				};
 			}
 			case "flush": {
 				const close = this.#expectTagEnd();
@@ -789,7 +789,7 @@ class Parser {
 			// Short form: {% block title page.title %}
 			const expression = this.#parseExpression();
 			const close = this.#expectTagEnd();
-			return this.#placed({
+			return {
 				type: "Block",
 				name,
 				body: [
@@ -800,18 +800,18 @@ class Parser {
 					},
 				],
 				span: { start: open.start, end: close.end },
-			});
+			};
 		}
 		this.#expectTagEnd();
 		const { body, end } = this.#parseBody(["endblock"]);
 		if (end) this.#finishEndTag(name);
 		else this.#unclosed("block", open, "endblock");
-		return this.#placed({
+		return {
 			type: "Block",
 			name,
 			body,
 			span: { start: open.start, end: this.#lastEnd },
-		});
+		};
 	}
 
 	#parseInclude(open: Token): Statement {
@@ -828,13 +828,13 @@ class Parser {
 			ignoreMissing = true;
 		}
 		const close = this.#expectTagEnd();
-		return this.#placed({
+		return {
 			type: "Include",
 			template,
 			with: withValue,
 			ignoreMissing,
 			span: { start: open.start, end: close.end },
-		});
+		};
 	}
 
 	#parseComponent(open: Token): Statement {
@@ -887,18 +887,13 @@ class Parser {
 			});
 		}
 
-		return this.#placed({
+		return {
 			type: "Component",
 			...header,
 			fills,
 			body,
 			span: { start: open.start, end: this.#lastEnd },
-		});
-	}
-
-	#placed<T extends PlacedStatement>(node: T): T {
-		this.placed.push(node);
-		return node;
+		};
 	}
 
 	#parseStringLiteral(what: string): string {
@@ -923,12 +918,12 @@ class Parser {
 		const { body, end } = this.#parseBody(["endslot"]);
 		if (end) this.#finishEndTag();
 		else this.#unclosed("slot", open, "endslot");
-		return this.#placed({
+		return {
 			type: "Slot",
 			name,
 			body,
 			span: { start: open.start, end: this.#lastEnd },
-		});
+		};
 	}
 
 	#parseMacro(open: Token): Statement {
@@ -1070,12 +1065,14 @@ class Parser {
 		const { body, end } = this.#parseBody(["endisland"]);
 		if (end) this.#finishEndTag();
 		else this.#unclosed("island", open, "endisland");
-		return this.#placed({
+		const island: IslandStatement = {
 			type: "Island",
 			...header,
 			body,
 			span: { start: open.start, end: this.#lastEnd },
-		});
+		};
+		this.islands.push(island);
+		return island;
 	}
 
 	#parseApply(open: Token): Statement {

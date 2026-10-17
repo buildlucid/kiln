@@ -73,41 +73,6 @@ describe("component", () => {
 		).toBe("123");
 	});
 
-	test("on a line of its own, the component and its slots line up with their tags", async () => {
-		const card = lines(
-			"<article>",
-			"\t<header>",
-			'\t\t{% slot "header" %}',
-			"\t\t\t<h2>Untitled</h2>",
-			"\t\t{% endslot %}",
-			"\t</header>",
-			"\t{% slot %}{% endslot %}",
-			"</article>",
-			"",
-		);
-		const template = lines(
-			"<main>",
-			'\t{% component "card" %}',
-			"\t\t<p>One</p>",
-			"\t\t<p>Two</p>",
-			"\t{% endcomponent %}",
-			"</main>",
-		);
-		expect(await render(template, { templates: { card } })).toBe(
-			lines(
-				"<main>",
-				"\t<article>",
-				"\t\t<header>",
-				"\t\t\t<h2>Untitled</h2>",
-				"\t\t</header>",
-				"\t\t<p>One</p>",
-				"\t\t<p>Two</p>",
-				"\t</article>",
-				"</main>",
-			),
-		);
-	});
-
 	test("can be nested, each with its own slots", async () => {
 		const templates = { box: "[{% slot %}{% endslot %}]" };
 		const template =

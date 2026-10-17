@@ -221,26 +221,19 @@ class Lexer {
 		const lines = textLines(this.#text, parts, standalone);
 
 		const tokens: Token[] = [];
-		// A line that starts with a tag or output still gets a text token, empty, to mark where the line starts.
-		let line = 0;
 		for (const part of parts) {
-			const text = part.kind === "text";
-			const at = text ? part.from : part.start;
-			if (text && part.from < part.to) {
-				tokens.push({
-					type: "text",
-					value: this.#text.slice(part.from, part.to),
-					start: part.from,
-					end: part.to,
-				});
-			} else if (lines[line]?.start === at) {
-				tokens.push({ type: "text", value: "", start: at, end: at });
-			}
-			if (!text && part.kind !== "comment") {
+			if (part.kind === "text") {
+				if (part.from < part.to) {
+					tokens.push({
+						type: "text",
+						value: this.#text.slice(part.from, part.to),
+						start: part.from,
+						end: part.to,
+					});
+				}
+			} else if (part.kind !== "comment") {
 				for (const token of part.tokens) tokens.push(token);
 			}
-			const end = text ? part.to : part.start;
-			while ((lines[line]?.start ?? Infinity) <= end) line++;
 		}
 		tokens.push({
 			type: "eof",
@@ -901,9 +894,6 @@ const textLines = (
 		if (removed.has(indentEnd)) return;
 		lines.push({ start, indentEnd });
 	};
-	const first = parts[0];
-	const start = contentStart(text);
-	if (first && (first.kind !== "text" || first.from === start)) add(start);
 	for (const part of parts) {
 		if (part.kind !== "text") continue;
 		for (

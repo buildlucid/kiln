@@ -1,26 +1,21 @@
 import { contentStart, type LexResult, type TextLine } from "../lexer/lexer.js";
-import type { PlacedStatement, Statement, TemplateNode } from "./ast.js";
+import type { IslandStatement, Statement, TemplateNode } from "./ast.js";
 
-/**
- * The statements inside one tag, with where the tag starts and where its whole span ends. `full` bodies are inserted
- * where another tag stands, so they lose all their shared indentation and take the indentation of where they land.
- */
+/** The statements inside one tag, with where the tag starts and where its whole span ends. */
 type Body = {
 	open: number;
 	end: number;
 	lists: Statement[][];
-	full: boolean;
 	/** Keeps every line's indentation, for content written back inside a wrapper, such as an island's fallback. */
 	keep?: boolean;
 };
 
 /** The bodies a statement holds. Branches share their tag's body. A component's fills are bodies of their own, inside the component's. */
 const bodiesOf = (node: Statement): Body[] => {
-	const own = (lists: Statement[][], full = false): Body => ({
+	const own = (lists: Statement[][]): Body => ({
 		open: node.span.start,
 		end: node.span.end,
 		lists,
-		full,
 	});
 	switch (node.type) {
 		case "If":
@@ -38,16 +33,14 @@ const bodiesOf = (node: Statement): Body[] => {
 					open: fill.span.start,
 					end: fill.span.end,
 					lists: [fill.body],
-					full: true,
 				})),
-				own([node.body, ...node.fills.map((fill) => fill.body)], true),
+				own([node.body, ...node.fills.map((fill) => fill.body)]),
 			];
 		case "Island":
 			return [{ ...own([node.body]), keep: true }];
 		case "Block":
 		case "Slot":
 		case "Add":
-			return [own([node.body], true)];
 		case "SetBlock":
 		case "Macro":
 		case "Cache":
@@ -125,19 +118,20 @@ const preformatted = (
 };
 
 /**
- * Works out the indentation of a template's text, so content can be inserted elsewhere and still line up.
+ * Removes the extra indentation inside tags that stand on their own line: the spaces and tabs that every content line
+ * inside shares, beyond the tag's own indentation. It happens when compiling, so rendering is no slower.
  *
- * - Removes the extra indentation inside tags that stand on their own line: the spaces and tabs that every content line inside shares, beyond the tag's own. Blocks, slots and a component's content can be inserted where another tag stands, so they lose all of it and take the indentation of where they land.
- * - Sets `indent` on the tags in `placedNodes`, which insert content, when they stand on their own line: the line's indentation once that removal is done.
- * - Sets `lines` on text nodes: where each line of text starts, to take the indentation of where the text is inserted.
+ * Also sets the indentation of `islands` whose tags stand on lines of their own, since a deferred island writes its
+ * tags back as `<kiln-island>` lines. See `IslandStatement`.
  *
- * Lines inside `<pre>` and `<textarea>` keep their whitespace. Amounts come from the source alone, so nested tags each remove their own step whatever order they are visited in.
+ * Lines inside `<pre>` and `<textarea>` keep their whitespace. Amounts come from the source alone, so nested tags each
+ * remove their own step whatever order they are visited in. Then the text nodes holding those offsets are rebuilt.
  */
-export const arrangeIndentation = (
+export const removeIndentation = (
 	ast: TemplateNode,
 	text: string,
 	{ tokens, standalone, lines }: LexResult,
-	placedNodes: readonly PlacedStatement[],
+	islands: readonly IslandStatement[],
 ): void => {
 	const textTokens = tokens.filter((token) => token.type === "text");
 	const pre = preformatted(text, textTokens);
@@ -158,29 +152,28 @@ export const arrangeIndentation = (
 		return { start, indentEnd };
 	};
 
-	// Standalone tags that insert content count as content lines, so the tags around them remove their step.
-	const placed: { node: PlacedStatement; line: TextLine }[] = [];
-	// A deferred island writes its end tag back as `</kiln-island>`, so a standalone `endisland` counts as one too.
-	const islandEnds: {
-		node: Extract<PlacedStatement, { type: "Island" }>;
-		line: TextLine;
+	// Island tags on lines of their own are written back as lines, so they count as content lines for the tags around them.
+	const islandLines: {
+		node: IslandStatement;
+		open: TextLine | null;
+		end: TextLine | null;
 	}[] = [];
-	for (const node of placedNodes) {
-		// Inside `<pre>` and `<textarea>` a tag is not indented, nor is what it inserts.
+	for (const node of islands) {
 		if (inPre(node.span.start)) continue;
-		if (node.type === "Island") {
-			const end = text.lastIndexOf("{%", node.span.end - 1);
-			if (standalone.has(end)) islandEnds.push({ node, line: lineOf(end) });
-		}
-		if (!standalone.has(node.span.start)) continue;
-		placed.push({ node, line: lineOf(node.span.start) });
+		const end = text.lastIndexOf("{%", node.span.end - 1);
+		const open = standalone.has(node.span.start)
+			? lineOf(node.span.start)
+			: null;
+		const close = standalone.has(end) ? lineOf(end) : null;
+		if (open || close) islandLines.push({ node, open, end: close });
 	}
 	const contentLines =
-		placed.length > 0 || islandEnds.length > 0
+		islandLines.length > 0
 			? [
 					...textLines,
-					...placed.map((item) => item.line),
-					...islandEnds.map((item) => item.line),
+					...islandLines.flatMap((item) =>
+						[item.open, item.end].filter((line) => line !== null),
+					),
 				].sort((a, b) => a.start - b.start)
 			: textLines;
 
@@ -204,6 +197,7 @@ export const arrangeIndentation = (
 		const last = firstAtLeast(contentLines, to, (line) => line.start);
 		if (first >= last) return;
 
+		const own = indentOf(body.open);
 		let shared = Infinity;
 		const firstLine = contentLines[first] as TextLine;
 		for (let i = first; i < last; i++) {
@@ -217,17 +211,12 @@ export const arrangeIndentation = (
 			}
 			shared = Math.min(shared, length);
 		}
-		let keep = 0;
-		if (!body.full) {
-			const own = indentOf(body.open);
-			if (shared <= own.length) return;
-			if (text.slice(firstLine.start, firstLine.start + own.length) !== own)
-				return;
-			keep = own.length;
-		} else if (shared === 0) return;
+		if (shared <= own.length) return;
+		if (text.slice(firstLine.start, firstLine.start + own.length) !== own)
+			return;
 		for (let i = first; i < last; i++) {
 			const line = contentLines[i] as TextLine;
-			cuts.push([line.start + keep, line.start + shared]);
+			cuts.push([line.start + own.length, line.start + shared]);
 		}
 	};
 
@@ -268,16 +257,17 @@ export const arrangeIndentation = (
 		return out + text.slice(Math.min(at, end), end);
 	};
 
-	for (const { node, line } of placed) {
-		node.indent = uncut(line.start, line.indentEnd);
+	for (const { node, open, end } of islandLines) {
+		if (open) node.indent = uncut(open.start, open.indentEnd);
+		if (end) {
+			const sameLine = open !== null && end.start === open.start;
+			node.closing = {
+				indent: sameLine ? null : uncut(end.start, end.indentEnd),
+				newline: text.includes("\n", node.span.end),
+			};
+		}
 	}
-	for (const { node, line } of islandEnds) {
-		const sameLine = line.start === lineOf(node.span.start).start;
-		node.closing = {
-			indent: sameLine ? null : uncut(line.start, line.indentEnd),
-			newline: text.includes("\n", node.span.end),
-		};
-	}
+	if (merged.length === 0) return;
 
 	const hasCut = (start: number, end: number): boolean => {
 		const range = merged[firstAtLeast(merged, start, (range) => range[1] - 1)];
@@ -287,14 +277,8 @@ export const arrangeIndentation = (
 	// A text token's value is its source slice, and a text node joins one or more tokens, so nodes are rebuilt token by token.
 	const rewrite = (list: Statement[]): void => {
 		for (const node of list) {
-			if (node.type === "Text") {
-				let line = firstAtLeast(textLines, node.span.start, (l) => l.start);
-				const hasLines = (textLines[line]?.start ?? Infinity) <= node.span.end;
-				const cut = hasCut(node.span.start, node.span.end);
-				if (!hasLines && !cut) continue;
+			if (node.type === "Text" && hasCut(node.span.start, node.span.end)) {
 				let value = "";
-				let size = 0;
-				const starts: number[] = [];
 				for (
 					let i = firstAtLeast(textTokens, node.span.start, (t) => t.start);
 					i < textTokens.length;
@@ -302,26 +286,9 @@ export const arrangeIndentation = (
 				) {
 					const token = textTokens[i] as (typeof textTokens)[number];
 					if (token.end > node.span.end) break;
-					for (
-						let next = textLines[line];
-						next !== undefined && next.start <= token.end;
-						next = textLines[++line]
-					) {
-						starts.push(
-							size +
-								(cut
-									? uncut(token.start, next.start).length
-									: next.start - token.start),
-						);
-					}
-					if (cut) {
-						const piece = uncut(token.start, token.end);
-						value += piece;
-						size += piece.length;
-					} else size += token.end - token.start;
+					value += uncut(token.start, token.end);
 				}
-				if (cut) node.value = value;
-				if (starts.length > 0) node.lines = starts;
+				node.value = value;
 			}
 			const bodies = bodiesOf(node);
 			if (bodies.length > 0) {
