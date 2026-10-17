@@ -113,6 +113,22 @@ describe("symbolAt", () => {
 		expect(symbol("<p>ti‸tle</p>")).toBeNull();
 	});
 
+	test("finds tag names, including end tags, but not a tag's arguments", () => {
+		expect(symbol("{% fo‸r post in posts %}")).toEqual({
+			kind: "tag",
+			name: "for",
+			start: 3,
+			end: 6,
+		});
+		expect(symbol("{%- endf‸or %}")).toMatchObject({
+			kind: "tag",
+			name: "endfor",
+		});
+		expect(symbol("{% for po‸st in posts %}")).toMatchObject({
+			kind: "variable",
+		});
+	});
+
 	test("finds template names", () => {
 		expect(symbol('{% include "components/ca‸rd" %}')).toEqual({
 			kind: "template",

@@ -29,6 +29,7 @@ import {
 	symbolAt,
 	templateStrings,
 } from "./context.js";
+import { type DocKind, docsFor } from "./docs.js";
 import { htmlCompletions, htmlHover } from "./html.js";
 import { listTemplates, pathOf, type Project, resolveName } from "./project.js";
 
@@ -78,19 +79,26 @@ const describeProp = (prop: AnalysedProp) =>
 
 const markdown = (value: string) => ({ kind: MarkupKind.Markdown, value });
 
+/** Markdown for an item's docs, or nothing when it has none. */
+const documentation = (kind: DocKind, name: string) => {
+	const docs = docsFor(kind, name);
+	return docs ? markdown(docs) : undefined;
+};
+
 const builtinItems = (
-	docs: Record<string, BuiltinDoc>,
+	builtins: Record<string, BuiltinDoc>,
+	docKind: DocKind,
 	kind: CompletionItemKind,
 	extra: readonly string[],
 ): CompletionItem[] => [
-	...Object.entries(docs).map(([label, doc]) => ({
+	...Object.entries(builtins).map(([label, doc]) => ({
 		label,
 		kind,
 		detail: doc.signature,
-		documentation: markdown(doc.description),
+		documentation: documentation(docKind, label),
 	})),
 	...extra
-		.filter((name) => !(name in docs))
+		.filter((name) => !(name in builtins))
 		.map((label) => ({ label, kind, detail: "From your project" })),
 ];
 
@@ -147,7 +155,7 @@ export const complete = async (
 				([label, tag]) => ({
 					label,
 					kind: CompletionItemKind.Keyword,
-					documentation: markdown(tag.description),
+					documentation: documentation("tags", label),
 					insertTextFormat: InsertTextFormat.Snippet,
 					insertTextMode: InsertTextMode.adjustIndentation,
 					// Replaces a `%}` already on the line, since the snippet brings its own.
@@ -186,12 +194,14 @@ export const complete = async (
 		case "filter":
 			return builtinItems(
 				FILTERS,
+				"filters",
 				CompletionItemKind.Function,
 				manifest?.filters ?? [],
 			);
 		case "test":
 			return builtinItems(
 				TESTS,
+				"tests",
 				CompletionItemKind.Function,
 				manifest?.tests ?? [],
 			);
@@ -231,6 +241,7 @@ export const complete = async (
 				}),
 				...builtinItems(
 					FUNCTIONS,
+					"functions",
 					CompletionItemKind.Function,
 					manifest?.functions ?? [],
 				),
@@ -274,18 +285,31 @@ export const hover = async (
 		names?.includes(symbol.name) ? `A ${what} your project registers.` : null;
 	let value: string | null = null;
 
+	/** A built-in's signature, then its docs. */
+	const builtin = (signature: string, kind: DocKind) =>
+		[codeBlock(signature), docsFor(kind, symbol.name)]
+			.filter(Boolean)
+			.join("\n");
+
 	switch (symbol.kind) {
+		case "tag": {
+			// An end tag, such as `endfor`, shows the docs of the tag it closes.
+			const tag =
+				symbol.name in TAGS ? symbol.name : symbol.name.replace(/^end/, "");
+			value = docsFor("tags", tag);
+			break;
+		}
 		case "filter": {
 			const doc = FILTERS[symbol.name];
 			value = doc
-				? `${codeBlock(`|${doc.signature}`)}\n${doc.description}`
+				? builtin(`|${doc.signature}`, "filters")
 				: fromProject(project.manifest?.filters, "filter");
 			break;
 		}
 		case "test": {
 			const doc = TESTS[symbol.name];
 			value = doc
-				? `${codeBlock(`is ${doc.signature}`)}\n${doc.description}`
+				? builtin(`is ${doc.signature}`, "tests")
 				: fromProject(project.manifest?.tests, "test");
 			break;
 		}
@@ -300,7 +324,7 @@ export const hover = async (
 			const macro = macrosIn(text).get(symbol.name);
 			const doc = FUNCTIONS[symbol.name];
 			if (macro) value = codeBlock(`macro ${symbol.name}(${macro.params})`);
-			else if (doc) value = `${codeBlock(doc.signature)}\n${doc.description}`;
+			else if (doc) value = builtin(doc.signature, "functions");
 			else value = fromProject(project.manifest?.functions, "function");
 			break;
 		}

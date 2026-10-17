@@ -185,7 +185,12 @@ describe("language server", () => {
 			0,
 			7,
 		);
-		expect(filter.contents.value).toContain("Changes text to upper case.");
+		expect(filter.contents.value).toContain(
+			"Change text to upper or lower case.",
+		);
+		expect(filter.contents.value).toContain(
+			"[Kiln docs](https://kilnlang.com/docs/filters/strings/#upper-and-lower)",
+		);
 		const template = await request<{ contents: { value: string } }>(
 			"textDocument/hover",
 			"templates/pages/hover.kiln",
@@ -225,6 +230,47 @@ describe("language server", () => {
 		);
 		expect(hover.contents.value).toContain("button");
 		expect(hover.contents.value).toContain("MDN Reference");
+	});
+
+	test("hovers tags, with an end tag showing the tag it closes", async () => {
+		await open(
+			"templates/pages/tags.kiln",
+			"{% for post in posts %}{{ post }}{% endfor %}",
+		);
+		const hover = (character: number) =>
+			request<{ contents: { value: string } }>(
+				"textDocument/hover",
+				"templates/pages/tags.kiln",
+				0,
+				character,
+			);
+		const start = await hover(4);
+		expect(start.contents.value).toMatch(/^Loop over arrays/);
+		expect(start.contents.value).toContain("```kiln\n{% for post in posts %}");
+		expect(start.contents.value).toContain(
+			"[Kiln docs](https://kilnlang.com/docs/tags/for/)",
+		);
+		expect((await hover(37)).contents.value).toBe(start.contents.value);
+	});
+
+	test("shows docs beside filter and tag completions", async () => {
+		await open("templates/pages/docs.kiln", "{{ a|tr }}\n{% fo %}");
+		type Items = { label: string; documentation?: { value: string } }[];
+		const item = async (line: number, character: number, label: string) =>
+			(
+				await request<Items>(
+					"textDocument/completion",
+					"templates/pages/docs.kiln",
+					line,
+					character,
+				)
+			).find((found) => found.label === label);
+		expect((await item(0, 7, "truncate"))?.documentation?.value).toContain(
+			"Shortens text to a length",
+		);
+		expect((await item(1, 5, "for"))?.documentation?.value).toContain(
+			"https://kilnlang.com/docs/tags/for/",
+		);
 	});
 
 	test("goes to templates and to the layout's block", async () => {

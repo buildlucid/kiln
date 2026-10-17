@@ -7,7 +7,10 @@ export default defineConfig({
 		projects: [
 			{
 				extends: true,
-				test: { name: "closures", include: ["packages/**/*.test.ts"] },
+				test: {
+					name: "closures",
+					include: ["packages/**/*.test.ts", "apps/**/*.test.ts"],
+				},
 			},
 			// Every feature test again, rendering precompiled templates. See `render` in packages/kiln/test/helpers.ts.
 			{

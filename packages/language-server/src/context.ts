@@ -103,7 +103,14 @@ export const cursorContext = (
 
 /** The name under the cursor, and what it names, for hover and go to definition. */
 export type CursorSymbol = {
-	kind: "filter" | "test" | "function" | "loop" | "variable" | "template";
+	kind:
+		| "tag"
+		| "filter"
+		| "test"
+		| "function"
+		| "loop"
+		| "variable"
+		| "template";
 	name: string;
 	start: number;
 	end: number;
@@ -141,6 +148,9 @@ export const symbolAt = (text: string, offset: number): CursorSymbol | null => {
 	const head = text.slice(delimiter.start + 2, start);
 	const tail = text.slice(end, end + 40);
 
+	if (delimiter.kind === "tag" && /^-?\s*$/.test(head)) {
+		return { kind: "tag", name, start, end };
+	}
 	if (/\|\s*$/.test(head)) return { kind: "filter", name, start, end };
 	if (/\bis\s+(?:not\s+)?$/.test(head)) {
 		if (name === "divisible" && /^\s+by\b/.test(tail)) name = "divisible by";
