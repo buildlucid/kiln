@@ -94,6 +94,7 @@ npx kiln-language-server --stdio
 		<li><strong>Formatting.</strong> The whole file or a selection, using the <a href="/docs/tooling/formatting/">formatter</a>.</li>
 		<li><strong>Completions</strong> for tags, filters, functions, tests, variables in scope, <code>loop</code>'s properties, template names in <code>extends</code>, <code>include</code>, <code>component</code> and <code>import</code>, and the props of the component or template you're passing data to.</li>
 		<li><strong>Hover</strong> for filters, functions, tests and templates, including a template's props.</li>
+		<li><strong>HTML completions and hover</strong> outside <code>&#123;{ }}</code> and <code>&#123;% %}</code>: elements, attributes and their values, such as the values of <code>button</code>'s <code>type</code>, with MDN's description and a link to its page. They come from the HTML service VS Code uses.</li>
 		<li><strong>Go to definition</strong> for template names, macros and blocks.</li>
 		<li><strong>Links</strong> on template names, and a list of the template's blocks, macros and slots for your editor's outline.</li>
 	</ul>

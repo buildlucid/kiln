@@ -23,7 +23,13 @@ import {
 	TAGS,
 	TESTS,
 } from "./builtins.js";
-import { cursorContext, symbolAt, templateStrings } from "./context.js";
+import {
+	cursorContext,
+	enclosingDelimiter,
+	symbolAt,
+	templateStrings,
+} from "./context.js";
+import { htmlCompletions, htmlHover } from "./html.js";
 import { listTemplates, pathOf, type Project, resolveName } from "./project.js";
 
 /** A template open in the editor, with its project and template name. */
@@ -124,7 +130,11 @@ export const complete = async (
 	const { document, project, name } = open;
 	const text = document.getText();
 	const context = cursorContext(text, offset);
-	if (!context) return [];
+	if (!context) {
+		return enclosingDelimiter(text, offset)
+			? []
+			: htmlCompletions(document, offset);
+	}
 	const replace = (end = offset) => ({
 		start: document.positionAt(context.start),
 		end: document.positionAt(end),
@@ -251,7 +261,11 @@ export const hover = async (
 	const { document, project, name } = open;
 	const text = document.getText();
 	const symbol = symbolAt(text, offset);
-	if (!symbol) return null;
+	if (!symbol) {
+		return enclosingDelimiter(text, offset)
+			? null
+			: htmlHover(document, offset);
+	}
 	const range = {
 		start: document.positionAt(symbol.start),
 		end: document.positionAt(symbol.end),

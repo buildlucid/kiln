@@ -95,4 +95,17 @@ analysis.templates; // [{ kind: "extends", name: "layouts/base.kiln", ... }]
 	{% endapply %}
 
 	<p>A name built at render time, such as <code>"sections/" ~ section.type</code>, is reported with a <code>name</code> of null.</p>
+
+	<h2>Reading the markup</h2>
+
+	<p><code>templateText</code> returns a template's source with every tag, output and comment, and the content of <code>verbatim</code>, replaced by spaces. Line breaks stay, so every offset, line and column still points at the same place. Hand it to HTML tools, such as a validator or an HTML language service, so they see only the markup you wrote.</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { templateText } from "@lucidkiln/core";
+
+templateText('<a href="{{ url }}">{% if new %}New{% endif %}</a>');
+// '<a href="         ">            New           </a>'
+		{% endverbatim %}
+	{% endapply %}
 {% endblock %}

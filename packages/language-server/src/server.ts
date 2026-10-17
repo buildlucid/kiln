@@ -49,7 +49,20 @@ export const startServer = (connection: Connection): void => {
 			capabilities: {
 				textDocumentSync: TextDocumentSyncKind.Incremental,
 				completionProvider: {
-					triggerCharacters: ["|", ".", "%", '"', "'", "/", " ", "{", ","],
+					// `<` and `=` start HTML element and attribute value completions.
+					triggerCharacters: [
+						"|",
+						".",
+						"%",
+						'"',
+						"'",
+						"/",
+						" ",
+						"{",
+						",",
+						"<",
+						"=",
+					],
 				},
 				hoverProvider: true,
 				definitionProvider: true,

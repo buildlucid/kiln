@@ -195,6 +195,38 @@ describe("language server", () => {
 		expect(template.contents.value).toContain("props title: string, url?: any");
 	});
 
+	test("completes and hovers HTML outside Kiln syntax", async () => {
+		await open(
+			"templates/pages/html.kiln",
+			'<a href="{{ url }}" ></a>\n<button type="">\n{{ "<b" }}',
+		);
+		type Items = { label: string }[];
+		const labels = async (line: number, character: number) =>
+			(
+				await request<Items>(
+					"textDocument/completion",
+					"templates/pages/html.kiln",
+					line,
+					character,
+				)
+			).map((item) => item.label);
+		// An attribute after an output, then an attribute's values.
+		expect(await labels(0, 20)).toEqual(
+			expect.arrayContaining(["target", "rel", "download"]),
+		);
+		expect(await labels(1, 14)).toEqual(["button", "submit", "reset"]);
+		// Inside an output, Kiln's own completions win.
+		expect(await labels(2, 6)).not.toContain("button");
+		const hover = await request<{ contents: { value: string } }>(
+			"textDocument/hover",
+			"templates/pages/html.kiln",
+			1,
+			3,
+		);
+		expect(hover.contents.value).toContain("button");
+		expect(hover.contents.value).toContain("MDN Reference");
+	});
+
 	test("goes to templates and to the layout's block", async () => {
 		await open(
 			"templates/pages/nav.kiln",

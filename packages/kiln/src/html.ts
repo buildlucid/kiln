@@ -349,6 +349,26 @@ const sourceMask = (source: string): Uint8Array => {
 	return mask;
 };
 
+/**
+ * A template's source with every Kiln tag, output and comment, and verbatim content, replaced by spaces. Line breaks
+ * stay, so offsets, lines and columns match the source. For HTML tools that should only see the markup.
+ */
+export const templateText = (source: string): string => {
+	const mask = sourceMask(source);
+	let text = "";
+	let start = 0;
+	for (let at = 0; at <= source.length; at++) {
+		if (at < source.length && mask[at] === TEXT) continue;
+		text += source.slice(start, at);
+		if (at < source.length) {
+			const char = source[at];
+			text += char === "\n" || char === "\r" ? char : " ";
+		}
+		start = at + 1;
+	}
+	return text;
+};
+
 const isSpace = (char: string | undefined) =>
 	char === " " ||
 	char === "\t" ||

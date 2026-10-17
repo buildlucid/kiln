@@ -32,7 +32,12 @@ export type {
 	ShapeKey,
 	TypeName,
 } from "./parser/ast.js";
-export type { HtmlCheck, HtmlCheckLevel, HtmlChecks } from "./html.js";
+export {
+	type HtmlCheck,
+	type HtmlCheckLevel,
+	type HtmlChecks,
+	templateText,
+} from "./html.js";
 export { generateManifest, type KilnManifest } from "./manifest.js";
 export { expose, lookup } from "./runtime/exposure.js";
 export {
