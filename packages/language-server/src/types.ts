@@ -13,19 +13,26 @@ import type { Member, TypeScriptProject } from "./typescript.js";
  *
  * - `Get`: `a.b` and `a[0]`, reading a property, a map's value or a list's item.
  * - `Item`, `Key`: what `for` gives for each pass.
- * - `Result`: what a call gives once Kiln waits for it. `Params` and `Returns` describe the function for hover.
+ * - `Params` and `Returns` describe a function for hover. A function made with `withRender` is an object whose `call`
+ *   takes `RenderInfo` first, so `Params` leaves that out.
+ * - `arg`, `plain`, `aware`, `dropRender`, `Called`: a call to a host function, written as a real call so TypeScript
+ *   works out a generic function's type parameters from the arguments. See `typeWriter`.
  * - `Members`: the values whose properties a template can read, so lists, maps and primitives complete nothing.
  * - `Last`: a function's last parameter, which named arguments are gathered into.
  * - `Fits`, `NamedFit`: whether an argument fits its parameter. Unknown types always fit, so the editor never guesses.
  */
-const PRELUDE = `import type { KilnFilters, KilnFunctions, KilnGlobals, KilnTests, KilnTypes, Markup, RenderAware } from "@lucidkiln/core";
+const PRELUDE = `import type { KilnFilters, KilnFunctions, KilnGlobals, KilnTests, KilnTypes, Markup } from "@lucidkiln/core";
 type Named<N extends string> = N extends keyof KilnTypes ? KilnTypes[N] : unknown;
 type Get<V, K> = NonNullable<V> extends infer O ? O extends ReadonlyMap<unknown, infer M> ? M : O extends readonly (infer I)[] ? (K extends number ? I : unknown) : K extends keyof O ? O[K] : unknown : never;
 type Item<V> = NonNullable<V> extends infer O ? O extends string ? unknown : O extends readonly (infer I)[] ? I : O extends ReadonlyMap<unknown, infer M> ? M : O extends ReadonlySet<infer S> ? S : O extends Iterable<infer I> ? I : O extends object ? O[keyof O] : unknown : never;
 type Key<V> = NonNullable<V> extends infer O ? O extends string ? unknown : O extends readonly unknown[] | ReadonlySet<unknown> ? number : O extends ReadonlyMap<infer K, unknown> ? K : O extends object ? keyof O & string : unknown : never;
-type Returns<F> = F extends RenderAware<any, any, infer R> ? R : F extends (...args: any) => infer R ? R : unknown;
-type Result<F> = Awaited<Returns<F>>;
-type Params<F> = F extends RenderAware<any, infer A, any> ? A : F extends (...args: infer A) => any ? A : never;
+type Returns<F> = F extends (...args: never) => infer R ? R : F extends { readonly call: (...args: never) => infer R } ? R : unknown;
+type Params<F> = F extends (...args: infer A) => unknown ? A : F extends { readonly call: (render: never, ...args: infer A) => unknown } ? A : never;
+declare function arg<T>(): T;
+declare function plain<F>(fn: F): F extends (...args: never) => unknown ? F : never;
+declare function aware<F>(fn: F): F extends (...args: never) => unknown ? never : F extends { readonly call: infer C } ? C : never;
+declare function dropRender<A extends unknown[], R>(fn: (render: never, ...args: A) => R): (...args: A) => R;
+type Called<F, Plain, Aware> = unknown extends F ? unknown : F extends (...args: never) => unknown ? Awaited<Plain> : F extends { readonly call: unknown } ? Awaited<Aware> : unknown;
 type Tail<A> = A extends readonly [unknown?, ...infer R] ? R : A;
 type Last<A> = Required<A> extends readonly [...unknown[], infer L] ? L : A extends readonly (infer E)[] ? E : unknown;
 type Fits<A, P> = [P] extends [never] ? true : unknown extends P ? true : unknown extends A ? true : [Exclude<A, Markup>] extends [P] ? true : false;
@@ -141,38 +148,6 @@ export type TypeContext = {
 
 const MAX_DEPTH = 32;
 
-/** The TypeScript type of a variable, from where its value comes from. */
-export const bindingType = (
-	source: BindingSource,
-	context: TypeContext,
-	depth = 0,
-): string => {
-	const of = (expression: Expression) =>
-		expressionType(expression, context, depth + 1);
-	switch (source.kind) {
-		case "prop":
-			return propType(source.type);
-		case "rest":
-			return "Readonly<Record<string, unknown>>";
-		case "set":
-			return of(source.value);
-		case "capture":
-			return "Markup";
-		case "item":
-			return `Item<${of(source.iterable)}>`;
-		case "key":
-			return `Key<${of(source.iterable)}>`;
-		case "arrow":
-			return ITEM_PARAMS[source.filter]?.includes(source.index)
-				? `Item<${of(source.input)}>`
-				: "unknown";
-		case "with":
-			return `Get<${of(source.value)}, ${JSON.stringify(source.key)}>`;
-		default:
-			return "unknown";
-	}
-};
-
 const union = (types: string[]) =>
 	types.length === 0 ? "never" : [...new Set(types)].join(" | ");
 
@@ -182,114 +157,221 @@ const literalKey = (expression: Expression) =>
 		? JSON.stringify(expression.value)
 		: null;
 
-/** Writes the TypeScript type of a Kiln expression, using the helper types in `PRELUDE`. */
-export const expressionType = (
-	expression: Expression,
-	context: TypeContext,
-	depth = 0,
-): string => {
-	if (depth > MAX_DEPTH) return "unknown";
-	const of = (inner: Expression) => expressionType(inner, context, depth + 1);
-	const args = (list: Argument[]) =>
-		list.map((arg) => (arg.type === "Spread" ? "unknown" : of(arg.value)));
+/** Writes TypeScript for a template's values. Its types read the declarations in `statements`. */
+export type TypeWriter = {
+	/** The TypeScript type of a Kiln expression, using the helper types in `PRELUDE`. */
+	expression(expression: Expression): string;
+	/** The TypeScript type of a variable, from where its value comes from. */
+	binding(source: BindingSource): string;
+	/** The calls the types written so far read. Pass them to `withTypes` with the aliases that use them. */
+	readonly statements: readonly string[];
+};
 
-	switch (expression.type) {
-		case "Literal":
-			return expression.value === null ? "null" : typeof expression.value;
-		case "Interpolation":
-			return "string";
-		case "Array":
-			return `(${union(
-				expression.elements.map((element) =>
-					element.type === "Spread"
-						? `Item<${of(element.value)}>`
-						: of(element),
-				),
-			)})[]`;
-		case "Hash": {
-			const keys = expression.entries.flatMap((entry) => {
-				if (entry.type === "Spread") return [];
-				const key =
-					entry.key.type === "Name"
-						? JSON.stringify(entry.key.name)
-						: literalKey(entry.key);
-				return key ? [`${key}: ${of(entry.value)}`] : [];
-			});
-			return `{ ${keys.join("; ")} }`;
+/**
+ * Writes the types of a template's values. A literal's type is its value, so `"page"` is `"page"`. A call to a host
+ * function or filter becomes a real call in `statements`, so TypeScript works out a generic function's type parameters
+ * from the arguments:
+ *
+ * ```ts
+ * declare const $fn0: Get<KilnFunctions, "document">;
+ * const $plain0 = plain($fn0)(arg<"page">());
+ * const $aware0 = dropRender(aware($fn0))(arg<"page">());
+ * ```
+ *
+ * The call's type is `Called<typeof $fn0, typeof $plain0, typeof $aware0>`: the first call for a plain function, the
+ * second for one made with `withRender`. Each expression is written once, however often a template reads it.
+ */
+export const typeWriter = (context: TypeContext): TypeWriter => {
+	const statements: string[] = [];
+	const written = new Map<Expression, string>();
+
+	/** Writes a call to `callee`, a TypeScript type, with the types of its arguments, and returns the result's type. */
+	const call = (callee: string, args: string[]) => {
+		const id = statements.length;
+		const list = args.join(", ");
+		statements.push(
+			`declare const $fn${id}: ${callee};\n` +
+				`const $plain${id} = plain($fn${id})(${list});\n` +
+				`const $aware${id} = dropRender(aware($fn${id}))(${list});\n`,
+		);
+		return `Called<typeof $fn${id}, typeof $plain${id}, typeof $aware${id}>`;
+	};
+
+	/** A call's arguments as TypeScript: named arguments are gathered into one hash at the end, as Kiln does. */
+	const callArgs = (list: Argument[], depth: number, input?: string) => {
+		const named = list.flatMap((item) =>
+			item.type === "Named"
+				? [`${JSON.stringify(item.name)}: ${expression(item.value, depth)}`]
+				: [],
+		);
+		return [
+			...(input ? [`arg<${input}>()`] : []),
+			...list.flatMap((item) => {
+				if (item.type === "Named") return [];
+				const type = expression(item.value, depth);
+				return [
+					item.type === "Spread"
+						? `...arg<Item<${type}>[]>()`
+						: `arg<${type}>()`,
+				];
+			}),
+			...(named.length > 0 ? [`arg<{ ${named.join("; ")} }>()`] : []),
+		];
+	};
+
+	const binding = (source: BindingSource, depth: number): string => {
+		const of = (value: Expression) => expression(value, depth + 1);
+		switch (source.kind) {
+			case "prop":
+				return propType(source.type);
+			case "rest":
+				return "Readonly<Record<string, unknown>>";
+			case "set":
+				return of(source.value);
+			case "capture":
+				return "Markup";
+			case "item":
+				return `Item<${of(source.iterable)}>`;
+			case "key":
+				return `Key<${of(source.iterable)}>`;
+			case "arrow":
+				return ITEM_PARAMS[source.filter]?.includes(source.index)
+					? `Item<${of(source.input)}>`
+					: "unknown";
+			case "with":
+				return `Get<${of(source.value)}, ${JSON.stringify(source.key)}>`;
+			default:
+				return "unknown";
 		}
-		case "Unary":
-			return expression.operator === "not" ? "boolean" : "number";
-		case "Binary":
-			switch (expression.operator) {
-				case "??":
-				case "?:":
-					return `NonNullable<${of(expression.left)}> | ${of(expression.right)}`;
-				case "~":
-					return "string";
-				case "..":
-					return "number[]";
-				case "+":
-				case "-":
-				case "*":
-				case "/":
-				case "//":
-				case "%":
-				case "**":
-					return "number";
-				default:
-					return "boolean";
+	};
+
+	const expression = (node: Expression, depth: number): string => {
+		if (depth > MAX_DEPTH) return "unknown";
+		const known = written.get(node);
+		if (known) return known;
+		const type = write(node, depth + 1);
+		written.set(node, type);
+		return type;
+	};
+
+	const write = (node: Expression, depth: number): string => {
+		const of = (inner: Expression) => expression(inner, depth);
+		switch (node.type) {
+			case "Literal":
+				return typeof node.value === "string"
+					? JSON.stringify(node.value)
+					: String(node.value);
+			case "Interpolation":
+				return "string";
+			case "Array":
+				return `(${union(
+					node.elements.map((element) =>
+						element.type === "Spread"
+							? `Item<${of(element.value)}>`
+							: of(element),
+					),
+				)})[]`;
+			case "Hash": {
+				const keys = node.entries.flatMap((entry) => {
+					if (entry.type === "Spread") return [];
+					const key =
+						entry.key.type === "Name"
+							? JSON.stringify(entry.key.name)
+							: literalKey(entry.key);
+					return key ? [`${key}: ${of(entry.value)}`] : [];
+				});
+				return `{ ${keys.join("; ")} }`;
 			}
-		case "Conditional":
-			return union([
-				of(expression.consequent),
-				expression.alternate ? of(expression.alternate) : "null",
-			]);
-		case "Member": {
-			const key = literalKey(expression.property) ?? "string";
-			return `Get<${of(expression.object)}, ${key}>`;
-		}
-		case "Call": {
-			const { callee } = expression;
-			if (callee.type === "Member") {
-				const key = literalKey(callee.property) ?? "string";
-				return `Result<Get<${of(callee.object)}, ${key}>>`;
+			case "Unary":
+				return node.operator === "not" ? "boolean" : "number";
+			case "Binary":
+				switch (node.operator) {
+					case "??":
+					case "?:":
+						return `NonNullable<${of(node.left)}> | ${of(node.right)}`;
+					case "~":
+						return "string";
+					case "..":
+						return "number[]";
+					case "+":
+					case "-":
+					case "*":
+					case "/":
+					case "//":
+					case "%":
+					case "**":
+						return "number";
+					default:
+						return "boolean";
+				}
+			case "Conditional":
+				return union([
+					of(node.consequent),
+					node.alternate ? of(node.alternate) : "null",
+				]);
+			case "Member": {
+				const key = literalKey(node.property) ?? "string";
+				return `Get<${of(node.object)}, ${key}>`;
 			}
-			if (callee.type !== "Name") return "unknown";
-			const name = callee.name;
-			if (context.macros.has(name)) return "Markup";
-			const builtin = BUILTIN_FUNCTIONS[name];
-			if (builtin && !context.functions.includes(name)) return builtin;
-			return `Result<Get<KilnFunctions, ${JSON.stringify(name)}>>`;
-		}
-		case "Filter": {
-			const input = of(expression.input);
-			const builtin = BUILTIN_FILTERS[expression.name];
-			if (!builtin || context.filters.includes(expression.name)) {
-				return `Result<Get<KilnFilters, ${JSON.stringify(expression.name)}>>`;
+			case "Call": {
+				const { callee } = node;
+				if (callee.type === "Member") {
+					const key = literalKey(callee.property) ?? "string";
+					return call(
+						`Get<${of(callee.object)}, ${key}>`,
+						callArgs(node.args, depth),
+					);
+				}
+				if (callee.type !== "Name") return "unknown";
+				const name = callee.name;
+				if (context.macros.has(name)) return "Markup";
+				const builtin = BUILTIN_FUNCTIONS[name];
+				if (builtin && !context.functions.includes(name)) return builtin;
+				return call(
+					`Get<KilnFunctions, ${JSON.stringify(name)}>`,
+					callArgs(node.args, depth),
+				);
 			}
-			const arrow = expression.args[0]?.value;
-			if (expression.name === "map" && arrow?.type === "Arrow") {
-				return `(${of(arrow.body)})[]`;
+			case "Filter": {
+				const input = of(node.input);
+				const builtin = BUILTIN_FILTERS[node.name];
+				if (!builtin || context.filters.includes(node.name)) {
+					return call(
+						`Get<KilnFilters, ${JSON.stringify(node.name)}>`,
+						callArgs(node.args, depth, input),
+					);
+				}
+				const arrow = node.args[0]?.value;
+				if (node.name === "map" && arrow?.type === "Arrow") {
+					return `(${of(arrow.body)})[]`;
+				}
+				return builtin(
+					input,
+					node.args.map((item) =>
+						item.type === "Spread" ? "unknown" : of(item.value),
+					),
+				);
 			}
-			return builtin(input, args(expression.args));
+			case "Test":
+				return "boolean";
+			case "OptionalChain":
+				return of(node.expression);
+			case "Name": {
+				if (node.name === "loop") return "unknown";
+				const found = bindingAt(context.scopes, node.name, node.span.start);
+				if (found) return binding(found.source, depth);
+				return `Get<KilnGlobals, ${JSON.stringify(node.name)}>`;
+			}
+			default:
+				return "unknown";
 		}
-		case "Test":
-			return "boolean";
-		case "OptionalChain":
-			return of(expression.expression);
-		case "Name": {
-			if (expression.name === "loop") return "unknown";
-			const binding = bindingAt(
-				context.scopes,
-				expression.name,
-				expression.span.start,
-			);
-			if (binding) return bindingType(binding.source, context, depth + 1);
-			return `Get<KilnGlobals, ${JSON.stringify(expression.name)}>`;
-		}
-		default:
-			return "unknown";
-	}
+	};
+
+	return {
+		expression: (node) => expression(node, 0),
+		binding: (source) => binding(source, 0),
+		statements,
+	};
 };
 
 /** The registries a project describes in TypeScript, by the kind of name the language server looks up. */
@@ -300,7 +382,10 @@ export const REGISTRIES = {
 	global: "KilnGlobals",
 } as const;
 
-/** Checks a file of `type name = type` aliases with the project's TypeScript, and reads it with `use`. */
+/**
+ * Checks a file of `type name = type` aliases with the project's TypeScript, and reads it with `use`. `statements` are
+ * what the aliases read, from a `TypeWriter`.
+ */
 export const withTypes = <T>(
 	typescript: TypeScriptProject,
 	aliases: Record<string, string>,
@@ -308,9 +393,11 @@ export const withTypes = <T>(
 		describe: (alias: string) => string | null;
 		members: (alias: string) => Member[];
 	}) => T,
+	statements: readonly string[] = [],
 ): T | null => {
 	const source =
 		PRELUDE +
+		statements.join("") +
 		Object.entries(aliases)
 			.map(([name, type]) => `type ${name} = ${type};\n`)
 			.join("");
@@ -395,10 +482,14 @@ export type ArgumentProblem =
 	| { kind: "mismatch"; expected: string; actual: string }
 	| { kind: "missing" };
 
-/** Checks arguments against their parameters with one TypeScript query. Null for an argument that fits. */
+/**
+ * Checks arguments against their parameters with one TypeScript query. Null for an argument that fits. `statements` are
+ * what the argument types read, from a `TypeWriter`.
+ */
 export const checkArguments = (
 	typescript: TypeScriptProject,
 	checks: ArgumentCheck[],
+	statements: readonly string[] = [],
 ): (ArgumentProblem | null)[] => {
 	if (checks.length === 0) return [];
 	const aliases: Record<string, string> = {};
@@ -415,17 +506,21 @@ export const checkArguments = (
 		aliases[`Actual${index}`] = check.type;
 	});
 	return (
-		withTypes(typescript, aliases, (read) =>
-			checks.map((_, index): ArgumentProblem | null => {
-				const fit = read.describe(`Fit${index}`);
-				if (fit === '"missing"') return { kind: "missing" };
-				if (fit !== '"mismatch"') return null;
-				return {
-					kind: "mismatch",
-					expected: read.describe(`Expected${index}`) ?? "unknown",
-					actual: read.describe(`Actual${index}`) ?? "unknown",
-				};
-			}),
+		withTypes(
+			typescript,
+			aliases,
+			(read) =>
+				checks.map((_, index): ArgumentProblem | null => {
+					const fit = read.describe(`Fit${index}`);
+					if (fit === '"missing"') return { kind: "missing" };
+					if (fit !== '"mismatch"') return null;
+					return {
+						kind: "mismatch",
+						expected: read.describe(`Expected${index}`) ?? "unknown",
+						actual: read.describe(`Actual${index}`) ?? "unknown",
+					};
+				}),
+			statements,
 		) ?? checks.map(() => null)
 	);
 };

@@ -168,11 +168,39 @@ describe("withRender", () => {
 				`${render.state.locale}/${slug}`,
 		);
 		expectTypeOf(document).toEqualTypeOf<
-			RenderAware<{ locale: string }, [slug: string], string>
+			RenderAware<
+				(render: RenderInfo<{ locale: string }>, slug: string) => string
+			>
 		>();
 		createKiln<{ locale: string }>({
 			loader,
 			functions: { document },
+			types: { Post: (value) => value instanceof PostView },
+		});
+	});
+
+	test("keeps type parameters", () => {
+		type Collections = { posts: PostView; tags: string };
+		const documents = withRender(
+			<Key extends keyof Collections>(
+				_render: RenderInfo<undefined>,
+				_collection: Key,
+			): Collections[Key][] => [],
+		);
+		expectTypeOf(
+			documents.call({} as RenderInfo<undefined>, "posts"),
+		).toEqualTypeOf<PostView[]>();
+	});
+
+	test("takes the render's state from createKiln", () => {
+		createKiln<{ locale: string }>({
+			loader,
+			functions: {
+				locale: withRender((render) => {
+					expectTypeOf(render.state).toEqualTypeOf<{ locale: string }>();
+					return render.state.locale;
+				}),
+			},
 			types: { Post: (value) => value instanceof PostView },
 		});
 	});

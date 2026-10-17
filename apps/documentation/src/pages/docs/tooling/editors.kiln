@@ -235,6 +235,23 @@ declare module "@lucidkiln/core" {
 		<li>Prop types come from <code>KilnTypes</code>. If you pass your type map to the generated <code>Schema</code> instead, add it to <code>KilnTypes</code> too, with <code>interface KilnTypes extends HostTypes {}</code>.</li>
 	</ul>
 
+	<h3>Generic functions</h3>
+
+	<p>When what a function returns depends on its arguments, make it generic. The editor hands TypeScript the arguments from the template, so TypeScript works out the type parameters for each call.</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+type Collections = { pages: PageView; posts: PostView };
+
+const functions = {
+	documents: <Key extends keyof Collections>(collection: Key): Promise<Collections[Key][]> =>
+		db.list(collection),
+};
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>Then <code>{% verbatim %}{% set posts = documents("posts") %}{% endverbatim %}</code> makes <code>posts</code> a list of <code>PostView</code>, and <code>documents("pages")</code> a list of <code>PageView</code>. Functions wrapped in <code>withRender</code> and filters work the same way.</p>
+
 	<h3>What the editor needs</h3>
 
 	<ul>
@@ -253,7 +270,7 @@ declare module "@lucidkiln/core" {
 		<tbody>
 			<tr><td>A prop</td><td>Its type in <a href="/docs/tags/props/"><code>props</code></a>, with your types from <code>KilnTypes</code>.</td></tr>
 			<tr><td>A global</td><td>Its type in <code>KilnGlobals</code>.</td></tr>
-			<tr><td>A call to your function or filter</td><td>What it returns. When that is a promise, the value Kiln waits for.</td></tr>
+			<tr><td>A call to your function or filter</td><td>What it returns for those arguments. When that is a promise, the value Kiln waits for.</td></tr>
 			<tr><td>A built-in filter</td><td>The type the filter gives, such as an item of the list for <code>first</code>, the same list for <code>sort</code>, and a number for <code>length</code>.</td></tr>
 			<tr><td><code>for item in list</code></td><td>An item of the list, or a value of a hash or map. In <code>for key, value in …</code>, the key is a number for a list and a string for a hash.</td></tr>
 			<tr><td>An arrow function's parameter in <code>map</code>, <code>filter</code> or <code>sort</code></td><td>An item of the list.</td></tr>
@@ -262,7 +279,7 @@ declare module "@lucidkiln/core" {
 		</tbody>
 	</table>
 
-	<p>A literal has its own type: <code>"tags"</code> is a string and <code>2</code> is a number. Named arguments are gathered into one hash at the end, so the editor checks them against the function's last parameter.</p>
+	<p>A literal's type is its exact value: <code>"tags"</code> is <code>"tags"</code> rather than any string, and <code>2</code> is <code>2</code>. Named arguments are gathered into one hash at the end, so the editor checks them against the function's last parameter.</p>
 
 	<p>When the editor can't tell a value's type, as for an untyped prop or a macro argument, it doesn't guess. You get no property completions for that value, and no warnings about the arguments it's passed to.</p>
 {% endblock %}

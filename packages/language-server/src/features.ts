@@ -46,14 +46,13 @@ import {
 } from "./scopes.js";
 import {
 	type ArgumentCheck,
-	bindingType,
 	checkArguments,
 	describeCallable,
-	expressionType,
 	namedOptions,
 	parametersType,
 	REGISTRIES,
 	type TypeContext,
+	typeWriter,
 	withTypes,
 } from "./types.js";
 import type { Member, SourceLocation } from "./typescript.js";
@@ -127,7 +126,7 @@ const builtinItems = (
 		.map((label) => ({ label, kind, detail: "From your project" })),
 ];
 
-/** Parses a template and finds its variables, with what `expressionType` needs to work out their types. */
+/** Parses a template and finds its variables, with what `typeWriter` needs to work out their types. */
 const templateTypes = (
 	open: OpenTemplate,
 	text: string,
@@ -195,10 +194,14 @@ const membersOf = async (
 ): Promise<Member[]> => {
 	const typescript = await open.project.typescript();
 	if (!typescript) return [];
-	const type = expressionType(object, context);
+	const types = typeWriter(context);
+	const type = types.expression(object);
 	return (
-		withTypes(typescript, { Value: `Members<${type}>` }, (read) =>
-			read.members("Value"),
+		withTypes(
+			typescript,
+			{ Value: `Members<${type}>` },
+			(read) => read.members("Value"),
+			types.statements,
 		) ?? []
 	);
 };
@@ -536,11 +539,13 @@ export const hover = async (
 				);
 			} else if (binding) {
 				const typescript = await project.typescript();
+				const writer = typeWriter(types.context);
 				const type = typescript
 					? withTypes(
 							typescript,
-							{ Value: bindingType(binding.source, types.context) },
+							{ Value: writer.binding(binding.source) },
 							(read) => read.describe("Value"),
+							writer.statements,
 						)
 					: null;
 				value = sections(
@@ -982,6 +987,7 @@ export const argumentWarnings = async (
 	if (!typescript) return [];
 	const text = open.document.getText();
 	const { scopes, context } = templateTypes(open, text);
+	const types = typeWriter(context);
 	/**
 	 * Each check, with what it's for: a filter's input, a positional or a named argument. A wrong type is reported on
 	 * the value, and a named argument the function doesn't take on its name.
@@ -1015,7 +1021,7 @@ export const argumentWarnings = async (
 		];
 		positional.forEach((value, index) => {
 			checks.push({
-				type: expressionType(value, context),
+				type: types.expression(value),
 				parameters,
 				index,
 				span: value.span,
@@ -1026,7 +1032,7 @@ export const argumentWarnings = async (
 		for (const arg of node.args) {
 			if (arg.type !== "Named") continue;
 			checks.push({
-				type: expressionType(arg.value, context),
+				type: types.expression(arg.value),
 				parameters,
 				name: arg.name,
 				span: arg.value.span,
@@ -1039,7 +1045,7 @@ export const argumentWarnings = async (
 			});
 		}
 	}
-	return checkArguments(typescript, checks).flatMap(
+	return checkArguments(typescript, checks, types.statements).flatMap(
 		(problem, index): ArgumentWarning[] => {
 			const check = checks[index];
 			if (!problem || !check) return [];

@@ -5,32 +5,61 @@ import { createTestProject, TYPESCRIPT_VERSIONS } from "./test-project.js";
 import {
 	checkArguments,
 	describeCallable,
-	expressionType,
 	parametersType,
+	typeWriter,
 	withTypes,
 } from "./types.js";
 import { openTypeScript, type TypeScriptProject } from "./typescript.js";
+
+/** Reads what TypeScript makes of the value of `{{ expression }}` in `text`, as the alias `Value`. */
+const readValue = <T>(
+	typescript: TypeScriptProject,
+	text: string,
+	expression: string,
+	type: (value: string) => string,
+	use: Parameters<typeof withTypes<T>>[2],
+) => {
+	const scopes = templateScopes(text, () => false);
+	const at = text.lastIndexOf(`{{ ${expression} }}`) + 3;
+	const found = expressionPathAt(scopes.ast, at)[0];
+	if (!found) throw new Error(`no {{ ${expression} }}`);
+	const types = typeWriter({
+		scopes,
+		functions: ["documents", "locale", "first", "latest"],
+		filters: ["markdown", "pick"],
+		macros: new Set(),
+	});
+	const value = types.expression(found);
+	return withTypes(typescript, { Value: type(value) }, use, types.statements);
+};
 
 /** The names of the properties TypeScript finds on the value of `expression` in `text`. */
 const membersOf = (
 	typescript: TypeScriptProject,
 	text: string,
 	expression: string,
-) => {
-	const scopes = templateScopes(text, () => false);
-	const at = text.lastIndexOf(`{{ ${expression} }}`) + 3;
-	const found = expressionPathAt(scopes.ast, at)[0];
-	if (!found) throw new Error(`no {{ ${expression} }}`);
-	const type = expressionType(found, {
-		scopes,
-		functions: ["documents", "locale"],
-		filters: ["markdown"],
-		macros: new Set(),
-	});
-	return withTypes(typescript, { Value: `Members<${type}>` }, (read) =>
-		read.members("Value").map((member) => member.name),
+) =>
+	readValue(
+		typescript,
+		text,
+		expression,
+		(value) => `Members<${value}>`,
+		(read) => read.members("Value").map((member) => member.name),
 	);
-};
+
+/** The type TypeScript gives the value of `expression` in `text`. */
+const typeOf = (
+	typescript: TypeScriptProject,
+	text: string,
+	expression: string,
+) =>
+	readValue(
+		typescript,
+		text,
+		expression,
+		(value) => value,
+		(read) => read.describe("Value"),
+	);
 
 describe.each(Object.keys(TYPESCRIPT_VERSIONS))("TypeScript %s", (version) => {
 	let dir: string;
@@ -80,6 +109,44 @@ describe.each(Object.keys(TYPESCRIPT_VERSIONS))("TypeScript %s", (version) => {
 			"name",
 			"url",
 		]);
+	});
+
+	test("works out a generic function's result from its arguments", () => {
+		expect(
+			membersOf(typescript, '{{ first("pages") }}', 'first("pages")'),
+		).toEqual(["title", "bricks"]);
+		expect(
+			membersOf(
+				typescript,
+				'{% set brick = latest("bricks")|first %}{{ brick }}',
+				"brick",
+			),
+		).toEqual(["key", "fields"]);
+		expect(
+			membersOf(
+				typescript,
+				'{% props page: Page %}{{ page|pick("bricks")|last }}',
+				'page|pick("bricks")|last',
+			),
+		).toEqual(["key", "fields"]);
+		expect(
+			typeOf(
+				typescript,
+				'{{ documents("pages", limit: 2) }}',
+				'documents("pages", limit: 2)',
+			),
+		).toBe("Page[]");
+	});
+
+	test("gives a literal its exact value as its type", () => {
+		const text =
+			'{% set title = "Home" %}{% set count = 2 %}{% set big = true %}';
+		expect(typeOf(typescript, `${text}{{ title }}`, "title")).toBe('"Home"');
+		expect(typeOf(typescript, `${text}{{ count }}`, "count")).toBe("2");
+		expect(typeOf(typescript, `${text}{{ big }}`, "big")).toBe("true");
+		expect(typeOf(typescript, "{{ [1, 2]|first }}", "[1, 2]|first")).toBe(
+			"1 | 2",
+		);
 	});
 
 	test("completes nothing for lists, text and unknown values", () => {

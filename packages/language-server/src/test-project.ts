@@ -26,6 +26,8 @@ export class Page {
 	bricks: Brick[] = [];
 }
 
+type Collections = { pages: Page; bricks: Brick };
+
 const functions = {
 	/**
 	 * Finds the published documents in a collection.
@@ -33,11 +35,15 @@ const functions = {
 	 */
 	documents: async (collection: string, query: { limit?: number } = {}): Promise<Page[]> => [],
 	locale: withRender((render: { state: unknown }, fallback: string) => fallback),
+	/** Generic, so each collection gives its own type. */
+	first: async <Key extends keyof Collections>(collection: Key): Promise<Collections[Key] | null> => null,
+	latest: withRender(<Key extends keyof Collections>(render: { state: unknown }, collection: Key): Collections[Key][] => []),
 };
 
 const filters = {
 	/** Turns Markdown into HTML. */
 	markdown: (value: string, options?: { inline?: boolean }) => value,
+	pick: <Value, Key extends keyof Value>(value: Value, key: Key): Value[Key] => value[key],
 };
 
 const globals = {
@@ -94,8 +100,8 @@ export const createTestProject = async (
 		join(dir, "kiln.json"),
 		JSON.stringify({
 			root: "src/templates",
-			functions: ["documents", "locale"],
-			filters: ["markdown"],
+			functions: ["documents", "locale", "first", "latest"],
+			filters: ["markdown", "pick"],
 			globals: ["site"],
 			types: ["Page"],
 		}),

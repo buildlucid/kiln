@@ -234,6 +234,7 @@ describe("TypeScript types", () => {
 			"{% props page: Page, other %}",
 			'{{ documents(2) }}{{ documents("pages", limit: "2") }}{{ documents("pages", limt: 2) }}',
 			'{{ 2|markdown }}{{ "ok"|markdown(inline: true) }}{{ documents(other, limit: other) }}{{ 2|round }}',
+			'{{ first("pages") }}{{ first("pgaes") }}',
 		].join("\n");
 		const warnings = await argumentWarnings(open(text));
 		expect(
@@ -242,10 +243,14 @@ describe("TypeScript types", () => {
 				warning.message,
 			]),
 		).toEqual([
-			["2", "This argument should be `string`, not `number`."],
-			['"2"', "`limit` should be `number`, not `string`."],
+			["2", "This argument should be `string`, not `2`."],
+			['"2"', '`limit` should be `number`, not `"2"`.'],
 			["limt", "`documents` doesn't take `limt`."],
-			["2", "`markdown` needs `string` before the `|`, not `number`."],
+			["2", "`markdown` needs `string` before the `|`, not `2`."],
+			[
+				'"pgaes"',
+				'This argument should be `keyof Collections`, not `"pgaes"`.',
+			],
 		]);
 	});
 });

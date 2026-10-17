@@ -28,11 +28,9 @@ export const kiln = createKiln<RequestState>({
 				{ author: "Priya", text: "Lovely glaze, a little heavy." },
 			];
 		},
-		visitor: withRender<RequestState, [], Promise<string | null>>(
-			async (render) => {
-				await wait(200);
-				return render.state.visitor;
-			},
-		),
+		visitor: withRender(async (render) => {
+			await wait(200);
+			return render.state.visitor;
+		}),
 	},
 });

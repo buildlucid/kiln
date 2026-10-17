@@ -166,22 +166,26 @@ export type TemplateBlock<
 const renderAware: unique symbol = Symbol("kiln.renderAware");
 
 /**
- * A host function that receives `RenderInfo` before its arguments. Create it with `withRender`. `Args` and `Result` keep
- * the function's own types, so editors can show them.
+ * Any function that takes `RenderInfo` first. Written as a method so `render` can declare any state, while a `render`
+ * without a type gets `RenderInfo<unknown>`, or the environment's state inside `createKiln`.
  */
-export type RenderAware<
-	State,
-	Args extends unknown[] = never,
-	Result = unknown,
-> = {
+type RenderCall = {
+	call(render: RenderInfo<unknown>, ...args: never): unknown;
+}["call"];
+
+/**
+ * A host function that receives `RenderInfo` before its arguments. Create it with `withRender`. `Call` is the function's
+ * own type, type parameters included, so editors can show it and work out what each call returns.
+ */
+export type RenderAware<Call extends RenderCall = RenderCall> = {
 	readonly [renderAware]: true;
-	readonly call: (render: RenderInfo<State>, ...args: Args) => Result;
+	readonly call: Call;
 };
 
 /** A function, filter or test a host registers. Parameter types are the host's to declare. */
 export type KilnCallable<State = undefined> =
 	| ((...args: never) => unknown)
-	| RenderAware<State>;
+	| RenderAware<(render: RenderInfo<State>, ...args: never) => unknown>;
 
 export type Limits = {
 	/** Characters of output, counted as string length. */
@@ -292,9 +296,9 @@ export type Kiln<
  * document: withRender((render, collection: string) => fetchDocument(collection, render.state.locale))
  * ```
  */
-export const withRender = <State, Args extends unknown[], Result>(
-	fn: (render: RenderInfo<State>, ...args: Args) => Result,
-): RenderAware<State, Args, Result> => ({
+export const withRender = <Call extends RenderCall>(
+	fn: Call,
+): RenderAware<Call> => ({
 	[renderAware]: true,
 	call: fn,
 });
