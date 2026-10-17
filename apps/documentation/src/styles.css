@@ -1069,7 +1069,7 @@
 		}
 	}
 
-	/* The landing page's opening, one piece after another. */
+	/* The landing page's opening, one piece after another. The heading stays put: it is the largest paint, and fading it in delays LCP. */
 	.enter {
 		animation: enter 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 		animation-delay: calc(var(--enter, 0) * 90ms);

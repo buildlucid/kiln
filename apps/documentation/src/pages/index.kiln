@@ -66,7 +66,7 @@
 
 			<div class="mx-auto grid max-w-[76rem] grid-cols-[minmax(0,1fr)] items-center gap-16 px-4 pt-16 pb-24 sm:px-6 sm:pt-24 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-14 lg:pt-24 lg:pb-32">
 				<div class="text-center lg:text-left">
-					<h1 class="enter mx-auto max-w-[17ch] text-[2.75rem] leading-[1.04] font-semibold tracking-[-0.04em] text-balance text-fg sm:text-[3.75rem] lg:mx-0 xl:text-[4rem]" style="--enter: 1">
+					<h1 class="mx-auto max-w-[17ch] text-[2.75rem] leading-[1.04] font-semibold tracking-[-0.04em] text-balance text-fg sm:text-[3.75rem] lg:mx-0 xl:text-[4rem]">
 						Fast, safe templates for <span class="bg-gradient-to-br from-ember-soft via-ember to-[#e2582b] bg-clip-text text-transparent">server-rendered</span> websites.
 					</h1>
 					<p class="enter mx-auto mt-6 max-w-[34rem] text-lg leading-relaxed text-pretty text-muted lg:mx-0" style="--enter: 2">

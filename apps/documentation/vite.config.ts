@@ -31,6 +31,36 @@ export default defineConfig({
 				await writeFile(EDITOR_DOCS_FILE, await generateEditorDocs());
 			},
 		},
+		{
+			// Preloads the body font, so it downloads with the stylesheet rather than after it. The
+			// hero heading is the largest paint and it re-paints once this font arrives.
+			name: "preload-font",
+			apply: "build",
+			transformIndexHtml: {
+				order: "post",
+				handler(_html, { bundle }) {
+					const font = Object.values(bundle ?? {}).find(
+						(file) =>
+							file.type === "asset" &&
+							file.names.includes("geist-latin-wght-normal.woff2"),
+					);
+					if (!font) throw new Error("preload-font: Geist's latin font is missing from the build");
+					return [
+						{
+							tag: "link",
+							attrs: {
+								rel: "preload",
+								href: `/${font.fileName}`,
+								as: "font",
+								type: "font/woff2",
+								crossorigin: true,
+							},
+							injectTo: "head",
+						},
+					];
+				},
+			},
+		},
 	],
 	run: {
 		tasks: {
