@@ -1,0 +1,58 @@
+{
+	"comments": {
+		"blockComment": ["{#", "#}"]
+	},
+	"brackets": [
+		["{%", "%}"],
+		["{", "}"],
+		["[", "]"],
+		["(", ")"]
+	],
+	"colorizedBracketPairs": [
+		["{", "}"],
+		["[", "]"],
+		["(", ")"]
+	],
+	"autoClosingPairs": [
+		{ "open": "{", "close": "}" },
+		{ "open": "[", "close": "]" },
+		{ "open": "(", "close": ")" },
+		{ "open": "{%", "close": " %}", "notIn": ["string", "comment"] },
+		{ "open": "{#", "close": " #}", "notIn": ["string", "comment"] },
+		{ "open": "\"", "close": "\"", "notIn": ["string", "comment"] },
+		{ "open": "'", "close": "'", "notIn": ["string", "comment"] },
+		{ "open": "<!--", "close": " -->", "notIn": ["string", "comment"] }
+	],
+	"autoCloseBefore": ">})]%#\"'` \n\t",
+	"surroundingPairs": [
+		["{", "}"],
+		["[", "]"],
+		["(", ")"],
+		["\"", "\""],
+		["'", "'"],
+		["<", ">"]
+	],
+	"wordPattern": "(-?\\d*\\.\\d\\w*)|([^`~!@$^&*()=+[{\\]}\\\\|;:'\",.<>/\\s%#?]+)",
+	"folding": {
+		"markers": {
+			"start": "^\\s*(\\{%-?\\s*(if|for|component|island|fill|slot|macro|with|cache|add|apply|autoescape|verbatim)\\b(?!.*\\{%-?\\s*end)|\\{%-?\\s*(set|block)\\s+\\w+\\s*-?%\\}\\s*$|<!--\\s*#region\\b)",
+			"end": "^\\s*(\\{%-?\\s*end\\w+\\b|<!--\\s*#endregion\\b)"
+		}
+	},
+	"indentationRules": {
+		"increaseIndentPattern": "^\\s*(\\{%-?\\s*(if|elseif|else|for|component|island|fill|slot|macro|with|cache|add|apply|autoescape)\\b(?!.*\\{%-?\\s*end)[^%]*-?%\\}|\\{%-?\\s*(set|block)\\s+\\w+\\s*-?%\\}|<(?!(?:area|base|br|col|embed|hr|img|input|keygen|link|menuitem|meta|param|source|track|wbr)\\b)([_:\\w][_:\\w\\-.\\d]*)(?:\\s[^<>]*)?(?<!/)>)\\s*$",
+		"decreaseIndentPattern": "^\\s*(\\{%-?\\s*(elseif|else|end\\w+)\\b|</)"
+	},
+	"onEnterRules": [
+		{
+			"beforeText": "<(?!(?:area|base|br|col|embed|hr|img|input|keygen|link|menuitem|meta|param|source|track|wbr)\\b)([_:\\w][_:\\w\\-.\\d]*)(?:\\s[^<>]*)?(?<!/)>[^<]*$",
+			"afterText": "^\\s*</([_:\\w][_:\\w\\-.\\d]*)\\s*>",
+			"action": { "indent": "indentOutdent" }
+		},
+		{
+			"beforeText": "\\{%-?\\s*(if|elseif|else|for|component|island|fill|slot|macro|with|cache|add|apply|autoescape|set|block)\\b[^%]*-?%\\}\\s*$",
+			"afterText": "^\\s*\\{%-?\\s*(elseif|else|end\\w+)\\b",
+			"action": { "indent": "indentOutdent" }
+		}
+	]
+}

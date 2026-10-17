@@ -6,7 +6,12 @@ import {
 	withRender,
 } from "@lucidkiln/core";
 import { format } from "@lucidkiln/core/format";
-import { createHighlighter, type ThemeRegistration } from "shiki";
+import {
+	createHighlighter,
+	type LanguageRegistration,
+	type ThemeRegistration,
+} from "shiki";
+import grammar from "../../../editors/vscode/syntaxes/kiln.tmLanguage.json" with { type: "json" };
 
 /** Renders one of the site's own templates, such as `components/code`. */
 type RenderTemplate = (
@@ -14,9 +19,23 @@ type RenderTemplate = (
 	context: Record<string, unknown>,
 ) => Promise<string>;
 
-/** Languages code blocks can use. `kiln` borrows Shiki's Twig grammar until Kiln has its own. */
-const languages = ["twig", "html", "typescript", "shellscript", "json"];
-const aliases = { kiln: "twig", ts: "typescript", sh: "shellscript" };
+/** Kiln's grammar from the VS Code extension. It embeds `html-derivative`, VS Code's HTML grammar for templates. */
+const kiln = {
+	...(grammar as unknown as LanguageRegistration),
+	name: "kiln",
+	embeddedLangs: ["html-derivative"],
+};
+
+/** Languages code blocks can use. */
+const languages = [
+	"html-derivative",
+	kiln,
+	"html",
+	"typescript",
+	"shellscript",
+	"json",
+];
+const aliases = { ts: "typescript", sh: "shellscript" };
 
 /** Token colours are `--code-*` custom properties, set in `styles.css`. */
 const color = (name: string, fontStyle?: string) => ({
@@ -36,7 +55,15 @@ const theme: ThemeRegistration = {
 			scope: ["comment", "punctuation.definition.comment"],
 			settings: color("comment", "italic"),
 		},
-		{ scope: ["punctuation.section.tag.twig"], settings: color("delimiter") },
+		{
+			scope: [
+				"punctuation.section.embedded.begin.kiln",
+				"punctuation.section.embedded.end.kiln",
+				"punctuation.section.interpolation.begin.kiln",
+				"punctuation.section.interpolation.end.kiln",
+			],
+			settings: color("delimiter"),
+		},
 		{
 			scope: ["keyword", "storage", "keyword.control"],
 			settings: color("keyword"),
@@ -59,11 +86,23 @@ const theme: ThemeRegistration = {
 			settings: color("constant"),
 		},
 		{
-			scope: ["entity.name.function", "support.function", "meta.function-call"],
+			scope: [
+				"entity.name.function",
+				"entity.name.section",
+				"support.function",
+				"meta.function-call",
+			],
 			settings: color("function"),
 		},
 		{
-			scope: ["variable", "variable.other.property", "meta.tag.template"],
+			// Kiln inside an HTML attribute value isn't part of the string.
+			scope: [
+				"variable",
+				"variable.other.property",
+				"support.type.property-name.kiln",
+				"meta.embedded.output.kiln",
+				"meta.embedded.tag.kiln",
+			],
 			settings: color("foreground"),
 		},
 	],

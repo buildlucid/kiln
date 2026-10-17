@@ -20,7 +20,8 @@
 	"packageManager": "npm@12.2.0",
 	"workspaces": [
 		"packages/*",
-		"apps/*"
+		"apps/*",
+		"editors/vscode"
 	],
 	"volta": {
 		"node": "24.22.0"

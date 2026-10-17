@@ -1,7 +1,45 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-	<p>Kiln has a language server that gives any editor that supports the Language Server Protocol errors as you type, formatting, completions and more. There is a ready-made extension for Zed.</p>
+	<p>Kiln has a language server that gives any editor that supports the Language Server Protocol errors as you type, formatting, completions and more. There are ready-made extensions for VS Code and Zed.</p>
+
+	<h2>VS Code</h2>
+
+	<p>Search for <strong>Kiln</strong> in the Extensions view. The extension is on the Visual Studio Marketplace and on Open VSX, so it also works in Cursor, Windsurf and VSCodium. It adds:</p>
+
+	<ul>
+		<li>Syntax highlighting for Kiln and the HTML around it, including Kiln inside attribute values, with JavaScript in <code>&lt;script&gt;</code> and CSS in <code>&lt;style&gt;</code>.</li>
+		<li>A file icon for <code>.kiln</code> files, which shows when your icon theme doesn't have one.</li>
+		<li>Comment toggling with <code>&#123;# #}</code>, bracket matching, auto-closing for <code>&#123;{</code> and <code>&#123;%</code>, folding for block tags, and indenting as you type.</li>
+		<li>Snippets for each block tag, such as <code>for</code> and <code>component</code>.</li>
+		<li>The language server, which comes with the extension and runs on VS Code's own Node.</li>
+	</ul>
+
+	<p>VS Code formats with the language server. To format when you save, add this to your settings. The <code>editor.defaultFormatter</code> line matters if your settings pick a formatter for every language, such as Biome or Prettier, which can't format Kiln.</p>
+
+	{% apply highlight("json") %}
+		{% verbatim %}
+{
+	"[kiln]": {
+		"editor.defaultFormatter": "buildlucid.kiln",
+		"editor.formatOnSave": true
+	}
+}
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>VS Code's indentation settings decide whether the formatter indents with tabs or spaces. The extension defaults to tabs.</p>
+
+	<p>To use Tailwind CSS class completion and Emmet abbreviations in templates, treat Kiln as HTML in both:</p>
+
+	{% apply highlight("json") %}
+		{% verbatim %}
+{
+	"tailwindCSS.includeLanguages": { "kiln": "html" },
+	"emmet.includeLanguages": { "kiln": "html" }
+}
+		{% endverbatim %}
+	{% endapply %}
 
 	<h2>Zed</h2>
 

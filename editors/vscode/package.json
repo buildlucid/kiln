@@ -1,0 +1,94 @@
+{
+	"name": "kiln",
+	"displayName": "Kiln",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "Kiln templates: highlighting, formatting, errors as you type, completions and go to definition.",
+	"publisher": "buildlucid",
+	"author": "William Yallop <hello@williamyallop.com>",
+	"license": "MIT",
+	"icon": "images/icon.png",
+	"homepage": "https://kilnlang.com",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/buildlucid/kiln.git",
+		"directory": "editors/vscode"
+	},
+	"bugs": "https://github.com/buildlucid/kiln/issues",
+	"categories": [
+		"Programming Languages",
+		"Formatters",
+		"Linters",
+		"Snippets"
+	],
+	"keywords": [
+		"kiln",
+		"template",
+		"html",
+		"twig"
+	],
+	"engines": {
+		"vscode": "^1.91.0"
+	},
+	"main": "./dist/extension.cjs",
+	"contributes": {
+		"languages": [
+			{
+				"id": "kiln",
+				"aliases": [
+					"Kiln",
+					"kiln"
+				],
+				"extensions": [
+					".kiln"
+				],
+				"configuration": "./language-configuration.json",
+				"icon": {
+					"light": "./images/file-icon.svg",
+					"dark": "./images/file-icon.svg"
+				}
+			}
+		],
+		"grammars": [
+			{
+				"language": "kiln",
+				"scopeName": "text.html.kiln",
+				"path": "./syntaxes/kiln.tmLanguage.json",
+				"embeddedLanguages": {
+					"source.js": "javascript",
+					"source.css": "css",
+					"source.kiln": "kiln"
+				}
+			}
+		],
+		"snippets": [
+			{
+				"language": "kiln",
+				"path": "./dist/snippets.json"
+			}
+		],
+		"configurationDefaults": {
+			"[kiln]": {
+				"editor.insertSpaces": false
+			}
+		}
+	},
+	"scripts": {
+		"build": "tsc --noEmit && vp pack && cp ../zed/snippets/kiln.json dist/snippets.json",
+		"package": "vsce package --no-dependencies"
+	},
+	"devDependencies": {
+		"@lucidkiln/language-server": "*",
+		"@types/node": "^24.19.2",
+		"@types/vscode": "~1.91.0",
+		"@vscode/vsce": "4.0.0",
+		"shiki": "^4.5.0",
+		"typescript": "^7.0.2",
+		"vite-plus": "1.2.0",
+		"vscode-languageclient": "10.1.2"
+	},
+	"volta": {
+		"node": "24.22.0"
+	}
+}

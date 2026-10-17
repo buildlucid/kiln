@@ -9,7 +9,11 @@ export default defineConfig({
 				extends: true,
 				test: {
 					name: "closures",
-					include: ["packages/**/*.test.ts", "apps/**/*.test.ts"],
+					include: [
+						"packages/**/*.test.ts",
+						"apps/**/*.test.ts",
+						"editors/vscode/**/*.test.ts",
+					],
 				},
 			},
 			// Every feature test again, rendering precompiled templates. See `render` in packages/kiln/test/helpers.ts.
