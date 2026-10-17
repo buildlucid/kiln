@@ -1,0 +1,8 @@
+<footer class="site-footer">
+	<ul>
+		<% for (const link of await navigation("footer")) { %>
+		<li><a href="<%= link.url %>"><%= link.title %></a></li>
+		<% } %>
+	</ul>
+	<p>© <%= site.year %> <%= site.name %></p>
+</footer>

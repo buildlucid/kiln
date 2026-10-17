@@ -65,6 +65,29 @@ export const twing: Engine = {
 			env.addFunction(
 				createFunction("categories", () => asyncFunctions.categories(), []),
 			);
+			env.addFunction(
+				createFunction(
+					"document",
+					(_, collection: string, slug: string) =>
+						asyncFunctions.document(collection, slug),
+					[{ name: "collection" }, { name: "slug" }],
+				),
+			);
+			env.addFunction(
+				createFunction(
+					"documents",
+					(_, collection: string, limit: number) =>
+						asyncFunctions.documents(collection, limit),
+					[{ name: "collection" }, { name: "limit" }],
+				),
+			);
+			env.addFunction(
+				createFunction(
+					"navigation",
+					(_, name: string) => asyncFunctions.navigation(name),
+					[{ name: "name" }],
+				),
+			);
 			const templateLoader = createTemplateLoader(env);
 			return env
 				.loadTemplate("page.twig")

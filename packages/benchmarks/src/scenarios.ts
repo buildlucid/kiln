@@ -94,6 +94,17 @@ export const scenarios: Scenario[] = [
 		cold: false,
 	},
 	{
+		id: "cms-data",
+		name: "CMS data",
+		description:
+			"A blog post from a headless CMS. The page loads its post and the latest posts, and the layout loads the header and footer menus. Each call waits 2 ms, as a database query would.",
+		features: ["Async functions", "Layouts", "Partials"],
+		templates: "cms-data",
+		data: data.cmsData,
+		async: true,
+		cold: false,
+	},
+	{
 		id: "first-render",
 		name: "First render",
 		description:

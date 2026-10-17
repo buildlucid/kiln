@@ -22,14 +22,13 @@ import {
 /**
  * Stands for the outlet's indentation in added content, which is rendered before the outlet may be reached. The
  * outlet puts its own indentation in place when it closes, so content lines up the same whichever runs first, and a
- * cached section's additions line up wherever they are replayed. A Unicode noncharacter, meant for uses like this.
- *
- * Indentation only starts lines, so only a marker at the start of an addition or after a line break is replaced. The
- * same character elsewhere, in your data, is left alone.
+ * cached section's additions line up wherever they are replayed. Two Unicode noncharacters, meant for uses like
+ * this. Indentation can land mid-line, where a tag's line ending was removed, so the marker is replaced wherever it
+ * is. Data holding one of the characters on its own is left alone.
  */
-export const OUTLET_INDENT = "\uFDD0";
+export const OUTLET_INDENT = "\uFDD0\uFDD1";
 
-const INDENT_MARKERS = /(?:^|\n)\uFDD0/g;
+const INDENT_MARKERS = /\uFDD0\uFDD1/g;
 
 /**
  * Where an outlet stands in the render's output, and the indentation its content takes. An outlet reached in output
@@ -164,9 +163,7 @@ const contentFor = (
 			content === "" && mark.inline && addition.html.startsWith(OUTLET_INDENT)
 				? addition.html.slice(OUTLET_INDENT.length)
 				: addition.html;
-		content += html.replace(INDENT_MARKERS, (marker) =>
-			marker === OUTLET_INDENT ? mark.indent : `\n${mark.indent}`,
-		);
+		content += html.replace(INDENT_MARKERS, mark.indent);
 	}
 	return content;
 };

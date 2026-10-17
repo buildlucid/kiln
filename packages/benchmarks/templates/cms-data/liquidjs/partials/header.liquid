@@ -1,0 +1,11 @@
+{% assign menu = "header" | navigation %}
+<header class="site-header">
+	<a class="logo" href="/">{{ site.name }}</a>
+	<nav>
+		<ul>
+			{% for item in menu %}
+			<li><a href="{{ item.url }}"{% if item.url == current %} aria-current="page"{% endif %}>{{ item.title }}</a></li>
+			{% endfor %}
+		</ul>
+	</nav>
+</header>

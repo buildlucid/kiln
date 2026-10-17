@@ -96,6 +96,21 @@ describe("outlet", () => {
 		);
 	});
 
+	test("indents added lines that continue a line", async () => {
+		// The include lines are standalone, so their line endings are removed and the second include continues the
+		// first's line. Each include still starts with the outlet's indentation, as it would without an outlet.
+		const add = lines(
+			'{% add to "head" %}',
+			'{% include "p" with { v: 1 } %}',
+			'{% include "p" with { v: 2 } %}',
+			"{% endadd %}",
+		);
+		const page = lines("<head>", '	{% outlet "head" %}', "</head>");
+		expect(
+			await render(lines(page, add), { templates: { p: "<{{ v }}>" } }),
+		).toBe(lines("<head>", "	<1>	<2></head>", ""));
+	});
+
 	test("can only be used once per render", async () => {
 		expect(await errorCode('{% outlet "a" %}{% outlet "a" %}')).toBe(
 			"duplicate-outlet",

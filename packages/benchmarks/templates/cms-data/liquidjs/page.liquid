@@ -1,0 +1,23 @@
+{% layout "layout" %}
+
+{%- comment -%} Liquid has no function calls, so the async data functions are filters. {%- endcomment -%}
+{% assign post = "blog" | document: slug %}
+{% assign latest = "blog" | documents: 3 %}
+
+{% block title %}{{ post.title }} · {{ site.name }}{% endblock %}
+
+{% block content %}
+<article>
+	<h1>{{ post.title }}</h1>
+	<p class="meta">By <a href="{{ post.author.url }}">{{ post.author.name }}</a> on <time datetime="{{ post.publishedAt }}">{{ post.publishedAt | date: "%-d %b %Y" }}</time></p>
+	<div class="body">{{ post.body | raw }}</div>
+</article>
+<aside class="latest">
+	<h2>Latest posts</h2>
+	<ul>
+		{% for item in latest %}
+		<li><a href="{{ item.url }}">{{ item.title }}</a> <time datetime="{{ item.publishedAt }}">{{ item.publishedAt | date: "%-d %b %Y" }}</time></li>
+		{% endfor %}
+	</ul>
+</aside>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "layout.twig" %}
+
+{% set post = document("blog", slug) %}
+{% set latest = documents("blog", 3) %}
+
+{% block title %}{{ post.title }} · {{ site.name }}{% endblock %}
+
+{% block content %}
+<article>
+	<h1>{{ post.title }}</h1>
+	<p class="meta">By <a href="{{ post.author.url }}">{{ post.author.name }}</a> on <time datetime="{{ post.publishedAt }}">{{ post.publishedAt|date("j M Y") }}</time></p>
+	<div class="body">{{ post.body|raw }}</div>
+</article>
+<aside class="latest">
+	<h2>Latest posts</h2>
+	<ul>
+		{% for item in latest %}
+		<li><a href="{{ item.url }}">{{ item.title }}</a> <time datetime="{{ item.publishedAt }}">{{ item.publishedAt|date("j M Y") }}</time></li>
+		{% endfor %}
+	</ul>
+</aside>
+{% endblock %}

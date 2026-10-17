@@ -1,0 +1,10 @@
+<header class="site-header">
+	<a class="logo" href="/"><%= it.site.name %></a>
+	<nav>
+		<ul>
+			<% (await navigation("header")).forEach((item) => { %>
+			<li><a href="<%= item.url %>"<% if (item.url === it.current) { %> aria-current="page"<% } %>><%= item.title %></a></li>
+			<% }) %>
+		</ul>
+	</nav>
+</header>

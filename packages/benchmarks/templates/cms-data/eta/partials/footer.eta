@@ -1,0 +1,8 @@
+<footer class="site-footer">
+	<ul>
+		<% (await navigation("footer")).forEach((link) => { %>
+		<li><a href="<%= link.url %>"><%= link.title %></a></li>
+		<% }) %>
+	</ul>
+	<p>© <%= it.site.year %> <%= it.site.name %></p>
+</footer>

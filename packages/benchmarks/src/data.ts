@@ -259,15 +259,55 @@ const categories = [
 	"Community",
 ];
 
+/** How long each CMS data function waits, about as long as a query to a database near the server takes. */
+export const CMS_LATENCY_MS = 2;
+
+const later = <T>(value: T) =>
+	new Promise<T>((resolve) => setTimeout(resolve, CMS_LATENCY_MS, value));
+
+/** Blog posts in the CMS, newest first. */
+const blog = times(6, (index) => {
+	const summary = postSummary(35 - index);
+	return {
+		...summary,
+		slug: slug(summary.title),
+		author: authors[index % authors.length]!,
+		body: times(6, () => `<p>${paragraph(int(3, 5))}</p>`).join("\n"),
+	};
+});
+
+const collections: Record<string, typeof blog> = { blog };
+
+const menus: Record<string, typeof site.nav> = {
+	header: site.nav,
+	footer: site.footer,
+};
+
 /**
- * The async functions templates call in the async data scenario. They resolve straight away, as data from an
- * in-memory cache would, so the scenario measures the cost of waiting rather than the data source.
+ * The async functions templates call. The async data scenario's resolve straight away, as data from an in-memory
+ * cache would, so it measures the cost of waiting. The CMS data scenario's stand in for a headless CMS's document
+ * API, and each waits `CMS_LATENCY_MS`.
  */
 export const asyncFunctions = {
 	latestPosts: async (limit: number) => posts.slice(0, limit),
 	author: async (id: string) => authors.find((item) => item.id === id) ?? null,
 	categories: async () => categories,
+	/** One document from a collection, by its slug. */
+	document: (collection: string, slug: string) =>
+		later(collections[collection]?.find((item) => item.slug === slug) ?? null),
+	/** The newest documents in a collection. */
+	documents: (collection: string, limit: number) =>
+		later(collections[collection]?.slice(0, limit) ?? []),
+	/** A navigation menu by name, such as `header`. */
+	navigation: (name: string) => later(menus[name] ?? []),
 };
 
 /** The async data scenario passes only the site. Templates load the rest. */
 export const asyncData = { site, current: "/blog/" };
+
+/** The CMS data scenario passes the site's name and the post's slug, as a router would. Templates load the rest. */
+export const cmsData = {
+	site: { name: site.name, year: site.year },
+	slug: blog[2]!.slug,
+	current: "/blog/",
+};

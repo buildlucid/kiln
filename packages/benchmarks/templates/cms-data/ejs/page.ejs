@@ -1,0 +1,17 @@
+<% const post = await document("blog", slug) %>
+<% const latest = await documents("blog", 3) %>
+<%- await include("/layout/start", { title: post.title + " · " + site.name }) %>
+<article>
+	<h1><%= post.title %></h1>
+	<p class="meta">By <a href="<%= post.author.url %>"><%= post.author.name %></a> on <time datetime="<%= post.publishedAt %>"><%= formatDate(post.publishedAt) %></time></p>
+	<div class="body"><%- post.body %></div>
+</article>
+<aside class="latest">
+	<h2>Latest posts</h2>
+	<ul>
+		<% for (const item of latest) { %>
+		<li><a href="<%= item.url %>"><%= item.title %></a> <time datetime="<%= item.publishedAt %>"><%= formatDate(item.publishedAt) %></time></li>
+		<% } %>
+	</ul>
+</aside>
+<%- await include("/layout/end") %>

@@ -1,0 +1,23 @@
+{% extends "layout.njk" %}
+
+{# `await` is an async filter that waits for the promise a data function returns. #}
+{% set post = document("blog", slug) | await %}
+{% set latest = documents("blog", 3) | await %}
+
+{% block title %}{{ post.title }} · {{ site.name }}{% endblock %}
+
+{% block content %}
+<article>
+	<h1>{{ post.title }}</h1>
+	<p class="meta">By <a href="{{ post.author.url }}">{{ post.author.name }}</a> on <time datetime="{{ post.publishedAt }}">{{ post.publishedAt | formatDate }}</time></p>
+	<div class="body">{{ post.body | safe }}</div>
+</article>
+<aside class="latest">
+	<h2>Latest posts</h2>
+	<ul>
+		{% for item in latest %}
+		<li><a href="{{ item.url }}">{{ item.title }}</a> <time datetime="{{ item.publishedAt }}">{{ item.publishedAt | formatDate }}</time></li>
+		{% endfor %}
+	</ul>
+</aside>
+{% endblock %}
