@@ -13,7 +13,7 @@
 		<li><strong>Never:</strong> <code>constructor</code>, <code>prototype</code> or <code>__proto__</code>, even when they are an object's own properties or a <code>Map</code>'s keys. Loops and filters skip them too.</li>
 	</ul>
 
-	<p>Templates can only call functions you registered, the built-ins, macros, their own arrow functions and exposed methods. A function stored in your data can't be called. That includes a <code>then</code> method: Kiln never calls one on your data, even while it waits for a promise.</p>
+	<p>Templates can only call functions you registered, the built-ins, macros, their own arrow functions and exposed methods. A function stored in your data can't be called. That includes a <code>then</code> method: Kiln never calls one on the data you pass to <code>render</code> or on your globals, even while it waits for a promise. A thenable that one of your functions or filters returns, such as a query builder, is awaited like a promise.</p>
 
 	<h2>Limits</h2>
 
@@ -37,9 +37,13 @@ const kiln = createKiln({
 		{% endverbatim %}
 	{% endapply %}
 
-	<p>Built-in filters and functions count the items they process, so one call to <code>sort</code>, <code>merge</code> or <code>max</code> can't do unlimited work. <code>in</code> counts the items it searches, and reading a generator or other iterable counts each item it gives. Spreads count the items they copy, and <code>json</code>, <code>urlEncode</code> and <code>attrs</code> count every item they convert.</p>
+	<p>Leave a limit out, or set it to <code>undefined</code>, to keep its default. Each limit must be a number above 0, or <code>createKiln</code> throws a <code>TypeError</code>.</p>
 
-	<p>Pass an <code>AbortSignal</code> as the <code>signal</code> render option to stop a render from outside, for example when the visitor disconnects. On Cloudflare Workers, the platform's CPU limit is a final backstop.</p>
+	<p>Built-in filters and functions count the items they process, so one call to <code>sort</code>, <code>merge</code> or <code>max</code> can't do unlimited work. <code>in</code> counts the items it searches, and reading a generator or other iterable counts each item it gives. Spreads count the items they copy, and <code>json</code>, <code>urlEncode</code> and <code>attrs</code> count every item they convert. An include or component counts each variable it passes with <code>with</code>. Escaping stops as soon as the escaped text is too long to output, and <a href="/docs/tags/island/#streaming-islands">streamed islands</a> count towards the page's limits.</p>
+
+	<p>Pass an <code>AbortSignal</code> as the <code>signal</code> render option to stop a render from outside, for example when the visitor disconnects. The render stops as soon as the signal aborts, even while it waits for one of your async functions. That function carries on unless it listens to the signal too, which it can read with <a href="/docs/api/extending/#request-data"><code>withRender</code></a>.</p>
+
+	<p>The limits count steps, output and nesting, but not the memory a template keeps alive, such as a list holding many long strings. Rely on your platform's memory limits as well. On Cloudflare Workers, the platform's CPU limit is a final backstop.</p>
 
 	<h2>Other safeguards</h2>
 

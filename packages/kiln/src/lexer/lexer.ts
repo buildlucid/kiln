@@ -145,9 +145,13 @@ export const scanParts = (
 	text: string,
 ): { parts: Part[]; problems: LexProblem[] } => new Lexer(text).scan();
 
+/** Where a template's content starts: after a byte order mark, which is never content. */
+export const contentStart = (text: string): number =>
+	text.charCodeAt(0) === 0xfeff ? 1 : 0;
+
 class Lexer {
 	readonly #text: string;
-	#pos = 0;
+	#pos: number;
 	/** How many string interpolations the lexer is inside. */
 	#interpolations = 0;
 	#tokens: Token[] = [];
@@ -155,6 +159,7 @@ class Lexer {
 
 	constructor(text: string) {
 		this.#text = text;
+		this.#pos = contentStart(text);
 	}
 
 	scan(): { parts: Part[]; problems: LexProblem[] } {
@@ -358,21 +363,34 @@ class Lexer {
 			});
 		}
 		const nameStart = text.indexOf("endverbatim", start);
+		const trimBefore = match[1] === "-";
+		const trimAfter = match[2] === "-";
 		parts.push({
 			kind: "tag",
 			start,
 			end,
-			trimBefore: match[1] === "-",
-			trimAfter: match[2] === "-",
+			trimBefore,
+			trimAfter,
+			// Token values include trim markers, as `#scanDelimited` writes them.
 			tokens: [
-				{ type: "tagOpen", value: "{%", start, end: start + 2 },
+				{
+					type: "tagOpen",
+					value: trimBefore ? "{%-" : "{%",
+					start,
+					end: start + 2,
+				},
 				{
 					type: "name",
 					value: "endverbatim",
 					start: nameStart,
 					end: nameStart + 11,
 				},
-				{ type: "tagClose", value: "%}", start: end - 2, end },
+				{
+					type: "tagClose",
+					value: trimAfter ? "-%}" : "%}",
+					start: end - 2,
+					end,
+				},
 			],
 		});
 		this.#pos = end;
@@ -464,13 +482,15 @@ class Lexer {
 				continue;
 			}
 
+			// A whole code point, so a character outside the Basic Multilingual Plane is one problem, not two halves.
+			const character = String.fromCodePoint(text.codePointAt(pos) as number);
 			this.#problem(
 				"unexpected-character",
-				`Unexpected character "${text[pos]}"`,
+				`Unexpected character "${character}"`,
 				pos,
-				pos + 1,
+				pos + character.length,
 			);
-			this.#pos++;
+			this.#pos += character.length;
 		}
 	}
 
@@ -629,7 +649,9 @@ class Lexer {
 			return simple;
 		}
 		if (next === "u" && text[start + 2] === "{") {
-			const close = text.indexOf("}", start + 3);
+			// Six hex digits at most, so look no further than the seventh character for the brace.
+			const brace = text.slice(start + 3, start + 10).indexOf("}");
+			const close = brace === -1 ? -1 : start + 3 + brace;
 			const hex = close === -1 ? "" : text.slice(start + 3, close);
 			if (/^[0-9a-fA-F]{1,6}$/.test(hex)) {
 				const code = Number.parseInt(hex, 16);
@@ -687,6 +709,25 @@ const isInlineBlank = (text: string, start: number, end: number): boolean => {
 };
 
 /**
+ * The first line feed from `start` up to `end`, or -1. The search stops at `end`, unlike `indexOf`, so a template with
+ * many tags on one long line stays linear.
+ */
+const newlineIn = (text: string, start: number, end: number): number => {
+	for (let i = start; i < end; i++) {
+		if (text.charCodeAt(i) === 10) return i;
+	}
+	return -1;
+};
+
+/** The last line feed from `start` up to `end`, or -1. Stops at `start`, as `newlineIn` stops at `end`. */
+const lastNewlineIn = (text: string, start: number, end: number): number => {
+	for (let i = end - 1; i >= start; i--) {
+		if (text.charCodeAt(i) === 10) return i;
+	}
+	return -1;
+};
+
+/**
  * Removes lines that hold only block tags and comments, including their indentation and line ending.
  *
  * Decisions use the original text, so they do not depend on what trim markers removed. Returns the start of each tag and comment it removed.
@@ -731,8 +772,8 @@ const applyStandaloneLines = (
 		if (previous) {
 			if (previous.kind !== "text") standalone = false;
 			else {
-				const newline = text.lastIndexOf("\n", previous.end - 1);
-				if (newline >= previous.start) {
+				const newline = lastNewlineIn(text, previous.start, previous.end);
+				if (newline !== -1) {
 					if (isInlineBlank(text, newline + 1, previous.end)) {
 						cutBefore = newline + 1;
 					} else standalone = false;
@@ -750,8 +791,8 @@ const applyStandaloneLines = (
 		if (standalone && next) {
 			if (next.kind !== "text") standalone = false;
 			else {
-				const newline = text.indexOf("\n", next.start);
-				if (newline !== -1 && newline < next.end) {
+				const newline = newlineIn(text, next.start, next.end);
+				if (newline !== -1) {
 					if (isInlineBlank(text, next.start, newline)) {
 						cutAfter = newline + 1;
 					} else standalone = false;
@@ -796,13 +837,14 @@ const textLines = (
 		lines.push({ start, indentEnd });
 	};
 	const first = parts[0];
-	if (first && (first.kind !== "text" || first.from === 0)) add(0);
+	const start = contentStart(text);
+	if (first && (first.kind !== "text" || first.from === start)) add(start);
 	for (const part of parts) {
 		if (part.kind !== "text") continue;
 		for (
-			let newline = text.indexOf("\n", part.start);
-			newline !== -1 && newline < part.end;
-			newline = text.indexOf("\n", newline + 1)
+			let newline = newlineIn(text, part.start, part.end);
+			newline !== -1;
+			newline = newlineIn(text, newline + 1, part.end)
 		) {
 			const start = newline + 1;
 			// A `-` marker trimmed the line break or the whole line.

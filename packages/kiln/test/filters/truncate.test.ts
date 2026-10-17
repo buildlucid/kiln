@@ -47,3 +47,13 @@ describe("edge cases", () => {
 		).toBe("\uDC00…");
 	});
 });
+
+describe("markup", () => {
+	test("counts the text of safe markup and closes the tags still open", async () => {
+		expect(
+			await render(
+				'{{ "<p>Hello <b>world</b> again</p>"|raw|truncate(8) }}|{{ "a &amp; b"|raw|truncate(3, "…"|raw) }}',
+			),
+		).toBe("<p>Hello <b>wo…</b></p>|a &amp;…");
+	});
+});

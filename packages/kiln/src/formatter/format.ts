@@ -9,7 +9,7 @@ import { printDelimiter } from "./delimiters.js";
 export type FormatOptions = {
 	/** Indent with tabs. Default `true`. */
 	useTabs?: boolean;
-	/** Spaces per step without tabs, and the width of a tab when moving lines. Default `4`. */
+	/** Spaces per step without tabs, and the width of a tab when moving lines. A whole number of at least 1. Default `4`. */
 	tabWidth?: number;
 	/** Only format lines that overlap this range of offsets. */
 	range?: { start: number; end: number };
@@ -28,7 +28,7 @@ export class KilnFormatError extends Error {
  *
  * - `indent`: set its indentation to `level` steps.
  * - `shift`: move it by as much as line `anchor` moved, keeping its own indentation relative to it. For scripts, styles and comments.
- * - `keep`: leave it alone, for `<pre>`, `<textarea>`, `verbatim` and text inside attribute values.
+ * - `keep`: leave it alone, for `<pre>`, `<textarea>`, `verbatim`, text inside attribute values, and the body of a `set` or `apply` whose tag shares its line.
  * - `inside`: it starts inside an output or tag, which `printDelimiter` indents.
  */
 type Line =
@@ -42,7 +42,9 @@ type Frame = { kind: "kiln" | "html"; name: string };
  * Where the scanner is in the HTML.
  *
  * - `tag`: inside `<name ...>` or `</name>`, which started on line `line`. `inner` counts block tags open inside it.
- * - `raw`: inside `<script>` or `<style>`, or kept as written inside `<pre>` and `<textarea>`.
+ * - `raw`: inside `<script>` or `<style>`, or kept as written inside `<pre>`, `<textarea>` and the like.
+ * - `kept`: inside the body of block tag `name`, output as written: `verbatim`, or a `set` or `apply` whose tag shares
+ *   its line, where Kiln doesn't remove the body's indentation. `depth` counts the tags of that name open.
  */
 type Mode =
 	| { kind: "data" }
@@ -57,7 +59,7 @@ type Mode =
 	  }
 	| { kind: "comment"; anchor: number; level: number }
 	| { kind: "raw"; name: string; keep: boolean; anchor: number; level: number }
-	| { kind: "verbatim"; level: number };
+	| { kind: "kept"; name: string; depth: number; level: number };
 
 const VOID_ELEMENTS = new Set([
 	"area",
@@ -77,8 +79,41 @@ const VOID_ELEMENTS = new Set([
 
 /** Elements written in `<script>` or `<style>`'s own language, whose lines move together. */
 const RAW_ELEMENTS = new Set(["script", "style"]);
-/** Elements whose whitespace shows on the page. */
-const KEPT_ELEMENTS = new Set(["pre", "textarea"]);
+/** Elements whose whitespace shows on the page. Nothing closes `<plaintext>`. */
+const KEPT_ELEMENTS = new Set([
+	"pre",
+	"textarea",
+	"xmp",
+	"listing",
+	"plaintext",
+]);
+
+/** Whether `</name` starts at `index`, as a whole tag name. */
+const closesElement = (text: string, index: number, name: string): boolean => {
+	if (name === "plaintext") return false;
+	const end = index + 2 + name.length;
+	return (
+		text.slice(index, end).toLowerCase() === `</${name}` &&
+		(end === text.length || /[\s/>]/.test(text[end] as string))
+	);
+};
+
+/**
+ * Whether a line starting with `trimmed` begins with the tag that ends the outermost `kept` body, and the formatter
+ * may indent it. It may when Kiln removes the whitespace before the tag: a `-` trim marker, or a tag alone on its line.
+ */
+const endsKept = (
+	trimmed: string,
+	mode: Extract<Mode, { kind: "kept" }>,
+): boolean => {
+	const match = /^\{%(-?)\s*end([A-Za-z]+)\s*-?%\}([^\n]*)/.exec(trimmed);
+	return (
+		match !== null &&
+		match[2] === mode.name &&
+		mode.depth === 1 &&
+		(match[1] === "-" || /^[ \t\r]*$/.test(match[3] as string))
+	);
+};
 
 /** Elements that the next of these siblings closes, such as a `<li>` without `</li>`. */
 const CLOSED_BY: Record<string, readonly string[]> = {
@@ -170,6 +205,14 @@ const planLines = (text: string, parts: readonly Part[]) => {
 
 	const lineText = (index: number) =>
 		text.slice(starts[index], starts[index + 1] ?? text.length);
+	/** Whether only spaces and tabs come between `offset` and the end of its line. */
+	const endsLine = (offset: number) => {
+		let index = offset;
+		while (index < text.length && " \t\r".includes(text[index] as string)) {
+			index++;
+		}
+		return index === text.length || text[index] === "\n";
+	};
 	const current = () => lines.length - 1;
 
 	/** Lowers the current line's level when a closing tag comes before anything else on it. */
@@ -216,14 +259,13 @@ const planLines = (text: string, parts: readonly Part[]) => {
 				return;
 			case "raw":
 				if (mode.keep) lines.push({ kind: "keep", start });
-				else if (trimmed.toLowerCase().startsWith(`</${mode.name}`)) {
+				else if (closesElement(trimmed, 0, mode.name)) {
 					lines.push({ kind: "indent", start, level: mode.level });
 				} else lines.push({ kind: "shift", start, anchor: mode.anchor });
 				return;
-			case "verbatim":
-				// Kiln drops the `endverbatim` line, but the text before it is output as written.
+			case "kept":
 				lines.push(
-					/^\{%-?\s*endverbatim\b/.test(trimmed)
+					endsKept(trimmed, mode)
 						? { kind: "indent", start, level: mode.level }
 						: { kind: "keep", start },
 				);
@@ -234,7 +276,7 @@ const planLines = (text: string, parts: readonly Part[]) => {
 	const canTrimHere = () =>
 		!(mode.kind === "tag" && mode.quote !== null) &&
 		!(mode.kind === "raw" && mode.keep) &&
-		mode.kind !== "verbatim";
+		mode.kind !== "kept";
 
 	const finishTag = (
 		tag: Extract<Mode, { kind: "tag" }>,
@@ -344,15 +386,11 @@ const planLines = (text: string, parts: readonly Part[]) => {
 					}
 					break;
 				case "raw":
-					if (
-						char === "<" &&
-						text.slice(index, index + 2 + mode.name.length).toLowerCase() ===
-							`</${mode.name}`
-					) {
+					if (char === "<" && closesElement(text, index, mode.name)) {
 						index = startTag(index, true) - 1;
 					}
 					break;
-				case "verbatim":
+				case "kept":
 					break;
 			}
 		}
@@ -373,8 +411,13 @@ const planLines = (text: string, parts: readonly Part[]) => {
 			} else outdent(current(), base + mode.inner - 1, first);
 			return;
 		}
-		if (mode.kind === "verbatim") {
-			if (role.kind === "close" && role.name === "verbatim") {
+		if (mode.kind === "kept") {
+			if (role.kind === "open" && role.name === mode.name) mode.depth++;
+			else if (
+				role.kind === "close" &&
+				role.name === mode.name &&
+				--mode.depth === 0
+			) {
 				const index = stack.findLastIndex((frame) => frame.kind === "kiln");
 				if (index !== -1) stack.length = index;
 				mode = { kind: "data" };
@@ -384,8 +427,17 @@ const planLines = (text: string, parts: readonly Part[]) => {
 		if (mode.kind !== "data") return;
 		if (role.kind === "open") {
 			stack.push({ kind: "kiln", name: role.name });
-			if (role.name === "verbatim") {
-				mode = { kind: "verbatim", level: stack.length - 1 };
+			if (
+				role.name === "verbatim" ||
+				((role.name === "set" || role.name === "apply") &&
+					!(first && endsLine(part.end)))
+			) {
+				mode = {
+					kind: "kept",
+					name: role.name,
+					depth: 1,
+					level: stack.length - 1,
+				};
 			}
 			return;
 		}
@@ -462,30 +514,10 @@ const planEdits = (
 
 	const oldIndent = (line: number) => {
 		const start = lines[line]?.start ?? 0;
-		return /^[ \t]*/.exec(text.slice(start, start + 200))?.[0] ?? "";
+		let end = start;
+		while (text[end] === " " || text[end] === "\t") end++;
+		return text.slice(start, end);
 	};
-	const newIndents = new Map<number, string | null>();
-	const newIndent = (line: number): string | null => {
-		if (newIndents.has(line)) return newIndents.get(line) ?? null;
-		const info = lines[line];
-		let indent: string | null = null;
-		if (info?.kind === "indent") indent = unit.repeat(info.level);
-		else if (info?.kind === "shift") {
-			const anchor = newIndent(info.anchor);
-			const moved =
-				anchor === null
-					? 0
-					: widthOf(anchor, tabWidth) -
-						widthOf(oldIndent(info.anchor), tabWidth);
-			indent = indentOfWidth(
-				Math.max(0, widthOf(oldIndent(line), tabWidth) + moved),
-			);
-		}
-		newIndents.set(line, indent);
-		return indent;
-	};
-
-	const edits: FormatEdit[] = [];
 	/** Where a line's content ends: at its line break, or the end of the file. */
 	const lineEnd = (line: number) => {
 		const next = lines[line + 1]?.start;
@@ -501,13 +533,44 @@ const planEdits = (
 		);
 	};
 
+	// Whitespace before the first content and after the last is output as written wherever the template is placed, so
+	// it stays as it is, as does a file of only whitespace.
+	let firstContent = 0;
+	while (firstContent < lines.length && isBlank(firstContent)) firstContent++;
 	let lastContent = lines.length - 1;
 	while (lastContent >= 0 && isBlank(lastContent)) lastContent--;
-	// Blank lines go where the line before is blank too, so runs become one and leading blank lines go.
-	let previousBlank = true;
+
+	const newIndents = new Map<number, string | null>();
+	const newIndent = (line: number): string | null => {
+		if (newIndents.has(line)) return newIndents.get(line) ?? null;
+		const info = lines[line];
+		let indent: string | null = null;
+		if (info?.kind === "indent") {
+			// The first content line keeps its indentation. See `firstContent`.
+			indent =
+				line === firstContent ? oldIndent(line) : unit.repeat(info.level);
+		} else if (info?.kind === "shift") {
+			const anchor = newIndent(info.anchor);
+			const moved =
+				anchor === null
+					? 0
+					: widthOf(anchor, tabWidth) -
+						widthOf(oldIndent(info.anchor), tabWidth);
+			indent = indentOfWidth(
+				Math.max(0, widthOf(oldIndent(line), tabWidth) + moved),
+			);
+		}
+		newIndents.set(line, indent);
+		return indent;
+	};
+
+	const edits: FormatEdit[] = [];
+	// Blank lines go where the line before is blank too, so runs become one.
+	let previousBlank = false;
 
 	for (const [index, info] of lines.entries()) {
 		if (index > lastContent) break;
+		if (index < firstContent) continue;
 		const start = info.start;
 		const end = lineEnd(index);
 		if (isBlank(index)) {
@@ -526,20 +589,13 @@ const planEdits = (
 				edits.push({ start, end: start + current.length, text: indent });
 			}
 		}
-		if (trimEnd[index] && info.kind !== "keep") {
+		if (trimEnd[index] && info.kind !== "keep" && index !== lastContent) {
 			let from = end;
 			while (from > start && /[ \t\r]/.test(text[from - 1] as string)) from--;
 			if (from < end && !insideDelimiter(delimiters, from)) {
 				edits.push({ start: from, end, text: "" });
 			}
 		}
-	}
-
-	// The file ends with exactly one line break, or is empty.
-	const tail = lastContent < 0 ? 0 : lineEnd(lastContent);
-	const ending = lastContent < 0 ? "" : "\n";
-	if (text.slice(tail) !== ending) {
-		edits.push({ start: tail, end: text.length, text: ending });
 	}
 
 	for (const { part, line } of delimiters) {
@@ -573,8 +629,7 @@ const normaliseText = (value: string) =>
 	value
 		.replace(/[ \t\r\f\v]+$/gm, "")
 		.replace(/^[ \t\f\v]+/gm, "")
-		.replace(/\n{2,}/g, "\n")
-		.replace(/^\n|\n$/g, "");
+		.replace(/\n{2,}/g, "\n");
 
 /** A copy of a syntax tree without positions or layout, with text normalised and text left empty by that removed. */
 const normaliseTree = (value: unknown): unknown => {
@@ -631,9 +686,15 @@ export const formatEdits = (
 		);
 	}
 
+	const tabWidth = options.tabWidth ?? 4;
+	if (!Number.isInteger(tabWidth) || tabWidth < 1) {
+		throw new RangeError(
+			`tabWidth must be a whole number of at least 1, but got ${tabWidth}`,
+		);
+	}
 	let edits = planEdits(text, scanParts(text).parts, {
 		useTabs: options.useTabs ?? true,
-		tabWidth: options.tabWidth ?? 4,
+		tabWidth,
 	});
 	const range = options.range;
 	if (range) {
@@ -655,7 +716,8 @@ export const formatEdits = (
 /**
  * Formats a template: indents it to match its structure, and tidies spacing inside outputs and tags. Never changes what it renders.
  *
- * Throws `KilnSyntaxError` when the template has syntax errors, and `KilnFormatError` if the safety check fails.
+ * Throws `KilnSyntaxError` when the template has syntax errors, `KilnFormatError` if the safety check fails, and
+ * `RangeError` for a `tabWidth` that isn't a whole number of at least 1.
  *
  * ```ts
  * const formatted = format(source, { useTabs: false, tabWidth: 2 });

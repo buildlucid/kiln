@@ -10,7 +10,7 @@ import {
 	unwrap,
 } from "./values.js";
 
-/** Builds the inclusive integer array for `a..b` and `range()`, refusing arrays longer than `limit`. */
+/** Builds the inclusive array of numbers for `a..b` and `range()`, refusing arrays longer than `limit`. */
 export const buildRange = (
 	start: unknown,
 	end: unknown,
@@ -31,8 +31,13 @@ export const buildRange = (
 	if (!Number.isFinite(from) || !Number.isFinite(to)) {
 		return issue("invalid-argument", "Range ends must be finite numbers");
 	}
-	if ((to - from) / step < 0) return [];
-	const length = Math.floor((to - from) / step) + 1;
+	const steps = (to - from) / step;
+	if (steps < 0) return [];
+	const exact =
+		Number.isInteger(from) && Number.isInteger(to) && Number.isInteger(step);
+	// A little slack for fractions, so a step such as 0.1 still reaches the end despite rounding.
+	const length =
+		Math.floor(exact ? steps : steps + Math.max(1, steps) * 1e-12) + 1;
 	if (length > limit) {
 		return issue(
 			"limit-steps",
@@ -41,7 +46,14 @@ export const buildRange = (
 	}
 	// oxlint-disable-next-line unicorn/no-new-array -- preallocates a known length on the hot path
 	const result = new Array<number>(length);
-	for (let i = 0; i < length; i++) result[i] = from + i * step;
+	if (exact) {
+		for (let i = 0; i < length; i++) result[i] = from + i * step;
+	} else {
+		// Rounded to 15 significant digits, so 3 steps of 0.1 are 0.3, not 0.30000000000000004.
+		for (let i = 0; i < length; i++) {
+			result[i] = Number((from + i * step).toPrecision(15));
+		}
+	}
 	return result;
 };
 

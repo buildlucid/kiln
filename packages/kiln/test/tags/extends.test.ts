@@ -141,6 +141,16 @@ describe("block", () => {
 		expect(await render(template)).toBe("12");
 	});
 
+	test("a child's block placed in a component's content can set a variable read after it", async () => {
+		const templates = {
+			base: "{% set x = 1 %}{{ x }}{% if true %}{% component 'box' %}{% block b %}{% endblock %}{% endcomponent %}{% endif %}{{ x }}",
+			box: "{% slot %}{% endslot %}",
+		};
+		const page =
+			'{% extends "base" %}{% block b %}{% set x = 2 %}{% endblock %}';
+		expect(await render(page, { templates })).toBe("12");
+	});
+
 	test("nested blocks can be overridden on their own", async () => {
 		const templates = {
 			base: "{% block outer %}<{% block inner %}old{% endblock %}>{% endblock %}",
@@ -239,6 +249,17 @@ describe("parent()", () => {
 		expect(await render(page, { templates })).toBe("xx");
 	});
 
+	test("a variable the parent's block sets is read after the block", async () => {
+		const templates = {
+			base: "{% set x = 1 %}{{ x }}{% if true %}{% block b %}{% set x = 2 %}{% endblock %}{% endif %}{{ x }}",
+		};
+		const page = lines(
+			'{% extends "base" %}',
+			"{% block b %}[{{ parent() }}]{% endblock %}",
+		);
+		expect(await render(page, { templates })).toBe("1[]2");
+	});
+
 	test("can read the loop it is called in", async () => {
 		const templates = { base: "{% block b %}{{ loop.index }}{% endblock %}" };
 		const page = lines(
@@ -272,6 +293,18 @@ describe("block()", () => {
 		const template =
 			'{% for x in [1, 2] %}{{ block("row") }}{% endfor %}{% if false %}{% block row %}{{ loop.index ?? "" }}{% endblock %}{% endif %}';
 		expect(await render(template)).toBe("12");
+	});
+
+	test("a variable the block it renders sets is read after the block placing it", async () => {
+		const templates = {
+			base: "{% set x = 1 %}{{ x }}{% if true %}{% block b %}{% endblock %}{% endif %}{{ x }}{% block c %}{% endblock %}",
+		};
+		const page = lines(
+			'{% extends "base" %}',
+			'{% block b %}[{{ block("c") }}]{% endblock %}',
+			"{% block c %}{% set x = 2 %}{% endblock %}",
+		);
+		expect(await render(page, { templates })).toBe("1[]2");
 	});
 
 	test("cannot recurse forever", async () => {

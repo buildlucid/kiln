@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import { errorCode, render } from "../helpers.js";
+import { KilnSyntaxError } from "../../src/index.js";
+import { errorCode, render, renderError } from "../helpers.js";
 
 describe("if", () => {
 	test("chooses between if, elseif and else", async () => {
@@ -48,6 +49,20 @@ describe("branch structure", () => {
 		expect(await errorCode("{% if a %}{% else %}{% else %}{% endif %}")).toBe(
 			"unexpected-tag",
 		);
+	});
+
+	test("a repeated else is reported where it stands, inside other tags too", async () => {
+		const error = await renderError(
+			"{% for i in [1] %}{% if a %}{% else %}{% else %}{% endif %}{% endfor %}",
+		);
+		expect(error).toBeInstanceOf(KilnSyntaxError);
+		expect((error as KilnSyntaxError).diagnostics).toMatchObject([
+			{
+				code: "unexpected-tag",
+				message: '"else" cannot follow "else" in "if"',
+				start: { column: 42 },
+			},
+		]);
 	});
 
 	test("other languages' spellings are errors", async () => {

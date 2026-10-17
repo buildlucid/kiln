@@ -13,7 +13,7 @@
 		{% endverbatim %}
 	{% endapply %}
 
-	<p><code>for</code> works with arrays, hashes, sets, maps and other iterables. Looping over null is the same as looping over an empty array.</p>
+	<p><code>for</code> works with arrays, hashes, sets, maps and other iterables. Looping over null is the same as looping over an empty array. Async iterables aren't supported, because Kiln doesn't wait for them: have your function collect the items into an array.</p>
 
 	<h2>Keys and values</h2>
 

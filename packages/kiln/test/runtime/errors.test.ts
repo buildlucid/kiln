@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
-import { KilnRenderError, KilnSyntaxError } from "../../src/index.js";
+import {
+	createKiln,
+	KilnRenderError,
+	KilnSyntaxError,
+	memoryLoader,
+} from "../../src/index.js";
 import { lines, renderError } from "../helpers.js";
 
 describe("render errors", () => {
@@ -92,6 +97,38 @@ describe("render errors", () => {
 		})) as KilnRenderError;
 		expect(error.code).toBe("host-error");
 		expect(error.cause).toBe(original);
+	});
+
+	test("from the loader keep the original error as cause", async () => {
+		const offline = new Error("offline");
+		const kiln = createKiln({
+			loader: {
+				load: async (name) => {
+					if (name === "page.kiln") return '{% include "part" %}';
+					throw offline;
+				},
+			},
+		});
+		await expect(kiln.render("part")).rejects.toMatchObject({
+			code: "host-error",
+			template: "part.kiln",
+			cause: offline,
+		});
+		await expect(kiln.render("page")).rejects.toMatchObject({
+			code: "host-error",
+			template: "page.kiln",
+			cause: offline,
+		});
+	});
+
+	test("for invalid template names are render errors", async () => {
+		const kiln = createKiln({ loader: memoryLoader({}) });
+		const invalid = { name: "KilnRenderError", code: "invalid-template-name" };
+		await expect(kiln.render("../x")).rejects.toMatchObject(invalid);
+		await expect(kiln.precompile("/x")).rejects.toMatchObject(invalid);
+		expect(() => kiln.invalidate("a//b")).toThrow(
+			expect.objectContaining(invalid),
+		);
 	});
 });
 

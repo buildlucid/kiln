@@ -1,5 +1,17 @@
-import { all, hold, isPromise, silence, unhold } from "../runtime/render.js";
+import {
+	all,
+	hold,
+	holdData,
+	isPromise,
+	silence,
+	unhold,
+} from "../runtime/render.js";
 import type { Compiled, Run, Scope } from "../runtime/types.js";
+
+/*
+ * Only a compiled expression marked `async` may return a promise to wait for. Any other promise is a value from your
+ * data, which is never waited for, so it is held when it has to pass through a promise. See `holdData`.
+ */
 
 /** A compiled literal. */
 export const constant = (value: unknown): Compiled => ({
@@ -11,7 +23,8 @@ export const constant = (value: unknown): Compiled => ({
 /**
  * Compiles `f(a)`. The sync version never checks for promises, so expressions without async calls stay fast.
  *
- * `async` says whether `f` itself may return a promise.
+ * `async` says whether `f` itself may return a promise. If it does, a value from your data that `f` returns as it is
+ * must go through `passData`.
  */
 export const map1 = (
 	a: Compiled,
@@ -22,11 +35,12 @@ export const map1 = (
 	if (!a.async) {
 		return { ev: (run, scope) => f(ev(run, scope), run, scope), async };
 	}
+	const keep = async ? hold : holdData;
 	return {
 		ev: (run, scope) => {
 			const value = ev(run, scope);
 			return isPromise(value)
-				? value.then((resolved) => hold(f(unhold(resolved), run, scope)))
+				? value.then((resolved) => keep(f(unhold(resolved), run, scope)))
 				: f(value, run, scope);
 		},
 		async: true,
@@ -48,6 +62,9 @@ export const map2 = (
 			async,
 		};
 	}
+	const leftAsync = a.async;
+	const rightAsync = b.async;
+	const keep = async ? hold : holdData;
 	return {
 		ev: (run, scope) => {
 			const l = left(run, scope);
@@ -55,11 +72,14 @@ export const map2 = (
 			try {
 				r = right(run, scope);
 			} catch (error) {
-				silence(l);
+				if (leftAsync) silence(l);
 				throw error;
 			}
-			if (isPromise(l) || isPromise(r)) {
-				return all([l, r]).then(([lv, rv]) => hold(f(lv, rv, run, scope)));
+			if ((leftAsync && isPromise(l)) || (rightAsync && isPromise(r))) {
+				return all([
+					leftAsync ? l : holdData(l),
+					rightAsync ? r : holdData(r),
+				]).then(([lv, rv]) => keep(f(lv, rv, run, scope)));
 			}
 			return f(l, r, run, scope);
 		},
@@ -67,7 +87,7 @@ export const map2 = (
 	};
 };
 
-/** Evaluates a list of expressions in order. Returns a promise only if one of them did. */
+/** Evaluates a list of expressions in order. Returns a promise only if one that may wait returned one. */
 export const evalAll = (
 	list: readonly Compiled[],
 ): ((run: Run, scope: Scope) => unknown[] | Promise<unknown[]>) => {
@@ -84,6 +104,7 @@ export const evalAll = (
 			return values;
 		};
 	}
+	const asyncAt = list.map((item) => item.async);
 	return (run, scope) => {
 		// oxlint-disable-next-line unicorn/no-new-array -- preallocates a known length on the hot path
 		const values = new Array<unknown>(count);
@@ -92,12 +113,16 @@ export const evalAll = (
 			for (let i = 0; i < count; i++) {
 				const value = (evs[i] as Compiled["ev"])(run, scope);
 				values[i] = value;
-				if (isPromise(value)) pending = true;
+				if (asyncAt[i] && isPromise(value)) pending = true;
 			}
 		} catch (error) {
-			for (const value of values) silence(value);
+			for (let i = 0; i < count; i++) if (asyncAt[i]) silence(values[i]);
 			throw error;
 		}
-		return pending ? all(values) : values;
+		if (!pending) return values;
+		for (let i = 0; i < count; i++) {
+			if (!asyncAt[i]) values[i] = holdData(values[i]);
+		}
+		return all(values);
 	};
 };

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import { createKiln, KilnRenderError } from "../../src/index.js";
-import { errorCode, lines, render, settle } from "../helpers.js";
+import { createKiln, KilnRenderError, memoryCache } from "../../src/index.js";
+import { errorCode, later, lines, render, settle } from "../helpers.js";
 
 describe("macro", () => {
 	test("takes arguments with defaults and named arguments", async () => {
@@ -253,5 +253,45 @@ describe("names and scope", () => {
 				templates: { a: "", b: "" },
 			}),
 		).toBe("duplicate-import");
+	});
+
+	test("a default that is a promise in globals is not awaited", async () => {
+		expect(
+			await render("{% macro m(a = p) %}{{ a|json }}{% endmacro %}{{ m() }}", {
+				globals: { p: Promise.resolve("P") },
+			}),
+		).toBe("{}");
+	});
+
+	describe("rendering alongside each other", () => {
+		// Each call waits `i` milliseconds, so the first call finishes last.
+		const functions = { later };
+		const calls = "{{ [30, 1]|map(i => m(i))|join }}";
+
+		test("add to outlets in the template's order", async () => {
+			const template = `{% macro m(i) %}{{ later(i, i) }}{% add to "h" %}[{{ i }}]{% endadd %}{% endmacro %}<h>{% outlet "h" %}</h>${calls}`;
+			expect(await render(template, { functions })).toBe("<h>[30][1]</h>301");
+		});
+
+		test("cached sections save only what they add", async () => {
+			const cache = memoryCache();
+			const template = `{% macro m(i) %}{% cache ["m", i] %}{{ later(i, i) }}{% add to "h" %}[{{ i }}]{% endadd %}{% endcache %}{% endmacro %}<h>{% outlet "h" %}</h>${calls}`;
+			expect(await render(template, { functions, cache })).toBe(
+				"<h>[30][1]</h>301",
+			);
+			expect(await render(template, { functions, cache })).toBe(
+				"<h>[30][1]</h>301",
+			);
+		});
+
+		test("cached sections leave fills free to change variables afterwards", async () => {
+			const template = `{% macro m(i) %}{% cache ["m", i] %}{{ later(i, i) }}{% endcache %}{% endmacro %}{{ [1, 30]|map(i => m(i))|join }} {% set n = 1 %}{% component "c" %}{% set n = n + 1 %}{% endcomponent %}{{ n }}`;
+			expect(
+				await render(template, {
+					functions,
+					templates: { c: "{% slot %}{% endslot %}" },
+				}),
+			).toBe("130 2");
+		});
 	});
 });

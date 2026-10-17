@@ -100,8 +100,9 @@ const describeToken = (token: Token): string => {
 		case "text":
 			return "text";
 		case "string":
-		case "stringStart":
 			return "a string";
+		case "stringStart":
+			return "an interpolated string";
 		case "number":
 			return `number ${token.value}`;
 		default:
@@ -259,6 +260,23 @@ class Parser {
 		} catch (failure) {
 			this.#record(failure);
 			return fallback;
+		}
+	}
+
+	/** Whether the current tag holds the punctuator `value` before its `%}`. */
+	#tagHasPunct(value: string): boolean {
+		for (let offset = 0; ; offset++) {
+			const token = this.#peek(offset);
+			if (token.type === "punct" && token.value === value) return true;
+			if (
+				token.type === "tagClose" ||
+				token.type === "eof" ||
+				token.type === "text" ||
+				token.type === "tagOpen" ||
+				token.type === "outputOpen"
+			) {
+				return false;
+			}
 		}
 	}
 
@@ -494,10 +512,7 @@ class Parser {
 			}
 			if (end.value === "else") {
 				this.#finishEndTag();
-				const rest = this.#parseBody(["endif"]);
-				alternate = rest.body;
-				if (rest.end) this.#finishEndTag();
-				else this.#unclosed("if", open, "endif");
+				alternate = this.#parseAlternate("if", open, ["elseif", "else"]);
 				break;
 			}
 			this.#finishEndTag();
@@ -509,6 +524,33 @@ class Parser {
 			alternate,
 			span: { start: open.start, end: this.#lastEnd },
 		};
+	}
+
+	/**
+	 * Parses the `else` branch of `if` or `for` up to its end tag. A branch tag after `else`, such as a second `else`,
+	 * is reported where it stands, so it can't close an outer tag instead.
+	 */
+	#parseAlternate(name: string, open: Token, branches: string[]): Statement[] {
+		const endName = `end${name}`;
+		const alternate: Statement[] = [];
+		for (;;) {
+			const { body, end } = this.#parseBody([endName, ...branches]);
+			alternate.push(...body);
+			if (!end) {
+				this.#unclosed(name, open, endName);
+				return alternate;
+			}
+			if (end.value === endName) {
+				this.#finishEndTag();
+				return alternate;
+			}
+			this.#problem(
+				"unexpected-tag",
+				`"${end.value}" cannot follow "else" in "${name}"`,
+				end,
+			);
+			this.#recover();
+		}
 	}
 
 	#parseFor(open: Token): Statement {
@@ -533,10 +575,7 @@ class Parser {
 		if (!end) this.#unclosed("for", open, "endfor");
 		else if (end.value === "else") {
 			this.#finishEndTag();
-			const rest = this.#parseBody(["endfor"]);
-			alternate = rest.body;
-			if (rest.end) this.#finishEndTag();
-			else this.#unclosed("for", open, "endfor");
+			alternate = this.#parseAlternate("for", open, ["else"]);
 		} else this.#finishEndTag();
 
 		return {
@@ -549,9 +588,9 @@ class Parser {
 	}
 
 	#parseSet(open: Token): Statement {
-		const name = this.#expectDeclarableName("a variable name").value;
-		if (this.#isPunct("=")) {
-			this.#next();
+		if (this.#tagHasPunct("=")) {
+			const name = this.#expectDeclarableName("a variable name").value;
+			this.#expectPunct("=");
 			const value = this.#parseExpression();
 			const close = this.#expectTagEnd();
 			return {
@@ -561,7 +600,11 @@ class Parser {
 				span: { start: open.start, end: close.end },
 			};
 		}
-		this.#expectTagEnd();
+		// Without "=" the tag captures a body, even when the rest of it is broken, so its end tag still matches.
+		const name = this.#header(
+			() => this.#expectDeclarableName("a variable name").value,
+			"",
+		);
 		const { body, end } = this.#parseBody(["endset"]);
 		if (end) this.#finishEndTag();
 		else this.#unclosed("set", open, "endset");
@@ -726,7 +769,21 @@ class Parser {
 		};
 	}
 
-	#parseBlock(open: Token): Statement {
+	#parseBlock(open: Token): Statement | null {
+		// A tag holding only a bad name is the long form, so its body and end tag are still read.
+		const first = this.#peek();
+		if (
+			first.type !== "name" &&
+			(first.type === "tagClose" || this.#peek(1).type === "tagClose")
+		) {
+			this.#header(() => {
+				this.#expectName("a block name");
+			}, undefined);
+			const { end } = this.#parseBody(["endblock"]);
+			if (end) this.#finishEndTag();
+			else this.#unclosed("block", open, "endblock");
+			return null;
+		}
 		const name = this.#expectName("a block name").value;
 		if (this.#peek().type !== "tagClose") {
 			// Short form: {% block title page.title %}
@@ -856,11 +913,13 @@ class Parser {
 	}
 
 	#parseSlot(open: Token): Statement {
-		let name = "default";
-		if (this.#peek().type !== "tagClose") {
-			name = this.#parseStringLiteral("a slot name");
-		}
-		this.#expectTagEnd();
+		const name = this.#header(
+			() =>
+				this.#peek().type === "tagClose"
+					? "default"
+					: this.#parseStringLiteral("a slot name"),
+			"default",
+		);
 		const { body, end } = this.#parseBody(["endslot"]);
 		if (end) this.#finishEndTag();
 		else this.#unclosed("slot", open, "endslot");
@@ -1649,8 +1708,12 @@ class Parser {
 						span: { start: token.start, end: token.end },
 					};
 					if (!this.#isPunct(":")) {
-						// Shorthand: { title } means { title: title }.
-						if (RESERVED_NAMES.has(token.value) && token.value !== "loop") {
+						// Shorthand: { title } means { title: title }. `loop` and `slots` are reserved but can be read.
+						if (
+							RESERVED_NAMES.has(token.value) &&
+							token.value !== "loop" &&
+							token.value !== "slots"
+						) {
 							this.#fail(`Expected ":" after "${token.value}"`);
 						}
 						entries.push({
@@ -1671,7 +1734,11 @@ class Parser {
 					this.#next();
 					key = {
 						type: "Literal",
-						value: token.value,
+						// A number key is the number as JavaScript writes it, so `1.0` and `01` are the key "1".
+						value:
+							token.type === "number"
+								? String(Number(token.value))
+								: token.value,
 						span: { start: token.start, end: token.end },
 					};
 				} else if (this.#isPunct("(")) {

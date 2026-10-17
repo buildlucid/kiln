@@ -58,3 +58,32 @@ describe("special values", () => {
 		expect(await render("{{ (0/0)|json|raw }}")).toBe("null");
 	});
 });
+
+describe("iterables and limits", () => {
+	test("serialises a generator as a list", async () => {
+		function* items() {
+			yield 1;
+			yield { a: 2 };
+		}
+		expect(
+			await render("{{ items|json|raw }}", { context: { items: items() } }),
+		).toBe('[1,{"a":2}]');
+	});
+
+	test("stops before building text longer than maxOutputLength", async () => {
+		expect(
+			await errorCode("{{ [text, text, text]|json }}", {
+				context: { text: "x".repeat(5) },
+				limits: { maxOutputLength: 20 },
+			}),
+		).toBe("limit-output");
+	});
+
+	test("data nested too deeply is a too-deep error", async () => {
+		let data: unknown = 1;
+		for (let i = 0; i < 2000; i++) data = [data];
+		expect(await errorCode("{{ data|json }}", { context: { data } })).toBe(
+			"too-deep",
+		);
+	});
+});

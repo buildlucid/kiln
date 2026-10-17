@@ -119,15 +119,12 @@ export const generateTypes = async (
 		if (!analysis) continue;
 		const { layouts, complete } = await layoutsOf(analysis);
 
-		let context: string;
-		if (analysis.props.length > 0 || analysis.rest !== null) {
-			// Strict mode rejects anything a template with `props` doesn't declare, unless it has a rest prop.
-			const fields = analysis.props.map((prop) => field(prop, !prop.required));
-			if (analysis.rest !== null) fields.push("[key: string]: unknown");
-			context = objectType(fields, "\t\t\t");
-		} else {
-			// Without `props`, a page takes any data, plus its layouts' props that it doesn't set itself.
-			const provided = new Set(analysis.sets);
+		/** Its layouts' props that the page doesn't declare or set itself, which it must pass on. */
+		const layoutFields = () => {
+			const provided = new Set([
+				...analysis.props.map((prop) => prop.name),
+				...analysis.sets,
+			]);
 			const fields: string[] = [];
 			for (const layout of layouts) {
 				for (const prop of layout.props) {
@@ -137,6 +134,25 @@ export const generateTypes = async (
 				}
 				for (const set of layout.sets) provided.add(set);
 			}
+			return fields;
+		};
+
+		let context: string;
+		if (analysis.rest !== null) {
+			// A rest prop accepts any other key, so the layouts can get their props too.
+			const fields = [
+				...analysis.props.map((prop) => field(prop, !prop.required)),
+				...layoutFields(),
+				"[key: string]: unknown",
+			];
+			context = objectType(fields, "\t\t\t");
+		} else if (analysis.props.length > 0) {
+			// Strict mode rejects anything a template with `props` doesn't declare.
+			const fields = analysis.props.map((prop) => field(prop, !prop.required));
+			context = objectType(fields, "\t\t\t");
+		} else {
+			// Without `props`, a page takes any data, plus its layouts' props.
+			const fields = layoutFields();
 			context =
 				fields.length === 0
 					? "Record<string, unknown>"

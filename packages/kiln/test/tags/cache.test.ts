@@ -39,7 +39,7 @@ describe("cache", () => {
 		);
 	});
 
-	test("adds the template, locale and time zone to the key, and passes for", async () => {
+	test("adds the template, a hash of its content, locale and time zone to the key, and passes for", async () => {
 		const { cache, saved } = recording();
 		await render('{% cache ["post", 1, true, null] for 600 %}x{% endcache %}', {
 			cache,
@@ -49,10 +49,32 @@ describe("cache", () => {
 			locale: "de",
 			timeZone: "Europe/Berlin",
 		});
-		expect([...saved].map(([key, { seconds }]) => [key, seconds])).toEqual([
-			['index.kiln|en|UTC|["post",1,true,null]', 600],
-			['index.kiln|de|Europe/Berlin|["post"]', null],
-		]);
+		const [first, second] = [...saved];
+		expect(first?.[0]).toMatch(
+			/^index\.kiln\|\w+\|en\|UTC\|\["post",1,true,null\]$/,
+		);
+		expect(first?.[1].seconds).toBe(600);
+		expect(second?.[0]).toMatch(
+			/^index\.kiln\|\w+\|de\|Europe\/Berlin\|\["post"\]$/,
+		);
+		expect(second?.[1].seconds).toBeNull();
+	});
+
+	test("editing the content gives the tag new keys", async () => {
+		const cache = memoryCache();
+		expect(await render('{% cache "a" %}old{% endcache %}', { cache })).toBe(
+			"old",
+		);
+		expect(await render('{% cache "a" %}new{% endcache %}', { cache })).toBe(
+			"new",
+		);
+	});
+
+	test("tags in one template with the same key share copies only when their content is the same", async () => {
+		const cache = memoryCache();
+		const template =
+			'{% cache "a" %}1{% endcache %}{% cache "a" %}2{% endcache %}{% cache "a" %}1{% endcache %}';
+		expect(await render(template, { cache })).toBe("121");
 	});
 
 	test("dates in a key are written as ISO 8601", async () => {
@@ -61,9 +83,7 @@ describe("cache", () => {
 			cache,
 			context: { at: new Date(Date.UTC(2026, 9, 15)) },
 		});
-		expect([...saved.keys()]).toEqual([
-			'index.kiln|en|UTC|["2026-10-15T00:00:00.000Z"]',
-		]);
+		expect([...saved.keys()][0]).toMatch(/\|\["2026-10-15T00:00:00\.000Z"\]$/);
 	});
 
 	test("works with a store that returns promises", async () => {

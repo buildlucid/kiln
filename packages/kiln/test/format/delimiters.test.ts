@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 import { format } from "../../src/format.js";
 
-/** Formats one line and drops the final line break. */
-const line = (source: string) => format(source).slice(0, -1);
+/** Formats one line. */
+const line = (source: string) => format(source);
 
 describe("format: spacing inside delimiters", () => {
 	test("puts one space inside outputs and tags, and keeps trim markers", () => {
@@ -76,16 +76,22 @@ describe("format: spacing inside delimiters", () => {
 				'{% include "card" with {\ntitle: post.title,\nurl: post.url,\n} %}',
 			),
 		).toBe(
-			'{% include "card" with {\n\ttitle: post.title,\n\turl: post.url,\n} %}\n',
+			'{% include "card" with {\n\ttitle: post.title,\n\turl: post.url,\n} %}',
 		);
 		expect(format("<div>\n{% if a\nand b %}\nx\n{% endif %}\n</div>")).toBe(
-			"<div>\n\t{% if a\n\t\tand b %}\n\t\tx\n\t{% endif %}\n</div>\n",
+			"<div>\n\t{% if a\n\t\tand b %}\n\t\tx\n\t{% endif %}\n</div>",
 		);
 	});
 
 	test("brackets opened on one line add one step", () => {
 		expect(format("{% set data = { posts: [\n1,\n] } %}")).toBe(
-			"{% set data = { posts: [\n\t1,\n] } %}\n",
+			"{% set data = { posts: [\n\t1,\n] } %}",
+		);
+	});
+
+	test("a closing bracket lines up with its own opening line, whatever closes on the next", () => {
+		expect(format('{% include "card" with {\ntags: [\n"a",\n]\n} %}')).toBe(
+			'{% include "card" with {\n\ttags: [\n\t\t"a",\n\t]\n} %}',
 		);
 	});
 });

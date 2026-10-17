@@ -45,6 +45,7 @@ describe("property access", () => {
 		"{{ data.value|upper }}",
 		"{{ data['value'] }}",
 		"{% for i in [1] %}{{ data.value }}{% endfor %}",
+		"{{ page.data.value }}",
 	])("an error a getter throws is located: %s", async (template) => {
 		const cause = new Error("boom");
 		const data = {
@@ -52,7 +53,9 @@ describe("property access", () => {
 				throw cause;
 			},
 		};
-		const error = await renderError(template, { context: { data } });
+		const error = await renderError(template, {
+			context: { data, page: { data } },
+		});
 		expect(error).toMatchObject({
 			code: "host-error",
 			message: expect.stringContaining('Reading "value" threw an error: boom'),

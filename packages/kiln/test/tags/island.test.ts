@@ -347,7 +347,7 @@ describe("island", () => {
 				lines(
 					"<p>Stock for 1</p>",
 					"<p>Stock for 1</p>",
-					"<P>STOCK FOR 1</P>",
+					"<p>STOCK FOR 1</p>",
 					"<p>Stock for 1</p>",
 				),
 			);
@@ -412,6 +412,31 @@ describe("island", () => {
 			controller.abort();
 			resolve("a", "In stock");
 			await expect(parts).rejects.toMatchObject({ code: "aborted" });
+		});
+
+		test("counts islands towards the page's maxSteps and maxDepth", async () => {
+			const options = {
+				islands: streamIslands({ script: false }),
+				templates: {
+					heavy: "{% for i in 1..40 %}{% endfor %}",
+					nested: '{% island "inner" %}{% endisland %}',
+					inner: '{% include "leaf" %}',
+					leaf: "leaf",
+				},
+			};
+			// Each island fits in the limit on its own, but not all five.
+			await expect(
+				renderStream(
+					'{% for i in 1..5 %}{% island "heavy" %}{% endisland %}{% endfor %}',
+					{ ...options, limits: { maxSteps: 150 } },
+				).then(readParts),
+			).rejects.toMatchObject({ code: "limit-steps" });
+			await expect(
+				renderStream('{% include "nested" %}', {
+					...options,
+					limits: { maxDepth: 2 },
+				}).then(readParts),
+			).rejects.toMatchObject({ code: "limit-depth" });
 		});
 
 		test("counts islands towards maxOutputLength", async () => {

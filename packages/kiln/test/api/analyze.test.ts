@@ -45,6 +45,14 @@ describe("analyze", () => {
 		]);
 	});
 
+	test("reports loop and slots where Kiln doesn't provide them, but not what macros read", async () => {
+		const analysis = await kiln.analyze(
+			"page",
+			"{% for x in xs %}{{ loop.index }}{% endfor %}{{ loop }}{{ slots }}{% macro m() %}{{ inner }}{% endmacro %}",
+		);
+		expect(analysis.variables).toEqual(["xs", "loop", "slots"]);
+	});
+
 	test("reports islands, and what their props and fallbacks read", async () => {
 		const analysis = await kiln.analyze(
 			"page",

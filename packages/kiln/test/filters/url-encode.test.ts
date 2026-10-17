@@ -59,3 +59,13 @@ describe("limits", () => {
 		);
 	});
 });
+
+describe("nesting", () => {
+	test("data nested too deeply is a too-deep error", async () => {
+		let data: unknown = { a: 1 };
+		for (let i = 0; i < 2000; i++) data = { a: data };
+		expect(await errorCode("{{ data|urlEncode }}", { context: { data } })).toBe(
+			"too-deep",
+		);
+	});
+});

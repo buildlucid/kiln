@@ -11,7 +11,13 @@ import {
 	withCaller,
 } from "./render.js";
 import { childScope } from "./scope.js";
-import { type CompiledMacro, emptyOut, Run } from "./types.js";
+import {
+	type CompiledMacro,
+	emptyOut,
+	endCapture,
+	Run,
+	startCapture,
+} from "./types.js";
 
 /**
  * Calls a macro: binds arguments to parameters in a scope that holds only globals, renders the body and returns it as markup.
@@ -69,7 +75,16 @@ export const callMacro = (
 		}
 	}
 
-	const macroRun = new Run(state, macro.template, run.depth + 1, null, null);
+	// A capture of its own, since a macro can render alongside other expressions while promises are pending.
+	const capture = startCapture(run);
+	const macroRun = new Run(
+		state,
+		macro.template,
+		run.depth + 1,
+		null,
+		null,
+		capture,
+	);
 	const scope = childScope(state.globals);
 
 	const bind = (index: number): void | Promise<void> => {
@@ -83,7 +98,7 @@ export const callMacro = (
 						: undefined;
 			if ((value === undefined || value === null) && param.default) {
 				value = param.default.ev(macroRun, scope);
-				if (isPromise(value)) {
+				if (param.default.async && isPromise(value)) {
 					return value.then((resolved) => {
 						scope[param.name] = unhold(resolved) ?? null;
 						return bind(i + 1);
@@ -99,10 +114,10 @@ export const callMacro = (
 		return after(bind(0), () => {
 			const out = emptyOut();
 			const render = () =>
-				after(
-					macro.body(macroRun, scope, out),
-					() => new Markup(out.s, macro.strategy || "html"),
-				);
+				after(macro.body(macroRun, scope, out), () => {
+					endCapture(run, capture);
+					return new Markup(out.s, macro.strategy || "html");
+				});
 			// A macro from another template records where it was called.
 			return macro.template === run.template
 				? render()

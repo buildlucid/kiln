@@ -1,6 +1,19 @@
 import { issue } from "../errors.js";
 import type { EscapeStrategy } from "../parser/ast.js";
 
+/*
+ * Escaping can make text up to nine times longer, so a chain of `escape` filters could build strings far longer than
+ * any render could print. Every escaper stops once its result passes the limit its caller passes: the `escape` filter
+ * passes the render's `maxOutputLength`. Autoescaped output needs no limit here, as `write` checks what it prints.
+ */
+
+/** Throws a `KilnIssue`, which the call site locates. */
+const tooLong = (limit: number): never =>
+	issue(
+		"limit-output",
+		`Escaping made a string longer than the output limit of ${limit}`,
+	);
+
 /** Global, so a test leaves `lastIndex` just past the first match. */
 const HTML_CHARACTERS = /[&<>"']/g;
 
@@ -8,7 +21,7 @@ const HTML_CHARACTERS = /[&<>"']/g;
  * Escapes text for element content and quoted attribute values. Most text has nothing to escape, which one regular
  * expression test finds; the rest is copied a slice at a time, from the first character that needs escaping.
  */
-export const escapeHtml = (value: string): string => {
+export const escapeHtml = (value: string, limit?: number): string => {
 	HTML_CHARACTERS.lastIndex = 0;
 	if (!HTML_CHARACTERS.test(value)) return value;
 	let result = "";
@@ -38,6 +51,9 @@ export const escapeHtml = (value: string): string => {
 		result += replacement;
 		last = i + 1;
 	}
+	// Each character grows at most six times, so checking once at the end keeps the work bounded.
+	const most = limit ?? Infinity;
+	if (result.length + value.length - last > most) tooLong(most);
 	return last < value.length ? result + value.slice(last) : result;
 };
 
@@ -47,9 +63,10 @@ const isAlphanumeric = (code: number) =>
 	(code >= 97 && code <= 122);
 
 /** Escapes everything except letters, digits, `,`, `.`, `-` and `_` as character references, so values are safe even unquoted. */
-const escapeAttr = (value: string): string => {
+const escapeAttr = (value: string, limit: number): string => {
 	let result = "";
 	for (const char of value) {
+		if (result.length > limit) tooLong(limit);
 		const code = char.codePointAt(0) as number;
 		if (
 			isAlphanumeric(code) ||
@@ -74,13 +91,14 @@ const escapeAttr = (value: string): string => {
 			result += `&#x${code.toString(16).toUpperCase()};`;
 		}
 	}
-	return result;
+	return result.length > limit ? tooLong(limit) : result;
 };
 
 /** Escapes for a JavaScript string literal, using `\uXXXX` for everything except letters, digits, `,`, `.` and `_`. */
-const escapeJs = (value: string): string => {
+const escapeJs = (value: string, limit: number): string => {
 	let result = "";
 	for (let i = 0; i < value.length; i++) {
+		if (result.length > limit) tooLong(limit);
 		const code = value.charCodeAt(i);
 		if (isAlphanumeric(code) || code === 44 || code === 46 || code === 95) {
 			result += value[i];
@@ -88,19 +106,20 @@ const escapeJs = (value: string): string => {
 			result += `\\u${code.toString(16).toUpperCase().padStart(4, "0")}`;
 		}
 	}
-	return result;
+	return result.length > limit ? tooLong(limit) : result;
 };
 
 /** Escapes for CSS values, using `\HEX ` for everything except letters and digits. */
-const escapeCss = (value: string): string => {
+const escapeCss = (value: string, limit: number): string => {
 	let result = "";
 	for (const char of value) {
+		if (result.length > limit) tooLong(limit);
 		const code = char.codePointAt(0) as number;
 		result += isAlphanumeric(code)
 			? char
 			: `\\${code.toString(16).toUpperCase()} `;
 	}
-	return result;
+	return result.length > limit ? tooLong(limit) : result;
 };
 
 const URL_RESERVED = /[!'()*]/;
@@ -110,29 +129,35 @@ let lastUrlValue = "";
 let lastUrlEncoded = "";
 
 /** Percent-encodes everything outside RFC 3986's unreserved characters. */
-export const escapeUrl = (value: string): string => {
-	if (value === lastUrlValue) return lastUrlEncoded;
+export const escapeUrl = (value: string, limit = Infinity): string => {
+	if (value === lastUrlValue) {
+		return lastUrlEncoded.length > limit ? tooLong(limit) : lastUrlEncoded;
+	}
+	let result: string;
 	try {
 		const encoded = encodeURIComponent(value);
-		const result = URL_RESERVED.test(encoded)
+		result = URL_RESERVED.test(encoded)
 			? encoded.replace(
 					/[!'()*]/g,
 					(char) =>
 						`%${(char.charCodeAt(0) as number).toString(16).toUpperCase()}`,
 				)
 			: encoded;
-		lastUrlValue = value;
-		lastUrlEncoded = result;
-		return result;
 	} catch {
 		return issue(
 			"invalid-argument",
 			"Cannot URL-encode a string with lone surrogates",
 		);
 	}
+	lastUrlValue = value;
+	lastUrlEncoded = result;
+	return result.length > limit ? tooLong(limit) : result;
 };
 
-const ESCAPERS: Record<EscapeStrategy, (value: string) => string> = {
+const ESCAPERS: Record<
+	EscapeStrategy,
+	(value: string, limit: number) => string
+> = {
 	html: escapeHtml,
 	attr: escapeAttr,
 	js: escapeJs,
@@ -140,6 +165,12 @@ const ESCAPERS: Record<EscapeStrategy, (value: string) => string> = {
 	url: escapeUrl,
 };
 
-/** Escapes a string with a strategy. */
-export const escapeWith = (value: string, strategy: EscapeStrategy): string =>
-	ESCAPERS[strategy](value);
+/**
+ * Escapes a string with a strategy. Throws a `KilnIssue` with code `limit-output` once the result passes `limit`, which
+ * callers that know the render's `maxOutputLength` pass.
+ */
+export const escapeWith = (
+	value: string,
+	strategy: EscapeStrategy,
+	limit = Infinity,
+): string => ESCAPERS[strategy](value, limit);

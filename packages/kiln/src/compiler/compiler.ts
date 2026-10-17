@@ -37,6 +37,7 @@ import {
 	rangeOperator,
 } from "../runtime/operators.js";
 import {
+	additionsIn,
 	closeOutlets,
 	OUTLET_INDENT,
 	recordAddition,
@@ -48,6 +49,7 @@ import {
 	consume,
 	embed,
 	fail,
+	holdData,
 	type IndentedText,
 	indentedText,
 	indentText,
@@ -57,6 +59,7 @@ import {
 	locating,
 	markCaller,
 	endPlace,
+	passData,
 	runFrom,
 	silence,
 	startPlace,
@@ -77,12 +80,14 @@ import {
 	type BlockDef,
 	type Builtin,
 	blockScope,
+	type Capture,
 	type CallableEntry,
 	type Compiled,
 	type CompiledMacro,
 	type CompiledTemplate,
 	type EnvironmentCore,
 	emptyOut,
+	endCapture,
 	type Ev,
 	fillScope,
 	type Out,
@@ -91,6 +96,7 @@ import {
 	type Scope,
 	type SlotFill,
 	type Stmt,
+	startCapture,
 } from "../runtime/types.js";
 import {
 	BLOCKED_NAMES,
@@ -121,6 +127,7 @@ export const SHORT: unique symbol = Symbol("kiln.short");
 const CAPTURED: unique symbol = Symbol("kiln.captured");
 
 const NOOP: Stmt = () => {};
+const NOTHING = (): void => {};
 
 /** JavaScript engines overflow the stack well before 100,000 arguments, so spreads into calls stop here. */
 const MAX_ARGUMENTS = 10_000;
@@ -135,6 +142,8 @@ const BUILTIN_CALLS = new Set(["parent", "block"]);
 type ArgumentShape = { kind: Argument["type"]; name: string };
 
 type CompiledArguments = {
+	/** Each argument, in order. */
+	compiled: Compiled[];
 	/** Each argument's expression, in order. */
 	evs: Ev[];
 	values: (run: Run, scope: Scope) => unknown[] | Promise<unknown[]>;
@@ -1373,11 +1382,17 @@ class Compiler {
 		return (run, scope, out) => {
 			const entry = run.blocks.get(name)?.[0];
 			if (!entry) return;
+			// The block renders in the capture it is placed in, such as a cached section.
 			const render = () =>
-				entry.def.body(entry.run, blockScope(entry.def, scope), out);
+				entry.def.body(
+					entry.run.within(run.capture),
+					blockScope(entry.def, scope),
+					out,
+				);
 			// A block defined in another template records where it was placed.
+			const own = entry.run.template === run.template;
 			if (indent === "") {
-				return entry.run === run ? render() : withCaller(run, span, render);
+				return own ? render() : withCaller(run, span, render);
 			}
 			const saved = out.indent;
 			const inline = out.inline;
@@ -1386,7 +1401,7 @@ class Compiler {
 				out,
 				saved,
 				inline,
-				entry.run === run ? render() : withCaller(run, span, render),
+				own ? render() : withCaller(run, span, render),
 			);
 		};
 	}
@@ -1549,7 +1564,7 @@ class Compiler {
 					(islands.mode === "defer" ||
 						(state.stream !== null &&
 							out === state.root &&
-							state.caching === 0));
+							!run.capture?.section));
 				if (away) {
 					return after(loadTemplate(run, name, span), (template) =>
 						template
@@ -1615,7 +1630,12 @@ class Compiler {
 			const fill = run.slots?.get(name);
 			if (!fill) return fallback(run, childScope(scope), out);
 			try {
-				const result = fill.body(fill.run, fillScope(fill), out);
+				// The fill renders in the capture the slot is in, such as a cached section.
+				const result = fill.body(
+					fill.run.within(run.capture),
+					fillScope(fill, run),
+					out,
+				);
 				if (result instanceof Promise) {
 					return result.catch((error: unknown) => {
 						throw markCaller(run, span, error);
@@ -1682,7 +1702,14 @@ class Compiler {
 		const seconds = node.seconds ? this.#expr(node.seconds) : null;
 		const body = this.#body(node.body);
 		const span = node.span;
-		const templateName = this.#template.name;
+		const first = node.body[0];
+		const last = node.body.at(-1);
+		// The section's content and escaping, so editing either gives the tag new keys, and tags with the same key in
+		// one template only share copies when their content is the same.
+		const content = shortHash(
+			`${this.#strategy}|${first && last ? this.#source.text.slice(first.span.start, last.span.end) : ""}`,
+		);
+		const templateName = `${this.#template.name}|${content}`;
 
 		const part = (run: Run, value: unknown) => {
 			if (value === null || value === undefined) return null;
@@ -1704,9 +1731,9 @@ class Compiler {
 				`"cache" keys are made of strings, numbers, booleans, dates and null, but got a ${typeName(value)}`,
 			);
 		};
-		// The template, locale and time zone are part of every key, since the output depends on them. So is how islands
-		// render, when they are deferred. Streamed islands render in place inside the section. So is the indentation the
-		// section is placed at, which its lines are saved with.
+		// The template, the section's content, locale and time zone are part of every key, since the output depends on
+		// them. So is how islands render, when they are deferred. Streamed islands render in place inside the section. So
+		// is the indentation the section is placed at, which its lines are saved with.
 		const fullKey = (run: Run, out: Out, value: unknown) => {
 			const parts = Array.isArray(value)
 				? value.map((item) => part(run, item))
@@ -1746,18 +1773,16 @@ class Compiler {
 			const store = state.env.cache;
 			// The body writes straight to `out`, so its indentation is the same as without the cache.
 			// The body sets variables in a section scope, so setting one never changes a variable outside. See `assign`.
-			const fresh = (): void | Promise<void> => {
+			// It renders in a capture of its own, which keeps what it adds to outlets and the islands it defers.
+			const fresh = (): Capture | Promise<Capture> => {
 				const inner = sectionScope(scope);
-				const outer = state.section;
-				state.caching++;
-				state.section = inner;
-				const result = body(run, inner, out);
-				return after(result, () => {
-					state.caching--;
-					state.section = outer;
+				const capture = startCapture(run, { scope: inner, deferred: [] });
+				return after(body(run.within(capture), inner, out), () => {
+					endCapture(run, capture);
+					return capture;
 				});
 			};
-			if (!store) return fresh();
+			if (!store) return after(fresh(), NOTHING);
 			const found = locating(
 				run,
 				span,
@@ -1787,17 +1812,15 @@ class Compiler {
 					return;
 				}
 				const start = out.s.length;
-				const from = state.additions?.length ?? 0;
-				const deferredFrom = state.deferred?.length ?? 0;
 				const hadScript = state.islandScript;
-				return after(fresh(), () => {
+				return after(fresh(), (capture) => {
 					const manifest =
 						state.islands?.mode === "defer" ? state.islands.manifest : null;
 					const value = packSaved({
 						html: out.s.slice(start),
-						additions: state.additions?.slice(from) ?? [],
+						additions: additionsIn(capture.additions ?? []),
 						islands: manifest
-							? (state.deferred?.slice(deferredFrom) ?? []).flatMap(
+							? (capture.section?.deferred ?? []).flatMap(
 									(id) => manifest[id] ?? [],
 								)
 							: [],
@@ -1827,9 +1850,10 @@ class Compiler {
 				(key.async && isPromise(keyValue)) ||
 				(seconds?.async && isPromise(secondsValue))
 			) {
-				return all([keyValue, secondsValue]).then(([k, t]) =>
-					render(run, scope, out, k, t),
-				);
+				return all([
+					key.async ? keyValue : holdData(keyValue),
+					seconds?.async ? secondsValue : holdData(secondsValue),
+				]).then(([k, t]) => render(run, scope, out, k, t));
 			}
 			return render(run, scope, out, keyValue, secondsValue);
 		};
@@ -1844,7 +1868,7 @@ class Compiler {
 		return (run, _scope, out) => {
 			step(run, span);
 			const state = run.state;
-			if (out !== state.root || state.caching > 0) {
+			if (out !== state.root || run.capture?.section) {
 				throw fail(
 					run,
 					span,
@@ -1880,7 +1904,7 @@ class Compiler {
 		return (run, _scope, out) => {
 			step(run, span);
 			const state = run.state;
-			if (out !== state.root || state.caching > 0) {
+			if (out !== state.root || run.capture?.section) {
 				throw fail(
 					run,
 					span,
@@ -1919,7 +1943,7 @@ class Compiler {
 
 	#apply(node: Extract<Statement, { type: "Apply" }>): Stmt {
 		const body = this.#body(node.body);
-		const strategy = this.#strategy || "html";
+		const strategy = this.#strategy;
 		const input: Compiled = {
 			ev: (_run, scope) => scope[CAPTURED],
 			async: false,
@@ -1930,10 +1954,13 @@ class Compiler {
 		}
 		const result = chain.ev;
 		const span = node.span;
+		// The result is printed like `{{ }}` output: markup as it is, and anything else, such as a plain string from a
+		// host filter, escaped.
+		const print = emitter(this.#strategy);
 		const emit = (run: Run, out: Out, value: unknown) => {
 			let text: string;
 			try {
-				text = toStr(value);
+				text = print(value);
 			} catch (error) {
 				throw locate(run, span, error);
 			}
@@ -1945,7 +1972,10 @@ class Compiler {
 			const captured = emptyOut();
 			return after(body(run, scope, captured), () => {
 				const inner = childScope(scope);
-				inner[CAPTURED] = new Markup(captured.s, strategy);
+				// The body was escaped as it rendered, so filters get it as markup. Without autoescape, it is plain text.
+				inner[CAPTURED] = strategy
+					? new Markup(captured.s, strategy)
+					: captured.s;
 				const value = result(run, inner);
 				return chain.async
 					? after(value, (resolved) => emit(run, out, resolved))
@@ -2146,7 +2176,9 @@ class Compiler {
 				}
 				let key = entry.key;
 				if (key === null) {
-					const computed = list[index++];
+					const raw = list[index++];
+					// Markup is a string with a safety mark, so it can name a key.
+					const computed = raw instanceof Markup ? raw.value : raw;
 					if (typeof computed !== "string" && typeof computed !== "number") {
 						throw fail(
 							run,
@@ -2210,6 +2242,8 @@ class Compiler {
 				? (run: Run, scope: Scope) =>
 						after(rightEv(run, scope), (resolved) => truthy(resolved))
 				: (run: Run, scope: Scope) => truthy(rightEv(run, scope));
+			// When the right side may wait, the left value is returned through `passData`, see `map1`.
+			const keep = right.async ? passData : (value: unknown) => value;
 			const decide = (value: unknown, run: Run, scope: Scope): unknown => {
 				switch (operator) {
 					case "and":
@@ -2219,9 +2253,9 @@ class Compiler {
 					case "??":
 						return value === MISSING || value === null || value === undefined
 							? right.ev(run, scope)
-							: value;
+							: keep(value);
 					default:
-						return truthy(value) ? value : right.ev(run, scope);
+						return truthy(value) ? keep(value) : right.ev(run, scope);
 				}
 			};
 			return map1(left, decide, right.async);
@@ -2269,11 +2303,18 @@ class Compiler {
 		const alternate = node.alternate
 			? this.#expr(node.alternate)
 			: constant(null);
+		const async = consequent.async || alternate.async;
+		// When one branch may wait, the other's value is returned through `passData`, see `map1`.
+		const branch = (compiled: Compiled): Ev =>
+			async && !compiled.async
+				? (run, scope) => passData(compiled.ev(run, scope))
+				: compiled.ev;
+		const yes = branch(consequent);
+		const no = branch(alternate);
 		const compiled = map1(
 			test,
-			(value, run, scope) =>
-				truthy(value) ? consequent.ev(run, scope) : alternate.ev(run, scope),
-			consequent.async || alternate.async,
+			(value, run, scope) => (truthy(value) ? yes(run, scope) : no(run, scope)),
+			async,
 		);
 		if (!test.async && consequent.constant && alternate.constant) {
 			compiled.choice = {
@@ -2306,7 +2347,9 @@ class Compiler {
 					? (target, run, scope) =>
 							stops(target)
 								? SHORT
-								: after(keyEv(run, scope), (name) => read(run, target, name))
+								: after(keyEv(run, scope), (name) =>
+										passData(read(run, target, name)),
+									)
 					: (target, run, scope) =>
 							stops(target) ? SHORT : read(run, target, keyEv(run, scope)),
 				key.async,
@@ -2341,10 +2384,14 @@ class Compiler {
 					}
 					return ev(run, inner);
 				};
-				// Your functions get the value itself, never a held one.
+				// Your functions get a promise only from a body that waits, resolving to the value itself, or to it held
+				// when it has a `then` member, which a promise resolving to it would call. See `holdData`.
+				const waits = body.async;
 				const fn = (...args: unknown[]) => {
 					const result = call(...args);
-					return result instanceof Promise ? result.then(unhold) : result;
+					return waits && result instanceof Promise
+						? result.then((value) => holdData(unhold(value)))
+						: result;
 				};
 				// Lets filters such as `sort` tell a key selector from a comparator.
 				Object.defineProperty(call, "length", { value: params.length });
@@ -2377,6 +2424,7 @@ class Compiler {
 			return index === optionsAt ? (literalHash(arg.value) ?? value) : value;
 		});
 		return {
+			compiled,
 			evs: compiled.map((item) => item.ev),
 			values: evalAll(compiled),
 			shapes: args.map((arg) => ({
@@ -2597,7 +2645,8 @@ class Compiler {
 						entry.options ? (entry.params?.length ?? 0) : -1,
 					)
 				: this.#arguments(argNodes);
-		const all = input ? evalAll([input]) : null;
+		// The input and arguments all start before any is waited for.
+		const withInput = input ? evalAll([input, ...args.compiled]) : null;
 		const inputAsync = input?.async ?? false;
 		const shapes = args.shapes;
 		const valuesOf = args.values;
@@ -2605,6 +2654,12 @@ class Compiler {
 		const plain =
 			shapes.length <= MAX_ARGUMENTS &&
 			shapes.every((shape) => shape.kind === "Positional");
+
+		const resultAsync = entry.kind === "host" || args.arrowAsync;
+		const async = resultAsync || args.async || inputAsync;
+		// A built-in that runs no arrow function that waits never returns a promise to wait for, so when the call may
+		// wait for its arguments, a value from your data it returns goes through `passData`. See `map1`.
+		const keep = async && !resultAsync ? passData : (value: unknown) => value;
 
 		const invoke = (
 			run: Run,
@@ -2615,9 +2670,11 @@ class Compiler {
 			const built = plain ? list : buildArguments(run, span, shapes, list);
 			if (entry.kind === "builtin") {
 				const call = entry.call;
-				return hasInput
-					? locating(run, span, () => call(run, first, ...built))
-					: locating(run, span, () => call(run, ...built));
+				return keep(
+					hasInput
+						? locating(run, span, () => call(run, first, ...built))
+						: locating(run, span, () => call(run, ...built)),
+				);
 			}
 			if (hasInput) built.unshift(first);
 			const call = entry.call;
@@ -2626,9 +2683,6 @@ class Compiler {
 			}
 			return locating(run, span, () => call(...built), label);
 		};
-
-		const resultAsync = entry.kind === "host" || args.arrowAsync;
-		const async = resultAsync || args.async || inputAsync;
 
 		if (entry.kind === "builtin" && plain && !async) {
 			const evs = input ? [input.ev, ...args.evs] : args.evs;
@@ -2677,11 +2731,12 @@ class Compiler {
 				async,
 			};
 		}
+		const values = withInput as NonNullable<typeof withInput>;
 		return {
 			ev: (run, scope) => {
 				step(run, span);
-				return after((all as NonNullable<typeof all>)(run, scope), ([value]) =>
-					after(valuesOf(run, scope), (list) => invoke(run, value, true, list)),
+				return after(values(run, scope), (list) =>
+					invoke(run, list[0], true, list.slice(1)),
 				);
 			},
 			async,
@@ -2702,10 +2757,13 @@ class Compiler {
 
 		if (name === "default") {
 			const fallback = args[0] ? this.#expr(args[0].value) : constant("");
+			const keep = fallback.async ? passData : (value: unknown) => value;
 			return map1(
 				input,
 				(value, run, scope) =>
-					value === MISSING || isEmpty(value) ? fallback.ev(run, scope) : value,
+					value === MISSING || isEmpty(value)
+						? fallback.ev(run, scope)
+						: keep(value),
 				fallback.async,
 			);
 		}
@@ -2746,7 +2804,13 @@ class Compiler {
 				const chosen = target as EscapeStrategy;
 				if (value instanceof Markup && value.strategy === chosen) return value;
 				const text = locating(run, span, () => toStr(value));
-				return new Markup(escapeWith(text, chosen), chosen);
+				// Escaping can make text several times longer, so it stops at the output limit.
+				return new Markup(
+					locating(run, span, () =>
+						escapeWith(text, chosen, run.state.maxSize),
+					),
+					chosen,
+				);
 			});
 		}
 
@@ -2816,7 +2880,10 @@ class Compiler {
 		return {
 			ev: (run, scope) => {
 				const list = run.blocks.get(blockName);
-				const index = list ? list.findIndex((entry) => entry.run === run) : -1;
+				// The entry for this template's block. A block can render in a capture, with a run of its own.
+				const index = list
+					? list.findIndex((entry) => entry.run.template === run.template)
+					: -1;
 				const next = list?.[index + 1];
 				if (!next) {
 					throw fail(
@@ -2877,12 +2944,19 @@ const renderBlockEntry = (
 		);
 	}
 	const out = emptyOut();
+	// A capture of its own, since the block can render alongside other expressions.
+	const capture = startCapture(run);
 	const done = () => {
 		state.blockDepth--;
+		endCapture(run, capture);
 		return new Markup(out.s, entry.def.strategy || "html");
 	};
 	const result = withCaller(run, span, () =>
-		entry.def.body(entry.run, blockScope(entry.def, scope), out),
+		entry.def.body(
+			entry.run.within(capture),
+			blockScope(entry.def, scope),
+			out,
+		),
 	);
 	if (result instanceof Promise) {
 		return result.then(done, (error: unknown) => {
@@ -2977,7 +3051,7 @@ export const assign = (
 	if (owner === run.state.globals) {
 		throw fail(run, span, "assign-global", `Cannot assign to global "${name}"`);
 	}
-	if (owner !== null && run.state.section !== null) {
+	if (owner !== null && run.capture?.section) {
 		owner = sectionCopy(scope, owner);
 	}
 	(owner ?? scope)[name] = value ?? null;
@@ -3320,6 +3394,15 @@ const buildArguments = (
 	return result;
 };
 
+/** A short, fast hash of text as up to 7 base-36 digits: 32-bit FNV-1a. Not for anything that must be secret. */
+const shortHash = (text: string): string => {
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < text.length; i++) {
+		hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193);
+	}
+	return (hash >>> 0).toString(36);
+};
+
 /** Normalises a `for` loop's value into parallel arrays of values and keys. */
 export const loopItems = (
 	run: Run,
@@ -3334,11 +3417,16 @@ export const loopItems = (
 		return { values: keys.map((key) => value[key]), keys };
 	}
 	if (value instanceof Map) {
-		const keys = mapKeys(value);
-		return {
-			values: keys.map((key) => value.get(key)),
-			keys: wantKeys ? keys : null,
-		};
+		if (wantKeys) {
+			const keys = mapKeys(value);
+			return { values: keys.map((key) => value.get(key)), keys };
+		}
+		// Without keys, the value of every entry whatever its key, except those under blocked names.
+		const values: unknown[] = [];
+		for (const [key, item] of value) {
+			if (typeof key !== "string" || !BLOCKED_NAMES.has(key)) values.push(item);
+		}
+		return { values, keys: null };
 	}
 	if (typeof value === "string" || value instanceof Markup) {
 		throw fail(
@@ -3368,6 +3456,20 @@ export const loopItems = (
 			}
 		}
 		return { values, keys: null };
+	}
+	if (
+		typeof value === "object" &&
+		typeof (value as { [Symbol.asyncIterator]?: unknown })[
+			Symbol.asyncIterator
+		] === "function"
+	) {
+		throw fail(
+			run,
+			span,
+			"not-iterable",
+			"Cannot loop over an async iterable, because Kiln doesn't wait for one",
+			"Collect its items into an array in your function first.",
+		);
 	}
 	throw fail(
 		run,

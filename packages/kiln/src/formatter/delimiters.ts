@@ -209,9 +209,20 @@ export const printDelimiter = (
 		const gap = source.slice(previousEnd, piece.start);
 		if (gap.includes("\n")) {
 			line++;
-			// Closing brackets at the start of a line line up with the line that opened them.
+			// Closing brackets at the start of a line line up with the line that opened them. Only those on this line count.
 			let closers = 0;
-			while (roles[index + closers] === "close") closers++;
+			while (
+				roles[index + closers] === "close" &&
+				(closers === 0 ||
+					!source
+						.slice(
+							(pieces[index + closers - 1] as Piece).end,
+							(pieces[index + closers] as Piece).start,
+						)
+						.includes("\n"))
+			) {
+				closers++;
+			}
 			out += `\n${indent}${unit.repeat(closers > 0 ? steps(closers) : Math.max(steps(0), 1))}`;
 		} else if (index === 0) out += " ";
 		else {

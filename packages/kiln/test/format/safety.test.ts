@@ -23,4 +23,10 @@ describe("format: safety", () => {
 			expect(format(once)).toBe(once);
 		},
 	);
+
+	test("formats a template that ends with an island", () => {
+		expect(format('<div>\n{% island "c" %}\nfallback\n{% endisland %}')).toBe(
+			'<div>\n\t{% island "c" %}\n\t\tfallback\n\t{% endisland %}',
+		);
+	});
 });

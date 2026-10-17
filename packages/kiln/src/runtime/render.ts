@@ -7,6 +7,7 @@ import {
 import { resolveTemplateName } from "../names.js";
 import type { Span } from "../source.js";
 import { suggest } from "../suggest.js";
+import { Markup } from "./markup.js";
 import { childScope } from "./scope.js";
 import {
 	type BlockDef,
@@ -50,6 +51,24 @@ export const hold = (value: unknown): unknown =>
 	!(value instanceof Promise)
 		? new Held(value)
 		: value;
+
+/**
+ * `hold` for a value from your data, which may itself be a promise: a promise in render data is a value like any
+ * other, and is never waited for. Return a value from a callback that never waits, after a promise, through it.
+ */
+export const holdData = (value: unknown): unknown =>
+	((typeof value === "object" && value !== null) ||
+		typeof value === "function") &&
+	"then" in value
+		? new Held(value)
+		: value;
+
+/**
+ * A value from your data, returned by an expression that may wait. Whatever runs the expression waits for any promise
+ * it returns, so a promise in the data comes back inside a promise of its own, which resolves to it held.
+ */
+export const passData = (value: unknown): unknown =>
+	value instanceof Promise ? Promise.resolve(new Held(value)) : value;
 
 /** Takes a value back out of `hold`. Use on every value a promise resolves to. */
 export const unhold = (value: unknown): unknown =>
@@ -178,6 +197,20 @@ export const consume = (run: Run, amount: number): void => {
 	state.steps += amount;
 	if (state.steps > state.maxSteps) {
 		issue("limit-steps", `Render stopped after ${state.maxSteps} steps`);
+	}
+};
+
+/** `consume`, failing at `span`. For work in proportion to a value's size, such as the variables an include passes. */
+export const consumeAt = (run: Run, span: Span, amount: number): void => {
+	const state = run.state;
+	state.steps += amount;
+	if (state.steps > state.maxSteps) {
+		throw fail(
+			run,
+			span,
+			"limit-steps",
+			`Render stopped after ${state.maxSteps} steps`,
+		);
 	}
 };
 
@@ -336,13 +369,17 @@ export const withCaller = <T>(
 	}
 };
 
-/** Loads a template by name, relative to the current template. Returns null for a missing template when `ignoreMissing` is set. */
+/**
+ * Loads a template by name, relative to the current template. Markup counts as its text. Returns null for a missing
+ * template when `ignoreMissing` is set.
+ */
 export const loadTemplate = (
 	run: Run,
-	name: unknown,
+	value: unknown,
 	span: Span,
 	ignoreMissing = false,
 ): CompiledTemplate | null | Promise<CompiledTemplate | null> => {
+	const name = value instanceof Markup ? value.value : value;
 	if (typeof name !== "string") {
 		throw fail(
 			run,
@@ -354,8 +391,9 @@ export const loadTemplate = (
 	const names = run.template.resolved;
 	let ref = names.get(name);
 	if (ref === undefined) {
+		// Names may be built from data, so a new one is checked against the output limit before it is resolved.
 		const resolved = locating(run, span, () =>
-			resolveTemplateName(name, run.template.name),
+			resolveTemplateName(checkLength(run, name), run.template.name),
 		);
 		ref = { resolved, template: null, generation: -1 };
 		remember(names, name, ref);
@@ -575,7 +613,7 @@ const embedLoaded = (
 		}
 		try {
 			const result = loaded.body(
-				new Run(state, loaded, depth, slots, passed),
+				new Run(state, loaded, depth, slots, passed, run.capture),
 				scope,
 				out,
 			);
@@ -664,7 +702,7 @@ export const importsFor = (
 	return finish(loaded as (CompiledTemplate | null)[]);
 };
 
-/** Creates an isolated scope holding globals plus the given variables. */
+/** Creates an isolated scope holding globals plus the given variables. Each variable passed counts as a step. */
 export const isolatedScope = (
 	run: Run,
 	variables: unknown,
@@ -675,10 +713,12 @@ export const isolatedScope = (
 	if (variables === null || variables === undefined) return { scope, passed };
 	if (isPlainObject(variables)) {
 		const keys = hashKeys(variables);
+		consumeAt(run, span, keys.length);
 		for (const key of keys) scope[key] = variables[key] ?? null;
 		return { scope, passed: keys };
 	}
 	if (variables instanceof Map) {
+		consumeAt(run, span, variables.size);
 		for (const key of mapKeys(variables)) {
 			scope[key] = variables.get(key) ?? null;
 			passed.push(key);
@@ -696,8 +736,8 @@ export const isolatedScope = (
 
 /**
  * Renders a template into `out`, following `extends` and sharing `scope` along the inheritance chain. `inherited` is
- * the block table of the child templates below it, and `caller` the render that asked for it, for depth errors: null
- * for the outermost render. `block`, for `renderBlock`, is the block to render once the top-most template is reached,
+ * the block table of the child templates below it, and `caller` the render that asked for it, for depth errors and the
+ * capture it renders in: null for the outermost render. `block`, for `renderBlock`, is the block to render once the top-most template is reached,
  * instead of its content.
  */
 export const renderTemplate = (
@@ -727,7 +767,14 @@ export const renderTemplate = (
 		addLayoutSlotFlags(scope, template, slots);
 	}
 
-	const run = new Run(state, template, depth, slots, passed);
+	const run = new Run(
+		state,
+		template,
+		depth,
+		slots,
+		passed,
+		caller?.capture ?? null,
+	);
 
 	// Every template in an inheritance chain shares one block table, most derived definition first, so `parent()` can find the next one from any level.
 	if (inherited || template.blocks.size > 0) {

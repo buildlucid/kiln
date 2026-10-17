@@ -36,6 +36,15 @@ describe("escapeWith", () => {
 		);
 	});
 
+	test("every strategy stops once the result passes the limit", () => {
+		for (const strategy of ["html", "attr", "js", "css", "url"] as const) {
+			expect(() => escapeWith("<<<<<<<<", strategy, 20)).toThrow(
+				expect.objectContaining({ code: "limit-output" }),
+			);
+			expect(() => escapeWith("<", strategy, 20)).not.toThrow();
+		}
+	});
+
 	test("url refuses lone surrogates", () => {
 		expect(() => escapeWith("\uD800", "url")).toThrow(KilnIssue);
 	});

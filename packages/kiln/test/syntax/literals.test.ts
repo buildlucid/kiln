@@ -70,6 +70,25 @@ describe("hashes", () => {
 		expect(await render("{{ {a: 1,}.a }}")).toBe("1");
 	});
 
+	test("number keys are the number as JavaScript writes it", async () => {
+		const template =
+			'{% set h = { 1: "a", 1.0: "b", 01: "c", 1_000: "d" } %}{{ h|keys|join(",") }}|{{ h[1] }}';
+		expect(await render(template)).toBe("1,1000|c");
+	});
+
+	test("loop and slots can be shorthand, though they are reserved", async () => {
+		expect(
+			await render("{% for i in [1] %}{{ {loop}.loop.index }}{% endfor %}"),
+		).toBe("1");
+		const card = '{{ {slots}.slots.footer ? "footer" : "none" }}';
+		expect(
+			await render(
+				'{% component "card" %}{% fill "footer" %}x{% endfill %}{% endcomponent %}',
+				{ templates: { card } },
+			),
+		).toBe("footer");
+	});
+
 	test("computed keys must be strings or numbers", async () => {
 		expect(await errorCode("{{ { ([1]): 1 }|length }}")).toBe("type-error");
 	});

@@ -134,8 +134,11 @@ describe("check across templates", () => {
 		expect(
 			await codes('{% extends "layouts/docs" %}{% props title %}'),
 		).toEqual([]);
-		// Without props, the render data may hold it.
+		// Without props, or with a rest prop, the render data may hold it.
 		expect(await codes('{% extends "layouts/base" %}')).toEqual([]);
+		expect(
+			await codes('{% extends "layouts/base" %}{% props title, ...rest %}'),
+		).toEqual([]);
 	});
 
 	test("warns about undeclared variables in a template with props", async () => {
@@ -147,6 +150,33 @@ describe("check across templates", () => {
 			{ code: "undeclared-variable", severity: "warning" },
 		]);
 		expect(diagnostics[0]?.message).toContain('Did you mean "title"?');
+	});
+
+	test("warns about names a macro reads that aren't its parameters or globals", async () => {
+		const diagnostics = await kiln.check(
+			"draft",
+			"{% props title %}{% macro m(a, b = title) %}{{ a }}{{ c }}{% endmacro %}{{ m(1) }}",
+		);
+		expect(diagnostics).toMatchObject([
+			{ code: "undeclared-variable", start: { column: 36 } },
+			{ code: "undeclared-variable", start: { column: 55 } },
+		]);
+		expect(diagnostics[0]?.message).toBe(
+			'"title" is not a parameter of its macro or a global',
+		);
+	});
+
+	test("warns about loop outside a loop, and slots in a template without slots", async () => {
+		expect(
+			await codes(
+				"{% props a %}{% for x in a %}{{ loop.index }}{% endfor %}{{ loop.index }}{{ slots.footer }}",
+			),
+		).toEqual(["undeclared-variable", "undeclared-variable"]);
+		expect(
+			await codes(
+				'{% props a %}{{ slots.footer }}{% slot "footer" %}{% endslot %}',
+			),
+		).toEqual([]);
 	});
 
 	test("follows strict mode", async () => {

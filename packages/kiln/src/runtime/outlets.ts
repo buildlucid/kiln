@@ -1,6 +1,6 @@
 import type { Span } from "../source.js";
 import { fail } from "./render.js";
-import type { RenderState, Run } from "./types.js";
+import { additionLog, Capture, type RenderState, type Run } from "./types.js";
 
 /*
  * Outlets and `add to`.
@@ -17,8 +17,13 @@ import type { RenderState, Run } from "./types.js";
  * Stands for the outlet's indentation in added content, which is rendered before the outlet may be reached. The
  * outlet puts its own indentation in place when it closes, so content lines up the same whichever runs first, and a
  * cached section's additions line up wherever they are replayed. A Unicode noncharacter, meant for uses like this.
+ *
+ * Indentation only starts lines, so only a marker at the start of an addition or after a line break is replaced. The
+ * same character elsewhere, in your data, is left alone.
  */
 export const OUTLET_INDENT = "\uFDD0";
+
+const INDENT_MARKERS = /(?:^|\n)\uFDD0/g;
 
 /** Where an outlet stands in the render's output, and the indentation its content takes. */
 export type OutletMark = {
@@ -37,9 +42,23 @@ export type Addition = {
 	readonly once: string | null;
 };
 
+/** The additions in a log, in order, with each capture's in its place. See `Capture`. */
+export const additionsIn = (
+	log: readonly (Addition | Capture)[],
+	into: Addition[] = [],
+): Addition[] => {
+	for (const entry of log) {
+		if (entry instanceof Capture) {
+			if (entry.additions !== null) additionsIn(entry.additions, into);
+		} else into.push(entry);
+	}
+	return into;
+};
+
 /**
- * Records an addition. A `once` tag that already added keeps its first content. New content for a closed outlet is
- * an error, since the outlet's part of the page may have been sent.
+ * Records an addition in the log of the capture `run` is in, or the render's. A `once` tag that already added keeps
+ * its first content. New content for a closed outlet is an error, since the outlet's part of the page may have been
+ * sent.
  */
 export const recordAddition = (
 	run: Run,
@@ -53,7 +72,7 @@ export const recordAddition = (
 		if (first !== undefined) {
 			const repeat =
 				first === addition.html ? addition : { ...addition, html: first };
-			(state.additions ??= []).push(repeat);
+			additionLog(run).push(repeat);
 			return;
 		}
 	}
@@ -69,7 +88,7 @@ export const recordAddition = (
 	if (addition.once !== null) {
 		(state.once ??= new Map()).set(addition.once, addition.html);
 	}
-	(state.additions ??= []).push(addition);
+	additionLog(run).push(addition);
 };
 
 /** Closes every outlet reached so far, fixing its content. */
@@ -88,18 +107,22 @@ const contentFor = (
 ): string => {
 	const seen = new Set<string>();
 	let content = "";
-	for (const addition of state.additions ?? []) {
+	for (const addition of additionsIn(state.additions ?? [])) {
 		if (addition.outlet !== name) continue;
 		if (addition.once !== null) {
 			if (seen.has(addition.once)) continue;
 			seen.add(addition.once);
 		}
-		content += addition.html;
+		// The outlet shares its line, so the first line of its content needs no indentation.
+		const html =
+			content === "" && mark.inline && addition.html.startsWith(OUTLET_INDENT)
+				? addition.html.slice(OUTLET_INDENT.length)
+				: addition.html;
+		content += html.replace(INDENT_MARKERS, (marker) =>
+			marker === OUTLET_INDENT ? mark.indent : `\n${mark.indent}`,
+		);
 	}
-	if (mark.inline && content.startsWith(OUTLET_INDENT)) {
-		content = content.slice(OUTLET_INDENT.length);
-	}
-	return content.replaceAll(OUTLET_INDENT, mark.indent);
+	return content;
 };
 
 /**

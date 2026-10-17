@@ -41,6 +41,12 @@ export type Analysis = {
 	macros: string[];
 };
 
+/** Where variables are first read without a guard, by name: from the context, and inside macros. See `analyzeTemplate`. */
+export type Reads = {
+	context: Map<string, Span>;
+	macros: Map<string, Span>;
+};
+
 const MAX_DEPTH = 1000;
 
 /** The statement lists nested inside a statement. */
@@ -74,12 +80,12 @@ export const childStatements = (node: Statement): Statement[][] => {
 /**
  * Walks a compiled template's syntax tree and reports what it uses.
  *
- * When `reads` is given, it collects where each variable in `variables` is first read without a guard such as `??`, `?.`, `default` or `is defined`. Strict mode fails on those reads when the variable is missing.
+ * When `reads` is given, it collects where each variable in `variables` is first read without a guard such as `??`, `?.`, `default` or `is defined`, and where a macro first reads a name that is neither its parameter nor a global. Strict mode fails on those reads when the variable is missing.
  */
 export const analyzeTemplate = (
 	template: CompiledTemplate,
 	globals: Scope,
-	reads?: Map<string, Span>,
+	reads?: Reads,
 ): Analysis => {
 	const source = template.source;
 	const variables = new Set<string>();
@@ -121,12 +127,14 @@ export const analyzeTemplate = (
 		});
 	};
 
-	// Scopes of declared names, innermost last. `null` marks an isolated scope, such as a macro body.
+	// Scopes of declared names, innermost last. `null` marks where an isolated scope, such as a macro's, begins. Names
+	// outside it can't be seen.
 	const scopes: (Set<string> | null)[] = [new Set()];
 	const declared = (name: string) => {
 		for (let i = scopes.length - 1; i >= 0; i--) {
 			const scope = scopes[i];
-			if (scope === null || scope?.has(name)) return true;
+			if (scope === null) break;
+			if (scope?.has(name)) return true;
 		}
 		return name in globals;
 	};
@@ -171,10 +179,18 @@ export const analyzeTemplate = (
 		else expression(node);
 	};
 
+	// A template that outputs slots, or extends a layout that may, gets a `slots` hash.
+	if (template.slotNames.length > 0 || template.parent) scopes[0]?.add("slots");
+
 	const read = (name: string, span: Span, isGuarded: boolean) => {
-		if (name === "loop" || name === "slots" || declared(name)) return;
-		variables.add(name);
-		if (reads && !isGuarded && !reads.has(name)) reads.set(name, span);
+		if (declared(name) || importAliases.has(name) || importedNames.has(name)) {
+			return;
+		}
+		// Inside a macro, a missing name is never one from the context.
+		const inMacro = scopes.includes(null);
+		if (!inMacro) variables.add(name);
+		const found = inMacro ? reads?.macros : reads?.context;
+		if (found && !isGuarded && !found.has(name)) found.set(name, span);
 	};
 
 	const visitExpression = (node: Expression): void => {
@@ -284,7 +300,9 @@ export const analyzeTemplate = (
 			case "For":
 				expression(node.iterable);
 				withScope(
-					node.keyName ? [node.valueName, node.keyName] : [node.valueName],
+					node.keyName
+						? [node.valueName, node.keyName, "loop"]
+						: [node.valueName, "loop"],
 					() => statements(node.body),
 				);
 				if (node.alternate) statements(node.alternate);

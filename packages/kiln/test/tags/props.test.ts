@@ -111,6 +111,14 @@ describe("edge cases", () => {
 		).toBe("unknown-prop");
 	});
 
+	test("the first undeclared variable is named in the order a hash holds its keys", async () => {
+		const error = await renderError(
+			'{% include "p" with { zed: 1, 7: 2, a: 1 } %}',
+			{ templates: { p: "{% props a %}" } },
+		);
+		expect(error.message).toContain('"7" was passed to p.kiln');
+	});
+
 	test("a layout's required props are checked", async () => {
 		expect(
 			await errorCode('{% extends "base" %}', {

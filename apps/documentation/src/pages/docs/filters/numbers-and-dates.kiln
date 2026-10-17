@@ -21,7 +21,7 @@
 
 	<h2><code>formatNumber</code></h2>
 
-	<p>Formats a number with <code>Intl.NumberFormat</code>. Pass any of its options as named arguments, plus <code>locale</code>. Option values must be strings, numbers or booleans.</p>
+	<p>Formats a number with <code>Intl.NumberFormat</code>. Pass any of its options as named arguments, plus <code>locale</code>. Option values must be strings, numbers or booleans, and an option name <code>Intl</code> doesn't know is an error.</p>
 
 	{{ '{{ 1234567.891|formatNumber }}
 {{ 49.5|formatNumber(style: "currency", currency: "GBP") }}
@@ -48,14 +48,17 @@
 
 	<h2><code>formatDate</code></h2>
 
-	<p>Formats a date with <code>Intl.DateTimeFormat</code>. It accepts a <code>Date</code>, an ISO 8601 string or milliseconds since 1970. Pass any of its options as named arguments, plus <code>locale</code> and <code>timeZone</code>. Option values must be strings, numbers or booleans. The default style is <code>dateStyle: "medium"</code>.</p>
+	<p>Formats a date with <code>Intl.DateTimeFormat</code>. It accepts a <code>Date</code>, an ISO 8601 string or milliseconds since 1970. A day past the end of its month, such as <code>2026-02-30</code>, is an error. Pass any of its options as named arguments, plus <code>locale</code> and <code>timeZone</code>. Option values must be strings, numbers or booleans. The default style is <code>dateStyle: "medium"</code>, unless you pass an option that chooses what to show, such as <code>timeStyle</code>, <code>month</code> or <code>hour</code>.</p>
 
 	{{ '{{ "2026-10-15"|formatDate }}
 {{ "2026-10-15"|formatDate(dateStyle: "long", locale: "en-GB") }}
 {{ "2026-10-15T14:30:00Z"|formatDate(timeStyle: "short", timeZone: "Europe/London") }}
 {{ "2026-10-15"|formatDate(weekday: "long", day: "numeric", month: "long") }}'|example }}
 
-	<p>A date and time without an offset, such as <code>2026-10-15T10:00</code>, is read as UTC.</p>
+	<p>A date and time without an offset, such as <code>2026-10-15T10:00</code>, is read as UTC. So is a date on its own: <code>2026-10-15</code> is midnight UTC, which a time zone behind UTC, such as <code>America/New_York</code>, shows as the day before. Pass <code>timeZone: "UTC"</code> to show a date on its own as written.</p>
+
+	{{ '{{ "2026-10-15"|formatDate(timeZone: "America/New_York") }}
+{{ "2026-10-15"|formatDate(timeZone: "UTC") }}'|example }}
 
 	<h2>Locale and time zone</h2>
 

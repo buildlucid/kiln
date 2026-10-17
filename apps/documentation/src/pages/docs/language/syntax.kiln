@@ -39,6 +39,8 @@
 
 	<p>Output tags never remove their line, because they print something.</p>
 
+	<p>A byte order mark at the start of a template is ignored, so a file saved with one prints the same as a file without.</p>
+
 	<p>To remove whitespace by hand, add a <code>-</code> inside a delimiter. It removes all whitespace on that side, including line breaks.</p>
 
 	{% apply example(context: { label: "Save" }) %}
@@ -102,7 +104,7 @@
 		<li>Only text in templates is indented. Values you output keep their own whitespace, including what a macro returns and what <code>set</code> and <code>apply</code> capture.</li>
 	</ul>
 
-	<p>Kiln never changes the indentation of lines inside a <code>&lt;pre&gt;</code> or <code>&lt;textarea&gt;</code>, because there the whitespace is part of the content.</p>
+	<p>Kiln never changes the indentation of lines inside a <code>&lt;pre&gt;</code> or <code>&lt;textarea&gt;</code>, because there the whitespace is part of the content. Content an <code>include</code> or <code>component</code> inserts there is not indented either. A <code>&lt;pre&gt;</code> inside an HTML comment, script or style doesn't count.</p>
 
 	<h2>Strings</h2>
 
@@ -114,7 +116,7 @@
 		{% endverbatim %}
 	{% endapply %}
 
-	<p>Both quote styles support the escapes <code>\\</code>, <code>\'</code>, <code>\"</code>, <code>\n</code>, <code>\r</code>, <code>\t</code> and <code>\u{hex}</code>. Write <code>\#{</code> for a literal <code>#{</code>.</p>
+	<p>Both quote styles support the escapes <code>\\</code>, <code>\'</code>, <code>\"</code>, <code>\n</code>, <code>\r</code>, <code>\t</code> and <code>\u{hex}</code>. In a double-quoted string, write <code>\#{</code> for a literal <code>#{</code>. Single-quoted strings never interpolate, so <code>'#{'</code> is already literal there, and <code>\#</code> is an error.</p>
 
 	<h2>Names</h2>
 
@@ -127,9 +129,9 @@
 	<p>Templates are named by their path, such as <code>pages/home.kiln</code> or <code>components/card</code>.</p>
 
 	<ul>
-		<li>The <code>.kiln</code> extension is optional.</li>
+		<li>The <code>.kiln</code> extension is optional. A name whose last part already holds a dot, such as <code>data/config.json</code>, is used as written, so write <code>partials/nav.main.kiln</code> in full.</li>
 		<li>Names starting with <code>./</code> or <code>../</code> are relative to the current template.</li>
 		<li>Other names are relative to the loader's root folder.</li>
-		<li>A name can't point above the root folder.</li>
+		<li>A name can't point above the root folder, or name a folder, such as <code>./</code> or <code>partials/</code>.</li>
 	</ul>
 {% endblock %}

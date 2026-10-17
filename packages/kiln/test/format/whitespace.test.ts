@@ -6,22 +6,27 @@ describe("format: whitespace", () => {
 		expect(format("<p>a</p>\n\n\n\n<p>b</p>\n")).toBe("<p>a</p>\n\n<p>b</p>\n");
 	});
 
-	test("removes blank lines at the start and end", () => {
-		expect(format("\n\n<p>a</p>\n\n\n")).toBe("<p>a</p>\n");
+	test("keeps whitespace at the start and end of the file as written", () => {
+		// A template can be placed inside a line, where these show.
+		expect(format("\n\n  <p>a</p>\n<p>b</p>  \n\n")).toBe(
+			"\n\n  <p>a</p>\n<p>b</p>  \n\n",
+		);
+		expect(format("<div>\n<p>a</p>\n</div>")).toBe("<div>\n\t<p>a</p>\n</div>");
 	});
 
-	test("removes trailing spaces and ends with one line break", () => {
-		expect(format("<p>a</p>   \n<p>b</p>\t")).toBe("<p>a</p>\n<p>b</p>\n");
+	test("removes trailing spaces", () => {
+		expect(format("<p>a</p>   \n<p>b</p>\n")).toBe("<p>a</p>\n<p>b</p>\n");
+		expect(format("<p>a</p>   \n\t\n<p>b</p>")).toBe("<p>a</p>\n\n<p>b</p>");
 	});
 
 	test("turns Windows line breaks into \\n", () => {
-		expect(format("<div>\r\n<p>a</p>\r\n</div>\r\n")).toBe(
-			"<div>\n\t<p>a</p>\n</div>\n",
+		expect(format("<div>\r\n<p>a</p>\r\n</div>")).toBe(
+			"<div>\n\t<p>a</p>\n</div>",
 		);
 	});
 
-	test("an empty template stays empty", () => {
+	test("a template of only whitespace stays as it is", () => {
 		expect(format("")).toBe("");
-		expect(format("\n\n")).toBe("");
+		expect(format("\n \n")).toBe("\n \n");
 	});
 });

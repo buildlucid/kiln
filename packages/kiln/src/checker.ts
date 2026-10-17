@@ -1,4 +1,4 @@
-import { analyzeTemplate, childStatements } from "./analyzer.js";
+import { analyzeTemplate, childStatements, type Reads } from "./analyzer.js";
 import { createDiagnostic, type Diagnostic } from "./errors.js";
 import { resolveTemplateName } from "./names.js";
 import type { Expression, HashEntry, Statement } from "./parser/ast.js";
@@ -85,7 +85,7 @@ export const checkReferences = async (
 			createDiagnostic(template.source, code, message, span, severity),
 		);
 	};
-	const ownProps = propsOf(template)?.props ?? null;
+	const ownProps = propsOf(template);
 
 	/** Loads a named template, reporting it when it doesn't exist. */
 	const use = async (name: string, span: Span, optional = false) => {
@@ -157,14 +157,15 @@ export const checkReferences = async (
 		}
 	};
 
-	// A page with `props` accepts only those, so its layouts can only get props it declares or sets.
+	// A page with `props` accepts only those, so its layouts can only get props it declares or sets. With a rest prop
+	// it accepts anything, so they can get any prop.
 	const layouts = async (node: Extract<Statement, { type: "Extends" }>) => {
 		let name = literalName(node.template, template.name);
 		if (!name) return;
 		let layout = await use(name, node.template.span);
-		if (!ownProps || !env.strict) return;
+		if (!ownProps || ownProps.rest !== null || !env.strict) return;
 		const provided = new Set([
-			...ownProps.map((prop) => prop.name),
+			...ownProps.props.map((prop) => prop.name),
 			...setsOf(template),
 		]);
 		const seen = new Set([template.name]);
@@ -205,16 +206,25 @@ export const checkReferences = async (
 	await visit(template.ast.body);
 
 	if (ownProps && env.strict) {
-		const reads = new Map<string, Span>();
+		const reads: Reads = { context: new Map(), macros: new Map() };
 		analyzeTemplate(template, env.globals, reads);
-		const declared = ownProps.map((prop) => prop.name);
-		for (const [name, span] of reads) {
+		const declared = ownProps.props.map((prop) => prop.name);
+		for (const [name, span] of reads.context) {
 			report(
 				"undeclared-variable",
 				withHint(
 					`"${name}" is not a prop, a global or a variable set in this template`,
 					suggest(name, declared),
 				),
+				span,
+				"warning",
+			);
+		}
+		// A macro only sees its parameters and globals.
+		for (const [name, span] of reads.macros) {
+			report(
+				"undeclared-variable",
+				`"${name}" is not a parameter of its macro or a global`,
 				span,
 				"warning",
 			);

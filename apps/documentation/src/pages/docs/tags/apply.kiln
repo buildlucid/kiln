@@ -11,7 +11,17 @@
 		{% endverbatim %}
 	{% endapply %}
 
-	<p>The content was escaped as it rendered, so the result isn't escaped again. <code>apply</code> doesn't create a scope.</p>
+	<p>The content was escaped as it rendered. The built-in text filters, such as <code>upper</code> and <code>replace</code>, keep it safe and change only its text, so it isn't escaped twice. Text they add, such as a replacement, is escaped. See <a href="/docs/filters/strings/#safe-markup">Safe markup</a>.</p>
+
+	{% apply example(context: { name: "<em>Ada</em>" }) %}
+		{% verbatim %}
+{% apply replace("NAME", name) %}
+	<p>Hello, NAME</p>
+{% endapply %}
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>A filter that returns a plain string, such as one of your own, has its result escaped like any other output. Return <a href="/docs/api/safe-markup/">safe markup</a> from it to keep the HTML. <code>apply</code> doesn't create a scope.</p>
 
 	<p>This site uses <code>apply</code> with its own filters to highlight every code example.</p>
 {% endblock %}

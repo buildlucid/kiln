@@ -14,3 +14,13 @@ describe("unicode", () => {
 		expect(await render('{{ "a😀"|reverse }}')).toBe("😀a");
 	});
 });
+
+describe("hashes", () => {
+	test("keeps the keys, in reverse order", async () => {
+		expect(
+			await render(
+				'{% for k, v in { "1": "a", "2": "b", c: "c" }|reverse %}{{ k }}={{ v }} {% endfor %}',
+			),
+		).toBe("c=c 2=b 1=a ");
+	});
+});

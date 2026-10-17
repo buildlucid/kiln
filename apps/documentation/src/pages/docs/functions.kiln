@@ -5,17 +5,18 @@
 
 	<h2><code>range</code></h2>
 
-	<p>Returns an array of numbers from a start to an end, including both. The optional third argument is the step.</p>
+	<p>Returns an array of numbers from a start to an end, including both. The optional third argument is the step. A fractional step, such as 0.1, still reaches the end.</p>
 
 	{{ '{{ range(1, 5)|join(", ") }}
 {{ range(0, 10, 5)|join(", ") }}
-{{ range(3, 1)|join(", ") }}'|example }}
+{{ range(3, 1)|join(", ") }}
+{{ range(0, 0.3, 0.1)|join(", ") }}'|example }}
 
 	<p>For a step of 1, <code>1..5</code> is shorter.</p>
 
 	<h2><code>max</code> and <code>min</code></h2>
 
-	<p>Return the largest or smallest argument, or the largest or smallest item of one array.</p>
+	<p>Return the largest or smallest argument, the largest or smallest item of one array, or the largest or smallest value of one hash. Null can't be compared, so it is an error.</p>
 
 	{{ '{{ max(3, 8, 1) }} {{ min([4, 2, 9]) }}'|example }}
 

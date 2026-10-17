@@ -50,3 +50,43 @@ describe("replacement text", () => {
 		expect(await render('{{ "a"|replace("a", "$&$&")|raw }}')).toBe("$&$&");
 	});
 });
+
+describe("markup", () => {
+	test("replaces text in safe markup, escaping a plain replacement", async () => {
+		expect(
+			await render('{{ "<b>X</b>"|raw|replace("X", name) }}', {
+				context: { name: "<i>Ada</i>" },
+			}),
+		).toBe("<b>&lt;i&gt;Ada&lt;/i&gt;</b>");
+	});
+
+	test("matches the text, not tags or entities, and keeps a safe replacement", async () => {
+		expect(
+			await render(
+				'{{ "<b>a&lt;b</b>"|raw|replace({ b: "<i>B</i>"|raw, "<": "[" }) }}',
+			),
+		).toBe("<b>a[<i>B</i></b>");
+	});
+});
+
+describe("limits", () => {
+	test("a hash counts the characters it compares against maxSteps", async () => {
+		const keys = Object.fromEntries(
+			Array.from({ length: 50 }, (_, i) => [`${"a".repeat(i + 2)}b`, "x"]),
+		);
+		expect(
+			await errorCode("{{ text|replace(keys) }}", {
+				context: { text: "a".repeat(2000), keys },
+				limits: { maxSteps: 1000 },
+			}),
+		).toBe("limit-steps");
+	});
+
+	test("a hash stops before building text longer than maxOutputLength", async () => {
+		expect(
+			await errorCode('{{ "aaaa"|replace({ a: "xxxx" }) }}', {
+				limits: { maxOutputLength: 10 },
+			}),
+		).toBe("limit-output");
+	});
+});

@@ -15,8 +15,13 @@ describe("format: options", () => {
 		expect(formatEdits("<div>\n<p>{{x}}</p>\n</div>")).toEqual([
 			{ start: 6, end: 6, text: "\t" },
 			{ start: 9, end: 14, text: "{{ x }}" },
-			{ start: 25, end: 25, text: "\n" },
 		]);
 		expect(formatEdits("<p>a</p>\n")).toEqual([]);
+	});
+
+	test("tabWidth must be a whole number of at least 1", () => {
+		for (const tabWidth of [0, -2, 2.5, Number.NaN]) {
+			expect(() => format("<p>a</p>", { tabWidth })).toThrow(RangeError);
+		}
 	});
 });

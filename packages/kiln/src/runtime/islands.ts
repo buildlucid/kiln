@@ -4,9 +4,8 @@ import { Markup } from "./markup.js";
 import { closeOutlets, takeOutput } from "./outlets.js";
 import {
 	addSlotFlags,
-	consume,
+	consumeAt,
 	fail,
-	locating,
 	markCaller,
 	renderTemplate,
 } from "./render.js";
@@ -138,8 +137,7 @@ export const islandProps = (
 		);
 	// Each list and hash is charged before it is copied, so props that share one object in many places can't make
 	// unlimited work.
-	const charge = (count: number) =>
-		locating(run, span, () => consume(run, count));
+	const charge = (count: number) => consumeAt(run, span, count);
 	const copyHash = (
 		hash: Record<string, unknown> | Map<unknown, unknown>,
 		path: string,
@@ -235,13 +233,17 @@ export const recordIsland = (
 			`Two different islands have the id "${id}". Change one island's props slightly`,
 		);
 	}
-	(run.state.deferred ??= []).push(id);
+	// A cached section saves the islands it deferred.
+	run.capture?.section?.deferred.push(id);
 	return id;
 };
 
 /**
  * Starts rendering a streamed island on its own, with a render state of its own and the page's state, locale and
  * limits, as the host would render a deferred one. Returns its HTML wrapped to fill `<kiln-island stream="n">`.
+ *
+ * The island's steps count against the page's, and its depth starts at the island tag's, so streaming does no more
+ * work than rendering the island in place.
  */
 export const streamIsland = (
 	run: Run,
@@ -262,6 +264,13 @@ export const streamIsland = (
 		page.userState,
 		page.signal,
 	);
+	// Islands run alongside the page and each other, so they share its counter rather than copying it.
+	Object.defineProperty(state, "steps", {
+		get: () => page.steps,
+		set: (steps: number) => {
+			page.steps = steps;
+		},
+	});
 	const scope = childScope(page.globals);
 	const passed = Object.keys(props);
 	for (const key of passed) scope[key] = props[key] ?? null;
@@ -275,12 +284,12 @@ export const streamIsland = (
 				template,
 				scope,
 				out,
-				0,
+				run.depth + 1,
 				null,
 				passed,
 				null,
-				null,
-				template.parentSpan,
+				run,
+				span,
 			),
 		)
 		.then(

@@ -333,6 +333,32 @@ describe("indentation of inserted content", () => {
 			),
 		);
 	});
+
+	test("content inserted inside pre and textarea is not indented", async () => {
+		const code = lines("a", "\tb", "");
+		const template = lines("<pre>", '\t{% include "code" %}', "</pre>");
+		expect(await render(template, { templates: { code } })).toBe(
+			lines("<pre>", "a", "\tb", "</pre>"),
+		);
+	});
+
+	test("pre and textarea in HTML comments and scripts are not elements", async () => {
+		const template = lines(
+			"{% if true %}",
+			"\t<!-- <pre> -->",
+			'\t<script>el.innerHTML = "<textarea>";</script>',
+			"\t<p>a</p>",
+			"{% endif %}",
+		);
+		expect(await render(template)).toBe(
+			lines(
+				"<!-- <pre> -->",
+				'<script>el.innerHTML = "<textarea>";</script>',
+				"<p>a</p>",
+				"",
+			),
+		);
+	});
 });
 
 describe("trim markers", () => {

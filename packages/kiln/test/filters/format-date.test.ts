@@ -34,13 +34,21 @@ describe("formatDate", () => {
 		).toBe("10:00 AM");
 	});
 
-	test("reads milliseconds, and days past the end of a month as JavaScript does", async () => {
-		const options = 'timeStyle: "medium", dateStyle: "short", locale: "en-GB"';
+	test("reads milliseconds", async () => {
 		expect(
 			await render(
-				`{{ "2026-10-15T09:30:05.250Z"|formatDate(${options}) }}|{{ "2026-02-29"|formatDate(${options}) }}`,
+				'{{ "2026-10-15T09:30:05.250Z"|formatDate(timeStyle: "medium", dateStyle: "short", locale: "en-GB") }}',
 			),
-		).toBe("15/10/2026, 09:30:05|01/03/2026, 00:00:00");
+		).toBe("15/10/2026, 09:30:05");
+	});
+
+	test("refuses a day past the end of its month", async () => {
+		expect(await errorCode('{{ "2026-02-29"|formatDate }}')).toBe(
+			"invalid-argument",
+		);
+		expect(await errorCode('{{ "2026-04-31T10:00"|formatDate }}')).toBe(
+			"invalid-argument",
+		);
 	});
 
 	test("refuses strings that are not ISO 8601", async () => {
@@ -90,5 +98,15 @@ describe("null", () => {
 				context: { post: { publishedAt: null } },
 			}),
 		).toBe("[]");
+	});
+});
+
+describe("default style", () => {
+	test("options that don't choose what to show keep the medium date", async () => {
+		expect(
+			await render(
+				'{{ "2026-10-15"|formatDate(calendar: "gregory") }}|{{ "2026-10-15"|formatDate(hour12: false) }}',
+			),
+		).toBe("Oct 15, 2026|Oct 15, 2026");
 	});
 });

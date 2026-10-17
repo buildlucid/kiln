@@ -9,13 +9,23 @@ import {
 	isPrecompiled,
 	type PrecompiledTemplate,
 } from "./compiler/precompiled.js";
-import { type Diagnostic, type KilnIssue, KilnRenderError } from "./errors.js";
+import {
+	type Diagnostic,
+	KilnIssue,
+	KilnRenderError,
+	KilnSyntaxError,
+} from "./errors.js";
 import { resolveTemplateName } from "./names.js";
 import type { EscapeStrategy } from "./parser/ast.js";
 import { ESCAPE_STRATEGIES } from "./parser/ast.js";
 import type { IslandMode } from "./runtime/islands.js";
 import { closeOutlets, takeOutput } from "./runtime/outlets.js";
-import { addSlotFlags, isPromise, renderTemplate } from "./runtime/render.js";
+import {
+	addSlotFlags,
+	isPromise,
+	renderTemplate,
+	silence,
+} from "./runtime/render.js";
 import { childScope } from "./runtime/scope.js";
 import { RenderStream } from "./runtime/stream.js";
 import {
@@ -31,15 +41,18 @@ import {
 	type Scope,
 	type TypeCheck,
 } from "./runtime/types.js";
-import { hashKeys, isPlainObject } from "./runtime/values.js";
+import { hashKeys, isPlainObject, typeName } from "./runtime/values.js";
 
 export type { RenderInfo };
 
-/** Where templates come from. Kiln calls `load` once per resolved name, until `invalidate`. */
+/**
+ * Where templates come from. Kiln calls `load` once per resolved name that exists, until `invalidate`, and remembers
+ * a limited number of missing names.
+ */
 export type Loader = {
 	/**
 	 * Returns the source for a resolved name, such as `pages/page.kiln`, or a precompiled module's default export, or
-	 * `null` if it does not exist.
+	 * `null` if it does not exist. May return a promise or another thenable.
 	 */
 	load(
 		name: string,
@@ -47,7 +60,7 @@ export type Loader = {
 		| string
 		| PrecompiledTemplate
 		| null
-		| Promise<string | PrecompiledTemplate | null>;
+		| PromiseLike<string | PrecompiledTemplate | null>;
 	/** Returns every resolved name the loader holds. Rendering never calls it; tools such as `generateTypes` do. */
 	list?(): string[] | Promise<string[]>;
 };
@@ -222,6 +235,44 @@ const DEFAULT_LIMITS: Limits = {
 	maxDepth: 64,
 };
 
+/** The default limits with the host's on top. A limit left out or `undefined` keeps its default. */
+const checkLimits = (limits: Partial<Limits> | undefined): Limits => {
+	const result = { ...DEFAULT_LIMITS };
+	if (limits === undefined) return result;
+	for (const key of Object.keys(DEFAULT_LIMITS) as (keyof Limits)[]) {
+		const value: unknown = limits[key];
+		if (value === undefined) continue;
+		if (typeof value !== "number" || !(value > 0)) {
+			throw new TypeError(`limits.${key} must be a number above 0`);
+		}
+		result[key] = value;
+	}
+	return result;
+};
+
+/** How many missing template names an environment remembers, so it doesn't ask its loader again on every render. */
+const MAX_MISSING = 1000;
+
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
+	typeof value === "object" &&
+	value !== null &&
+	typeof (value as { then?: unknown }).then === "function";
+
+/** Resolves a name passed to the API, failing with a `KilnRenderError` for an invalid one. */
+const resolveName = (name: string): string => {
+	if (typeof name !== "string") {
+		throw new TypeError(
+			`Template name must be a string, but got a ${typeName(name)}`,
+		);
+	}
+	try {
+		return resolveTemplateName(name);
+	} catch (error) {
+		if (!(error instanceof KilnIssue)) throw error;
+		throw new KilnRenderError(error.code, error.message, name);
+	}
+};
+
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const TYPE_NAME = /^[A-Z][A-Za-z0-9_]*$/;
 const TEST_NAME = /^[A-Za-z_][A-Za-z0-9_]*( [A-Za-z_][A-Za-z0-9_]*)?$/;
@@ -304,8 +355,10 @@ class Environment<State> implements EnvironmentCore {
 	readonly #loader: Loader;
 	readonly #cache = new Map<
 		string,
-		CompiledTemplate | null | Promise<CompiledTemplate | null>
+		CompiledTemplate | Promise<CompiledTemplate | null>
 	>();
+	/** Names the loader didn't find. Names may come from requests, so only a limited number are remembered. */
+	readonly #missing = new Set<string>();
 	/** Names passed to `render`, resolved. */
 	readonly #names = new Map<string, string>();
 	generation = 0;
@@ -337,7 +390,7 @@ class Environment<State> implements EnvironmentCore {
 		this.autoescape = options.autoescape ?? "html";
 		this.locale = options.locale ?? "en";
 		this.timeZone = options.timeZone ?? "UTC";
-		this.limits = { ...DEFAULT_LIMITS, ...options.limits };
+		this.limits = checkLimits(options.limits);
 		this.functions = registry("function", builtinFunctions, options.functions);
 		this.filters = registry("filter", builtinFilters, options.filters);
 		this.tests = registry("test", builtinTests, options.tests);
@@ -369,6 +422,7 @@ class Environment<State> implements EnvironmentCore {
 	): CompiledTemplate | null | Promise<CompiledTemplate | null> {
 		const cached = this.#cache.get(name);
 		if (cached !== undefined) return cached;
+		if (this.#missing.has(name)) return null;
 
 		const compile = (source: string | PrecompiledTemplate | null) => {
 			if (source === null) return null;
@@ -376,36 +430,57 @@ class Environment<State> implements EnvironmentCore {
 				return compileTemplate(this, name, source);
 			}
 			if (isPrecompiled(source)) return compilePrecompiled(this, name, source);
-			throw new TypeError(`Loader returned a ${typeof source} for "${name}"`);
+			throw new TypeError(
+				`Loader returned a ${typeName(source)} for "${name}", not a string, a precompiled template or null`,
+			);
+		};
+		const keep = (template: CompiledTemplate | null) => {
+			if (template !== null) this.#cache.set(name, template);
+			else {
+				if (this.#missing.size >= MAX_MISSING) this.#missing.clear();
+				this.#missing.add(name);
+			}
 		};
 
-		const loaded = this.#loader.load(name);
-		if (isPromise(loaded)) {
+		const result = this.#loader.load(name);
+		// A loader may return a thenable, such as a promise from another realm.
+		const loaded = isThenable(result) ? Promise.resolve(result) : result;
+		if (loaded instanceof Promise) {
 			// An invalidate while this load is in flight replaces or drops the
-			// entry, so only touch the cache if it still holds this load.
-			const pending: Promise<CompiledTemplate | null> = loaded.then(
-				(source) => {
-					const template = compile(source);
-					if (this.#cache.get(name) === pending)
-						this.#cache.set(name, template);
-					return template;
-				},
-				(error: unknown) => {
-					if (this.#cache.get(name) === pending) this.#cache.delete(name);
-					throw error;
-				},
-			);
+			// entry, so only touch the cache if it still holds this load. A load
+			// or compile that fails is forgotten, so the next render tries again.
+			const pending: Promise<CompiledTemplate | null> = loaded
+				.then(compile)
+				.then(
+					(template) => {
+						if (this.#cache.get(name) === pending) {
+							this.#cache.delete(name);
+							keep(template);
+						}
+						return template;
+					},
+					(error: unknown) => {
+						if (this.#cache.get(name) === pending) this.#cache.delete(name);
+						throw error;
+					},
+				);
 			this.#cache.set(name, pending);
 			return pending;
 		}
 		const template = compile(loaded);
-		this.#cache.set(name, template);
+		keep(template);
 		return template;
 	}
 
 	invalidate(name?: string): void {
-		if (name === undefined) this.#cache.clear();
-		else this.#cache.delete(resolveTemplateName(name));
+		if (name === undefined) {
+			this.#cache.clear();
+			this.#missing.clear();
+		} else {
+			const resolved = resolveName(name);
+			this.#cache.delete(resolved);
+			this.#missing.delete(resolved);
+		}
 		this.generation++;
 	}
 
@@ -414,7 +489,7 @@ class Environment<State> implements EnvironmentCore {
 		name: string,
 		source?: string,
 	): Promise<CompiledTemplate | null> {
-		const resolved = resolveTemplateName(name);
+		const resolved = resolveName(name);
 		if (source !== undefined) return compileTemplate(this, resolved, source);
 		return await this.load(resolved);
 	}
@@ -429,7 +504,9 @@ class Environment<State> implements EnvironmentCore {
 		let render = this.#prepare(name, context, options);
 		if (isPromise(render)) render = await render;
 		const result = this.#run(render, block);
-		if (result !== undefined) await result;
+		if (result !== undefined) {
+			await untilAborted(result, render.state.signal, render.resolved);
+		}
 		const { state, out } = render;
 		// The signal may have been aborted while the last call was pending, after the render's last check.
 		if (state.signal?.aborted) throw aborted(render.resolved);
@@ -476,9 +553,14 @@ class Environment<State> implements EnvironmentCore {
 				if (failed) return;
 				failed = true;
 				output.stop();
+				state.signal?.removeEventListener?.("abort", stop);
 				if (!opened) reject(error);
 				else if (!cancelled) controller.error(error);
 			};
+			// An abort ends the stream at once, even while the page or an island waits for your code. The render
+			// stops at its next step.
+			const stop = () => failWith(aborted(render.resolved));
+			state.signal?.addEventListener?.("abort", stop);
 			// The first half of a character split across two sends, held back so each part encodes to valid UTF-8.
 			let held = "";
 			const send = (text: string) => {
@@ -500,6 +582,7 @@ class Environment<State> implements EnvironmentCore {
 			const output = new RenderStream(state, out, send);
 			state.stream = output;
 			const close = () => {
+				state.signal?.removeEventListener?.("abort", stop);
 				if (failed || cancelled) return;
 				if (held !== "") controller.enqueue(encoder.encode(held));
 				controller.close();
@@ -538,21 +621,28 @@ class Environment<State> implements EnvironmentCore {
 	): Prepared | Promise<Prepared> {
 		let resolved = this.#names.get(name);
 		if (resolved === undefined) {
-			try {
-				resolved = resolveTemplateName(name);
-			} catch (error) {
-				const issue = error as KilnIssue;
-				throw new KilnRenderError(issue.code, issue.message, name);
-			}
+			resolved = resolveName(name);
 			// Names may come from requests, so the cache can't grow without limit.
 			if (this.#names.size >= 1000) this.#names.clear();
 			this.#names.set(name, resolved);
 		}
-		const template = this.load(resolved);
+		let template: ReturnType<typeof this.load>;
+		try {
+			template = this.load(resolved);
+		} catch (error) {
+			throw loaderError(resolved, error);
+		}
 		if (isPromise(template)) {
 			const path = resolved;
-			return template.then((loaded) =>
-				this.#prepared(path, loaded, context, options),
+			return untilAborted(
+				template.then(
+					(loaded) => this.#prepared(path, loaded, context, options),
+					(error: unknown) => {
+						throw loaderError(path, error);
+					},
+				),
+				options.signal,
+				path,
 			);
 		}
 		return this.#prepared(resolved, template, context, options);
@@ -630,6 +720,41 @@ type Prepared = {
 
 const aborted = (resolved: string) =>
 	new KilnRenderError("aborted", "Render was aborted", resolved);
+
+/**
+ * Waits for `work`, or rejects as soon as `signal` aborts, when the signal can say so, as a real `AbortSignal` can.
+ * The render itself stops at its next step, once the call it waits for settles.
+ */
+const untilAborted = <T>(
+	work: Promise<T>,
+	signal: AbortSignalLike | undefined,
+	resolved: string,
+): Promise<T> => {
+	if (signal?.addEventListener === undefined) return work;
+	return new Promise<T>((resolve, reject) => {
+		const stop = () => {
+			silence(work);
+			reject(aborted(resolved));
+		};
+		if (signal.aborted) return stop();
+		signal.addEventListener?.("abort", stop);
+		work
+			.finally(() => signal.removeEventListener?.("abort", stop))
+			.then(resolve, reject);
+	});
+};
+
+/** A loader's error for the template a render asked for, as an include would report it. Kiln errors pass through. */
+const loaderError = (resolved: string, error: unknown): unknown =>
+	error instanceof KilnRenderError || error instanceof KilnSyntaxError
+		? error
+		: new KilnRenderError(
+				"host-error",
+				`The template loader threw an error: ${error instanceof Error ? error.message : String(error)}`,
+				resolved,
+				undefined,
+				{ cause: error },
+			);
 
 const tooLong = ({ resolved, state }: Prepared) =>
 	new KilnRenderError(

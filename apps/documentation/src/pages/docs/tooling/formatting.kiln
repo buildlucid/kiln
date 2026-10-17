@@ -35,7 +35,10 @@ npx kiln format --check templates
 	<ul>
 		<li>Without <code>--check</code>, it rewrites files that need formatting and lists them.</li>
 		<li>With <code>--check</code>, it changes nothing. It lists files that need formatting and exits with code 1 if there are any, which suits CI and pre-commit hooks.</li>
-		<li>Files and folders whose names start with a dot, and <code>node_modules</code>, are skipped.</li>
+		<li>Files and folders whose names start with a dot, and <code>node_modules</code>, are skipped. So are files you name that aren't <code>.kiln</code> files, with a warning.</li>
+		<li>A file named twice, or named and also inside a folder you name, is formatted once.</li>
+		<li>A path that doesn't exist is reported, and nothing is formatted. It exits with code 2.</li>
+		<li>A file it can't format is reported, and the other files are still formatted. It exits with code 1.</li>
 		<li>Indentation uses tabs. Pass <code>--spaces 2</code>, or any other width, to indent with spaces.</li>
 	</ul>
 
@@ -46,8 +49,8 @@ npx kiln format --check templates
 	<ul>
 		<li><strong>Indentation.</strong> Each line is indented one step for every block tag and HTML element it sits inside.</li>
 		<li><strong>Spacing inside delimiters.</strong> One space inside <code>&#123;{ }}</code> and <code>&#123;% %}</code>, and consistent spacing around operators, commas and colons. Trim markers such as <code>&#123;%-</code> stay where they are.</li>
-		<li><strong>Blank lines.</strong> Runs of blank lines become one, and blank lines at the start and end of the file are removed.</li>
-		<li><strong>Line ends.</strong> Trailing spaces are removed and the file ends with one line break. Line breaks become <code>\n</code>.</li>
+		<li><strong>Blank lines.</strong> Runs of blank lines become one.</li>
+		<li><strong>Line ends.</strong> Trailing spaces are removed, and line breaks become <code>\n</code>.</li>
 	</ul>
 
 	<p>It never joins or splits lines, rewraps text or reorders anything. A line break inside a tag stays, and the lines after it are indented one step further, or to match the brackets they are inside:</p>
@@ -88,16 +91,18 @@ npx kiln format --check templates
 	<h3>What it leaves alone</h3>
 
 	<ul>
-		<li>Everything inside <code>&lt;pre&gt;</code>, <code>&lt;textarea&gt;</code> and <code>verbatim</code>, because whitespace there shows on the page.</li>
+		<li>Everything inside <code>&lt;pre&gt;</code>, <code>&lt;textarea&gt;</code>, <code>&lt;xmp&gt;</code>, <code>&lt;listing&gt;</code>, <code>&lt;plaintext&gt;</code> and <code>verbatim</code>, because whitespace there shows on the page.</li>
+		<li>The body of a <code>set</code> or <code>apply</code> whose tag shares its line with other content. Kiln keeps its whitespace, so changing it would change the value. When the tag stands on its own line, Kiln removes the body's shared indentation, and the formatter indents it.</li>
+		<li>Whitespace and blank lines before the first content in the file and after the last. They show wherever the template is placed, such as an icon included inside a link. A file ends with a line break only if it did before, and a file of only whitespace is left as it is.</li>
 		<li>Text inside attribute values.</li>
 		<li>The lines inside <code>&lt;script&gt;</code>, <code>&lt;style&gt;</code>, HTML comments and Kiln comments. They move with their opening line, but keep their own indentation relative to it.</li>
 	</ul>
 
 	<h2>Safety</h2>
 
-	<p>The formatter only changes whitespace and the spacing inside delimiters. To prove it, it parses the template before and after, and compares the two. If anything differs apart from whitespace at the start and end of lines, it changes nothing and reports an error. Please <a href="https://github.com/buildlucid/kiln/issues">open an issue</a> if you see one.</p>
+	<p>The formatter only changes whitespace and the spacing inside delimiters. To prove it, it parses the template before and after, and compares the two. If anything differs apart from whitespace at the start and end of lines and runs of blank lines, it changes nothing and reports an error. Please <a href="https://github.com/buildlucid/kiln/issues">open an issue</a> if you see one.</p>
 
-	<p>Whitespace at the start of a line can still change in the output, because the formatter assumes the template writes HTML, where it doesn't show. If a template writes plain text, such as an email's text version, check the output after formatting.</p>
+	<p>Whitespace at the start of a line can still change in the output, because the formatter assumes the template writes HTML, where it doesn't show. If a template writes plain text, such as an email's text version, or is included inside a <code>&lt;pre&gt;</code> in another template, check the output after formatting.</p>
 
 	<p>A template with syntax errors isn't formatted. Fix the errors first. <code>kiln format</code> lists them.</p>
 
@@ -118,12 +123,12 @@ const withSpaces = format(source, { useTabs: false, tabWidth: 2 });
 		<thead><tr><th>Option</th><th>Description</th></tr></thead>
 		<tbody>
 			<tr><td><code>useTabs</code></td><td>Indent with tabs. Default <code>true</code>.</td></tr>
-			<tr><td><code>tabWidth</code></td><td>Spaces per step when <code>useTabs</code> is false, and the width of a tab when lining up the lines of a script or comment. Default <code>4</code>.</td></tr>
+			<tr><td><code>tabWidth</code></td><td>Spaces per step when <code>useTabs</code> is false, and the width of a tab when lining up the lines of a script or comment. A whole number of at least 1. Default <code>4</code>.</td></tr>
 			<tr><td><code>range</code></td><td>Only format lines that overlap this range, given as <code>{ start, end }</code> offsets. Editors use it to format a selection.</td></tr>
 		</tbody>
 	</table>
 
-	<p><code>format</code> throws a <code>KilnSyntaxError</code> when the template has syntax errors, and a <code>KilnFormatError</code> if the safety check fails.</p>
+	<p><code>format</code> throws a <code>KilnSyntaxError</code> when the template has syntax errors, a <code>KilnFormatError</code> if the safety check fails, and a <code>RangeError</code> if <code>tabWidth</code> isn't a whole number of at least 1.</p>
 
 	<p><code>formatEdits</code> takes the same arguments and returns the changes as a list of <code>{ start, end, text }</code> edits, from first to last, instead of the new source. Editors apply them so the cursor and undo history stay put.</p>
 {% endblock %}

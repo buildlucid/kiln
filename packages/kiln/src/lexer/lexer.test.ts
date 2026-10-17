@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { lex } from "./lexer.js";
+import { lex, scanParts } from "./lexer.js";
 
 describe("lexer", () => {
 	test("tokens carry offsets", () => {
@@ -51,5 +51,24 @@ describe("lexer", () => {
 			(t) => t.type === "text",
 		);
 		expect(text.map((t) => t.value)).toEqual(["a\n", "b\n"]);
+	});
+
+	test("a byte order mark is skipped, and offsets still count it", () => {
+		const { tokens } = lex("\uFEFFa{{ x }}");
+		expect(tokens.slice(0, 2).map((t) => [t.type, t.value, t.start])).toEqual([
+			["text", "a", 1],
+			["outputOpen", "{{", 2],
+		]);
+	});
+
+	test("an endverbatim tag keeps its trim markers", () => {
+		const end = scanParts("{% verbatim %}x{%- endverbatim -%}").parts.at(-1);
+		expect(
+			end?.kind === "tag" && end.tokens.map((t) => [t.value, t.start, t.end]),
+		).toEqual([
+			["{%-", 15, 17],
+			["endverbatim", 19, 30],
+			["-%}", 32, 34],
+		]);
 	});
 });

@@ -89,6 +89,14 @@ const hasOwnKeys = (value: object): boolean => {
 	return false;
 };
 
+/** Whether a map has an entry loops and filters read, as they skip blocked names. */
+const hasReadableEntries = (map: Map<unknown, unknown>): boolean => {
+	for (const key of map.keys()) {
+		if (typeof key !== "string" || !BLOCKED_NAMES.has(key)) return true;
+	}
+	return false;
+};
+
 /** Kiln truthiness: empty arrays, hashes, maps and sets are falsy, and `"0"` is truthy. */
 export const truthy = (value: unknown): boolean => {
 	switch (typeof value) {
@@ -104,7 +112,8 @@ export const truthy = (value: unknown): boolean => {
 			if (value === null) return false;
 			if (Array.isArray(value)) return value.length > 0;
 			if (value instanceof Markup) return value.value !== "";
-			if (value instanceof Map || value instanceof Set) return value.size > 0;
+			if (value instanceof Map) return hasReadableEntries(value);
+			if (value instanceof Set) return value.size > 0;
 			if (isPlainObject(value)) return hasOwnKeys(value);
 			return true;
 		}
@@ -126,7 +135,8 @@ export const isEmpty = (value: unknown): boolean => {
 	if (typeof value !== "object") return false;
 	if (Array.isArray(value)) return value.length === 0;
 	if (value instanceof Markup) return value.value === "";
-	if (value instanceof Map || value instanceof Set) return value.size === 0;
+	if (value instanceof Map) return !hasReadableEntries(value);
+	if (value instanceof Set) return value.size === 0;
 	if (isPlainObject(value)) return !hasOwnKeys(value);
 	return false;
 };

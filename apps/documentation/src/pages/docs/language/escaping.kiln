@@ -19,7 +19,7 @@
 		{% endverbatim %}
 	{% endapply %}
 
-	<p><code>raw</code> must be the last filter. Other filters return plain strings, even when given safe markup, so <code>&#123;{ body|raw|upper }}</code> is escaped again. Write <code>&#123;{ body|upper|raw }}</code> instead.</p>
+	<p>Text filters such as <code>upper</code>, <code>replace</code> and <code>truncate</code> keep safe markup safe, so <code>&#123;{ body|raw|upper }}</code> changes only the text and leaves the tags alone. Other filters return plain values, which are escaped again, so put <code>raw</code> after them. See <a href="/docs/filters/strings/">String filters</a>.</p>
 
 	<p>Never use <code>raw</code> on data from visitors. Functions and filters you write can also return safe HTML. See <a href="/docs/api/safe-markup/">Safe markup and classes</a>.</p>
 

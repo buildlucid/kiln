@@ -21,8 +21,8 @@
 	<ul>
 		<li>Any function, filter or test can return a promise.</li>
 		<li>Kiln only waits where a call returns one. Everything else runs straight through, so a template with no async calls never waits.</li>
-		<li>Output always follows the order of the template, whatever order the promises finish in.</li>
-		<li>Values in the render data and globals are not awaited, and Kiln never calls their <code>then</code> method. Pass data that is ready, or a function the template can call.</li>
+		<li>Output always follows the order of the template, whatever order the promises finish in. So does content that macros and blocks add to an <a href="/docs/tags/outlet/">outlet</a> while they wait.</li>
+		<li>Values in the render data and globals are not awaited, and Kiln never calls their <code>then</code> method, even next to a call that waits, as in <code>&#123;&#123; later() ~ value }}</code>. Pass data that is ready, or a function the template can call.</li>
 	</ul>
 
 	<h2>Async in filters</h2>

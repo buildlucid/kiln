@@ -10,3 +10,11 @@ describe("capitalize", () => {
 		expect(await render('[{{ ""|capitalize }}]')).toBe("[]");
 	});
 });
+
+describe("markup", () => {
+	test("capitalises the first letter of the text, skipping tags", async () => {
+		expect(
+			await render('{{ "<p>hELLO <b>wORLD</b></p>"|raw|capitalize }}'),
+		).toBe("<p>Hello <b>world</b></p>");
+	});
+});

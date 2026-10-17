@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vite-plus/test";
-import { errorCode, lines, render } from "../helpers.js";
+import type { KilnSyntaxError } from "../../src/index.js";
+import {
+	errorCode,
+	errorCodes,
+	lines,
+	render,
+	renderError,
+} from "../helpers.js";
 
 describe("text", () => {
 	test("passes through unchanged", async () => {
@@ -14,6 +21,17 @@ describe("text", () => {
 
 	test("an empty template renders nothing", async () => {
 		expect(await render("")).toBe("");
+	});
+
+	test("a byte order mark at the start is not content", async () => {
+		expect(
+			await render('<p>{% include "part" %}</p>', {
+				templates: { part: "\uFEFFhi" },
+			}),
+		).toBe("<p>hi</p>");
+		expect(await render(lines("\uFEFF{% if true %}", "a", "{% endif %}"))).toBe(
+			"a\n",
+		);
 	});
 });
 
@@ -73,6 +91,18 @@ describe("tags", () => {
 	test("unexpected characters are errors", async () => {
 		expect(await errorCode("{{ a @ b }}")).toBe("unexpected-character");
 	});
+
+	test("a character outside the Basic Multilingual Plane is one problem", async () => {
+		const error = (await renderError("{{ 😀 }}")) as KilnSyntaxError;
+		expect(error.diagnostics[0]).toMatchObject({
+			code: "unexpected-character",
+			message: 'Unexpected character "😀"',
+			end: { column: 6 },
+		});
+		expect(
+			error.diagnostics.filter((d) => d.code === "unexpected-character"),
+		).toHaveLength(1);
+	});
 });
 
 describe("delimiters in text and strings", () => {
@@ -107,6 +137,17 @@ describe("malformed tags", () => {
 	test("unbalanced brackets are errors", async () => {
 		expect(await errorCode("{{ (1 + 3 }}")).toBe("unexpected-token");
 		expect(await errorCode("{{ 1 + 3) }}")).toBe("unexpected-token");
+	});
+
+	test("a broken header is one problem, and its end tag still matches", async () => {
+		for (const template of [
+			"{% set 1 %}x{% endset %}",
+			"{% block 1 %}x{% endblock %}",
+			"{% block %}x{% endblock %}",
+			"{% slot main %}x{% endslot %}",
+		]) {
+			expect(await errorCodes(template)).toEqual(["unexpected-token"]);
+		}
 	});
 
 	test("a tag needs a name", async () => {

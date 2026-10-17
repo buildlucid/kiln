@@ -71,6 +71,22 @@ describe("createKiln", () => {
 		);
 	});
 
+	test("refuses limits that aren't numbers above 0, and keeps the default for undefined", async () => {
+		const loader = memoryLoader({
+			index: "{% for i in 1..2000000 %}{% endfor %}",
+		});
+		// Values from untyped code, which the types would otherwise reject.
+		for (const maxSteps of [0, -1, Number.NaN, "100" as unknown as number]) {
+			expect(() => createKiln({ loader, limits: { maxSteps } })).toThrow(
+				/maxSteps/,
+			);
+		}
+		const kiln = createKiln({ loader, limits: { maxSteps: undefined } });
+		await expect(kiln.render("index")).rejects.toMatchObject({
+			code: "limit-steps",
+		});
+	});
+
 	test("the render context must be a plain object", async () => {
 		const kiln = createKiln({ loader: memoryLoader({ index: "" }) });
 		// @ts-expect-error: testing a value from untyped code.

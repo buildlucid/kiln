@@ -13,6 +13,12 @@ describe("Source.position", () => {
 	test("an offset at the end is on the last line", () => {
 		expect(source.position(9)).toEqual({ offset: 9, line: 3, column: 3 });
 	});
+
+	test("a byte order mark is not a column, as editors hide it", () => {
+		const bom = new Source("a.kiln", "\uFEFFab\ncd");
+		expect(bom.position(2)).toEqual({ offset: 2, line: 1, column: 2 });
+		expect(bom.position(5)).toEqual({ offset: 5, line: 2, column: 2 });
+	});
 });
 
 describe("Source.frame", () => {
@@ -35,6 +41,13 @@ describe("Source.frame", () => {
 	test("stops the marker at the end of the line", () => {
 		const source = new Source("a.kiln", "ab\ncd");
 		expect(source.frame({ start: 1, end: 5 }).split("\n")[1]).toBe("    |  ^");
+	});
+
+	test("leaves out a byte order mark", () => {
+		const source = new Source("a.kiln", "\uFEFF{{ x }}");
+		expect(source.frame({ start: 4, end: 5 })).toBe(
+			["> 1 | {{ x }}", "    |    ^"].join("\n"),
+		);
 	});
 
 	test("pads line numbers to the same width", () => {

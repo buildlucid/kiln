@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { lines, render } from "../helpers.js";
+import { errorCode, lines, render } from "../helpers.js";
 
 describe("dump", () => {
 	test("outputs nothing without debug", async () => {
@@ -14,5 +14,17 @@ describe("dump", () => {
 				"}</pre>",
 			),
 		);
+	});
+});
+
+describe("limits", () => {
+	test("stops before building text longer than maxOutputLength", async () => {
+		expect(
+			await errorCode("{{ dump([text, text]) }}", {
+				context: { text: "x".repeat(10) },
+				debug: true,
+				limits: { maxOutputLength: 20 },
+			}),
+		).toBe("limit-output");
 	});
 });

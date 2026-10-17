@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { errorCode, render } from "../helpers.js";
+import { errorCode, render, renderError } from "../helpers.js";
 
 describe("range", () => {
 	test("is inclusive, with a step", async () => {
@@ -38,5 +38,26 @@ describe("edge cases", () => {
 
 	test("a range of one number", async () => {
 		expect(await render("{{ range(1, 1)|join }}")).toBe("1");
+	});
+});
+
+describe("fractional steps", () => {
+	test("reach the end despite rounding", async () => {
+		expect(await render('{{ range(0, 0.3, 0.1)|join(", ") }}')).toBe(
+			"0, 0.1, 0.2, 0.3",
+		);
+	});
+});
+
+describe("huge integer ranges", () => {
+	test("are counted exactly before they are refused", async () => {
+		for (const template of [
+			"{% for i in 0..9007199254740993 %}{% endfor %}",
+			"{{ range(0, 9007199254740993)|length }}",
+		]) {
+			expect((await renderError(template)).message).toContain(
+				"Range of 9007199254740992 items",
+			);
+		}
 	});
 });

@@ -27,6 +27,24 @@ describe("apply", () => {
 		).toBe("&lt;b&gt;");
 	});
 
+	test("escapes plain text a filter inserts, and plain results", async () => {
+		expect(
+			await render(
+				'{% apply replace("X", name) %}<b>X</b>{% endapply %}|{% apply shout %}<b>x</b>{% endapply %}',
+				{
+					context: { name: "<i>Ada</i>" },
+					filters: { shout: (value: unknown) => `${String(value)}!` },
+				},
+			),
+		).toBe("<b>&lt;i&gt;Ada&lt;/i&gt;</b>|&lt;b&gt;x&lt;/b&gt;!");
+	});
+
+	test("case filters leave escaped characters alone", async () => {
+		expect(
+			await render('{% apply upper %}{{ "<b>" }} &amp; x{% endapply %}'),
+		).toBe("&lt;B&gt; &amp; X");
+	});
+
 	test("an unknown filter is an error", async () => {
 		expect(await errorCode("{% apply nope %}x{% endapply %}")).toBe(
 			"unknown-filter",
@@ -43,6 +61,14 @@ describe("edge cases", () => {
 
 	test("escape leaves the already-safe body alone", async () => {
 		expect(await render("{% apply escape %}<b>{% endapply %}")).toBe("<b>");
+	});
+
+	test("follows autoescape, and doesn't escape when it is off", async () => {
+		expect(
+			await render(
+				'{% autoescape "js" %}{% apply upper %}{{ "a b" }}{% endapply %}{% endautoescape %}|{% autoescape false %}{% apply replace("x", "<i>") %}x{% endapply %}{% endautoescape %}',
+			),
+		).toBe(String.raw`A\u0020B|<i>`);
 	});
 
 	test("the result must be printable", async () => {

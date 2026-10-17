@@ -38,3 +38,30 @@ describe("edge cases", () => {
 		expect(await errorCode("{{ true|length }}")).toBe("type-error");
 	});
 });
+
+describe("hashes", () => {
+	test("counts the keys a loop would see", async () => {
+		const map = new Map<unknown, unknown>([
+			["__proto__", 1],
+			[1, "x"],
+			["a", 2],
+		]);
+		expect(
+			await render("{{ map|length }}|{% for v in map %}{{ v }}{% endfor %}", {
+				context: { map },
+			}),
+		).toBe("2|x2");
+	});
+
+	test("counts each key against maxSteps", async () => {
+		const hash = Object.fromEntries(
+			Array.from({ length: 20 }, (_, i) => [`k${i}`, i]),
+		);
+		expect(
+			await errorCode("{{ hash|length }}", {
+				context: { hash },
+				limits: { maxSteps: 10 },
+			}),
+		).toBe("limit-steps");
+	});
+});

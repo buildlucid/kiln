@@ -38,3 +38,13 @@ describe("characters", () => {
 		);
 	});
 });
+
+describe("markup", () => {
+	test("trims the text of safe markup, matching escaped characters", async () => {
+		expect(
+			await render(
+				'{{ "<<x<"|escape|trim("<") }}|{{ " <b> x </b> "|raw|trim }}',
+			),
+		).toBe("x|<b> x </b>");
+	});
+});

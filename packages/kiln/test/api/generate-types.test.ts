@@ -109,6 +109,22 @@ describe("generateTypes", () => {
 		);
 	});
 
+	test("a page with a rest prop also takes its layouts' props", async () => {
+		const output = await generate({
+			base: '{% props lang, title = "" %}',
+			page: '{% extends "base" %}{% props title, ...rest %}',
+		});
+		expect(entry(output, "page")).toContain(
+			lines(
+				"\t\t\tcontext: {",
+				"\t\t\t\ttitle: unknown;",
+				"\t\t\t\tlang: unknown;",
+				"\t\t\t\t[key: string]: unknown;",
+				"\t\t\t};",
+			),
+		);
+	});
+
 	test("a page with props takes exactly its props", async () => {
 		const output = await generate({
 			base: "{% props lang %}",

@@ -148,6 +148,66 @@ describe("guards and short-circuits", () => {
 		).toBe("not-iterable");
 	});
 
+	test("promises in the context are not awaited next to calls that wait", async () => {
+		const p = Promise.resolve("P");
+		const options = {
+			context: { p },
+			functions: {
+				later,
+				pair: (a: unknown, b: unknown) => `${String(a)}${String(b)}`,
+				holder: () => later({ p }),
+			},
+		};
+		expect(await render('{{ pair(p, later("S")) }}', options)).toBe(
+			"[object Promise]S",
+		);
+		expect(await errorCode('{{ p ~ later("S") }}', options)).toBe(
+			"not-printable",
+		);
+		expect(await errorCode("{{ holder().p }}", options)).toBe("not-printable");
+		expect(await errorCode("{{ later(null) ?? p }}", options)).toBe(
+			"not-printable",
+		);
+	});
+
+	test("a filter's input and arguments start before either is waited for", async () => {
+		const started: string[] = [];
+		// Resolves to the calls started by the time it settles.
+		const track = (name: string) => {
+			started.push(name);
+			return later(null, 5).then(() => started.join(","));
+		};
+		const glue = (a: unknown, b: unknown) => `${String(a)}|${String(b)}`;
+		expect(
+			await render('{{ track("in")|glue(track("arg")) }}', {
+				functions: { track },
+				filters: { glue },
+			}),
+		).toBe("in,arg|in,arg");
+	});
+
+	test("an arrow function that waits never calls then on a value it returns", async () => {
+		let called = false;
+		const thing = {
+			// oxlint-disable-next-line unicorn/no-thenable -- the thenable is what this test checks
+			then: (resolve: (value: string) => void) => {
+				called = true;
+				resolve("adopted");
+			},
+		};
+		const callIt = async (fn: () => Promise<unknown>) => {
+			await fn();
+			return "ok";
+		};
+		expect(
+			await render("{{ callIt(() => later(null) ?? thing) }}", {
+				context: { thing },
+				functions: { later, callIt },
+			}),
+		).toBe("ok");
+		expect(called).toBe(false);
+	});
+
 	test("properties of a promise in the context cannot be read", async () => {
 		expect(
 			await errorCode("{{ p.then }}", { context: { p: Promise.resolve(1) } }),

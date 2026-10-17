@@ -12,6 +12,7 @@ import {
 } from "../runtime/render.js";
 import type { CallableEntry, Run } from "../runtime/types.js";
 import {
+	BLOCKED_NAMES,
 	compare,
 	FORMATTERS,
 	type FormatterCells,
@@ -28,11 +29,21 @@ import {
 	unwrap,
 } from "../runtime/values.js";
 import {
+	checkDepth,
 	entriesOf,
+	fromPieces,
 	functionArgument,
+	insertedPiece,
 	integerArgument,
+	isHtmlStrategy,
+	Kept,
 	listOf,
+	mapContents,
+	markupText,
+	type Pieces,
 	readProperty,
+	scanHtml,
+	toPieces,
 	toTime,
 	toPlainData,
 } from "./helpers.js";
@@ -95,24 +106,239 @@ const trimCharacters = (
 	return chars.slice(start, end).join("");
 };
 
-/** Replaces several strings at once, preferring the longest match at each position. */
-const replacePairs = (text: string, pairs: [string, string][]): string => {
-	const sorted = pairs
-		.filter(([search]) => search !== "")
-		.sort((a, b) => b[0].length - a[0].length);
-	if (sorted.length === 0) return text;
-	let result = "";
+/** Refuses a string a filter would build longer than `maxOutputLength`, before it builds it. */
+const refuseLength = (run: Run, length: number, what: string): void => {
+	if (length > run.state.maxSize) {
+		issue(
+			"limit-output",
+			`"${what}" would build a string longer than the output limit of ${run.state.maxSize}`,
+		);
+	}
+};
+
+/**
+ * Runs a string filter over markup's text. Tags, comments and entities stay as they are, and the result is markup of
+ * the same strategy, so it isn't escaped again.
+ */
+const changeMarkup = (
+	run: Run,
+	markup: Markup,
+	change: (pieces: Pieces) => Pieces,
+): Markup => {
+	checkLength(run, markup.value);
+	return fromPieces(run, change(toPieces(markup)), markup.strategy);
+};
+
+const mapText = (pieces: Pieces, change: (text: string) => string): Pieces =>
+	pieces.map((piece) => (typeof piece === "string" ? change(piece) : piece));
+
+/** Joins the pieces of plain text, which never holds kept pieces. */
+const joinText = (pieces: Pieces): string =>
+	pieces
+		.map((piece) => (typeof piece === "string" ? piece : piece.html))
+		.join("");
+
+const upperFirst = (text: string): string => {
+	const head = String.fromCodePoint(text.codePointAt(0) as number);
+	return head.toUpperCase() + text.slice(head.length);
+};
+
+/** Upper-cases the first character of the text and lower-cases the rest. */
+const capitalizeText = (text: string): string => {
+	const first = text.codePointAt(0);
+	if (first === undefined) return "";
+	const head = String.fromCodePoint(first);
+	return head.toUpperCase() + text.slice(head.length).toLowerCase();
+};
+
+/** `capitalizeText` over pieces: the first character of the first text that has one. */
+const capitalizePieces = (pieces: Pieces): Pieces => {
+	let first = true;
+	return mapText(pieces, (text) => {
+		if (!first || text === "") return text.toLowerCase();
+		first = false;
+		return capitalizeText(text);
+	});
+};
+
+/** Letters, marks, digits and apostrophes, so neither a combining accent nor the apostrophe in "o'neil" starts a word. */
+const WORD = /[\p{L}\p{M}\p{N}'’]+/gu;
+const STARTS_WITH_LETTER = /^\p{L}/u;
+const ENDS_IN_WORD = /[\p{L}\p{M}\p{N}'’]$/u;
+
+/** Starts each word with an upper-case letter and lower-cases the rest. The first word only when `boundary` is true. */
+const titleText = (text: string, boundary: boolean): string =>
+	text
+		.toLowerCase()
+		.replace(WORD, (word, offset: number) =>
+			(offset > 0 || boundary) && STARTS_WITH_LETTER.test(word)
+				? upperFirst(word)
+				: word,
+		);
+
+/** `titleText` over pieces. Tags don't end a word, but kept entities do. */
+const titlePieces = (pieces: Pieces): Pieces => {
+	let boundary = true;
+	return pieces.map((piece) => {
+		if (typeof piece !== "string") {
+			if (!piece.html.startsWith("<")) boundary = true;
+			return piece;
+		}
+		const text = titleText(piece, boundary);
+		boundary = !ENDS_IN_WORD.test(piece);
+		return text;
+	});
+};
+
+/** Trims the text at each end of the pieces, stopping at a kept piece such as a tag. */
+const trimPieces = (
+	pieces: Pieces,
+	side: string,
+	trimText: (text: string, side: "start" | "end") => string,
+): Pieces => {
+	const result = [...pieces];
+	if (side !== "end") {
+		for (let i = 0; i < result.length; i++) {
+			const piece = result[i];
+			if (typeof piece !== "string") break;
+			result[i] = trimText(piece, "start");
+			if (result[i] !== "") break;
+		}
+	}
+	if (side !== "start") {
+		for (let i = result.length - 1; i >= 0; i--) {
+			const piece = result[i];
+			if (typeof piece !== "string") break;
+			result[i] = trimText(piece, "end");
+			if (result[i] !== "") break;
+		}
+	}
+	return result;
+};
+
+/** Text a filter inserts: plain text, or markup kept as it is. */
+type Insert = string | Kept;
+
+const insertLength = (insert: Insert): number =>
+	typeof insert === "string" ? insert.length : insert.html.length;
+
+/**
+ * Replaces several strings at once, preferring the longest match at each position. Candidates are looked up by their
+ * first character, and the characters compared are charged against `maxSteps`, 256 to a step. The result is checked
+ * against `maxOutputLength` as it grows, before it is joined.
+ */
+const replacePairs = (
+	run: Run,
+	text: string,
+	pairs: [string, Insert][],
+): Pieces => {
+	const byFirst = new Map<string, [string, Insert][]>();
+	for (const pair of pairs) {
+		const first = pair[0][0];
+		if (first === undefined) continue;
+		const list = byFirst.get(first);
+		if (list) list.push(pair);
+		else byFirst.set(first, [pair]);
+	}
+	for (const list of byFirst.values()) {
+		list.sort((a, b) => b[0].length - a[0].length);
+	}
+	const pieces: Pieces = [];
+	let start = 0;
 	let i = 0;
-	outer: while (i < text.length) {
-		for (const [search, replacement] of sorted) {
-			if (text.startsWith(search, i)) {
-				result += replacement;
-				i += search.length;
-				continue outer;
+	let length = 0;
+	let compared = 0;
+	while (i < text.length) {
+		const candidates = byFirst.get(text[i] as string);
+		let match: [string, Insert] | undefined;
+		if (candidates) {
+			for (const pair of candidates) {
+				compared += pair[0].length;
+				if (text.startsWith(pair[0], i)) {
+					match = pair;
+					break;
+				}
+			}
+			if (compared >= 256) {
+				consume(run, compared >> 8);
+				compared &= 255;
 			}
 		}
-		result += text[i];
-		i++;
+		if (!match) {
+			i++;
+			continue;
+		}
+		length += i - start + insertLength(match[1]);
+		refuseLength(run, length, "replace");
+		if (i > start) pieces.push(text.slice(start, i));
+		pieces.push(match[1]);
+		i += match[0].length;
+		start = i;
+	}
+	refuseLength(run, length + text.length - start, "replace");
+	if (start < text.length) pieces.push(text.slice(start));
+	return pieces;
+};
+
+/** Elements that have no closing tag. */
+const VOID_ELEMENTS = new Set([
+	"area",
+	"base",
+	"br",
+	"col",
+	"embed",
+	"hr",
+	"img",
+	"input",
+	"link",
+	"meta",
+	"source",
+	"track",
+	"wbr",
+]);
+
+const TAG_NAME = /^<(\/?)([a-zA-Z][^\s/>]*)/;
+
+/**
+ * Cuts markup's text after `max` characters, counting a kept entity as one, and adds `ending`. The tags still open at
+ * the cut are closed, so the HTML stays balanced.
+ */
+const truncatePieces = (
+	pieces: Pieces,
+	max: number,
+	ending: Insert,
+): Pieces => {
+	const result: Pieces = [];
+	const open: string[] = [];
+	let remaining = max;
+	for (const piece of pieces) {
+		if (typeof piece !== "string" && piece.html.startsWith("<")) {
+			result.push(piece);
+			const [, closing, name] = TAG_NAME.exec(piece.html) ?? [];
+			const tag = name?.toLowerCase();
+			if (tag === undefined || VOID_ELEMENTS.has(tag)) continue;
+			if (closing) {
+				const index = open.lastIndexOf(tag);
+				if (index !== -1) open.length = index;
+			} else if (!piece.html.endsWith("/>")) open.push(tag);
+			continue;
+		}
+		const length = typeof piece === "string" ? codePointLength(piece) : 1;
+		if (length <= remaining) {
+			result.push(piece);
+			remaining -= length;
+			continue;
+		}
+		if (typeof piece === "string" && remaining > 0) {
+			result.push(piece.slice(0, codePointOffset(piece, remaining)));
+		}
+		const last = result[result.length - 1];
+		if (typeof last === "string") result[result.length - 1] = last.trimEnd();
+		result.push(ending);
+		for (let i = open.length - 1; i >= 0; i--) {
+			result.push(new Kept(`</${open[i] as string}>`));
+		}
+		return result;
 	}
 	return result;
 };
@@ -122,41 +348,45 @@ const roundNumber = (
 	precision: number,
 	method: string,
 ): number => {
+	if (method !== "common" && method !== "ceil" && method !== "floor") {
+		return issue(
+			"invalid-argument",
+			`"round" method must be "common", "ceil" or "floor", but got "${method}"`,
+		);
+	}
 	const shift = (number: number, exponent: number) => {
 		const [mantissa, power = "0"] = String(number).split("e");
 		return Number(`${mantissa}e${Number(power) + exponent}`);
 	};
-	switch (method) {
-		case "ceil":
-			return shift(Math.ceil(shift(value, precision)), -precision);
-		case "floor":
-			return shift(Math.floor(shift(value, precision)), -precision);
-		case "common": {
-			const rounded = shift(
-				Math.round(shift(Math.abs(value), precision)),
-				-precision,
-			);
-			return value < 0 ? -rounded : rounded;
-		}
-		default:
-			return issue(
-				"invalid-argument",
-				`"round" method must be "common", "ceil" or "floor", but got "${method}"`,
-			);
-	}
+	const scaled = shift(
+		method === "common" ? Math.abs(value) : value,
+		precision,
+	);
+	// Infinity, NaN and numbers with fewer decimal places than `precision` can hold are already rounded.
+	if (!Number.isFinite(scaled)) return value;
+	const rounded = shift(
+		method === "ceil"
+			? Math.ceil(scaled)
+			: method === "floor"
+				? Math.floor(scaled)
+				: Math.round(scaled),
+		-precision,
+	);
+	return method === "common" && value < 0 ? -rounded : rounded;
 };
 
 /**
  * Builds `urlEncode`'s query string from a hash. Each list and hash is charged against `maxSteps` before it is read,
- * and the text stops at `maxOutputLength`, so a value that shares one object in many places can't make unlimited work.
+ * and the text stops at `maxOutputLength` before each part is encoded, so a value that shares one object in many
+ * places can't make unlimited work.
  */
 const queryString = (run: Run, hash: object): string => {
 	const parts: string[] = [];
 	const seen = new Set<object>();
 	let length = 0;
-	const add = (value: object, prefix: string | null) => {
+	const add = (value: object, prefix: string | null, depth: number) => {
+		checkDepth(depth, "urlEncode");
 		const { values, keys } = entriesOf(run, value, "urlEncode");
-		consume(run, values.length);
 		seen.add(value);
 		for (let i = 0; i < values.length; i++) {
 			const item = values[i];
@@ -175,41 +405,104 @@ const queryString = (run: Run, hash: object): string => {
 						'"urlEncode" cannot encode a value that contains itself',
 					);
 				}
-				add(item, key);
+				add(item, key, depth + 1);
 				continue;
 			}
-			const part = `${escapeUrl(key)}=${escapeUrl(toStr(item))}`;
+			const text = toStr(item);
+			// Encoding never makes text shorter, so check before encoding, and again after.
+			refuseLength(run, length + key.length + text.length, "urlEncode");
+			const part = `${escapeUrl(key)}=${escapeUrl(text)}`;
 			length += part.length + 1;
-			if (length > run.state.maxSize + 1) {
-				issue(
-					"limit-output",
-					`"urlEncode" would build a string longer than the output limit of ${run.state.maxSize}`,
-				);
-			}
+			refuseLength(run, length - 1, "urlEncode");
 			parts.push(part);
 		}
 		seen.delete(value);
 	};
-	add(hash, null);
+	add(hash, null, 1);
 	return parts.join("&");
 };
 
 const formatterCache = new Map<string, Formatter>();
 
+/** Longer cache keys aren't cached, so templates can't fill the cache with large strings. */
+const MAX_FORMATTER_KEY = 512;
+
+const NUMBER_OPTIONS = new Set([
+	"localeMatcher",
+	"style",
+	"currency",
+	"currencyDisplay",
+	"currencySign",
+	"unit",
+	"unitDisplay",
+	"minimumIntegerDigits",
+	"minimumFractionDigits",
+	"maximumFractionDigits",
+	"minimumSignificantDigits",
+	"maximumSignificantDigits",
+	"roundingPriority",
+	"roundingIncrement",
+	"roundingMode",
+	"trailingZeroDisplay",
+	"notation",
+	"compactDisplay",
+	"useGrouping",
+	"signDisplay",
+	"numberingSystem",
+]);
+
+/** `plural` options configure both its plural rules and the number `#` becomes. */
+const PLURAL_OPTIONS = new Set([...NUMBER_OPTIONS, "type"]);
+
+/** Date options that choose what to show. Without one, `formatDate` uses `dateStyle: "medium"`. */
+const DATE_STYLE_OPTIONS = new Set([
+	"dateStyle",
+	"timeStyle",
+	"weekday",
+	"era",
+	"year",
+	"month",
+	"day",
+	"dayPeriod",
+	"hour",
+	"minute",
+	"second",
+	"fractionalSecondDigits",
+	"timeZoneName",
+]);
+
+const DATE_OPTIONS = new Set([
+	...DATE_STYLE_OPTIONS,
+	"localeMatcher",
+	"calendar",
+	"numberingSystem",
+	"hour12",
+	"hourCycle",
+	"timeZone",
+	"formatMatcher",
+]);
+
 /** Keys of frozen options hashes, which the compiler builds once for literal named arguments. */
 const optionsKeys = new WeakMap<object, string>();
 
 /**
- * The part of a formatter's cache key its options make. Option values must be strings, markup, numbers, booleans or
- * null: `JSON.stringify` and `Intl` would call methods such as `toJSON` and `toString` on anything else.
+ * The part of a formatter's cache key its options make. Option names must be ones `Intl` knows, from `names`. Option
+ * values must be strings, markup, numbers, booleans or null: `JSON.stringify` and `Intl` would call methods such as
+ * `toJSON` and `toString` on anything else.
  */
-const optionsKey = (options: Record<string, unknown>): string => {
+const optionsKey = (
+	options: Record<string, unknown>,
+	names: ReadonlySet<string>,
+): string => {
 	const frozen = Object.isFrozen(options);
 	let key = frozen ? optionsKeys.get(options) : undefined;
 	if (key !== undefined) return key;
 	key = "";
 	for (const name of hashKeys(options)) {
 		if (name === "locale") continue;
+		if (!names.has(name)) {
+			return issue("invalid-argument", `Unknown formatting option "${name}"`);
+		}
 		const value = unwrap(options[name]);
 		if (
 			(typeof value === "object" && value !== null) ||
@@ -232,8 +525,8 @@ type Formatter = Intl.NumberFormat | Intl.DateTimeFormat | Intl.PluralRules;
 const NO_OPTIONS: FormatterCells = {};
 
 /**
- * Splits `locale` out of filter options and caches the formatter by its settings. `defaults` gives the settings the
- * options are merged over.
+ * Splits `locale` out of filter options and caches the formatter by its settings. `names` are the options allowed, and
+ * `defaults` gives the settings the options are merged over.
  *
  * Calls without options, or with a hash of literals such as `formatNumber(style: "currency")`'s, which
  * `literalOptions` gives a place for it, first try the formatter they used last, so a filter called in a loop skips
@@ -243,6 +536,7 @@ const cachedFormatter = <T extends Formatter>(
 	kind: "number" | "date" | "plural",
 	run: Run,
 	options: unknown,
+	names: ReadonlySet<string>,
 	defaults: (options: Record<string, unknown>) => Record<string, unknown>,
 	create: (locale: string, options: Record<string, unknown>) => T,
 ): T => {
@@ -276,16 +570,21 @@ const cachedFormatter = <T extends Formatter>(
 	const base = defaults(given);
 	let key = `${kind}|${locale}`;
 	for (const name in base) key += `|${name}=${JSON.stringify(base[name])}`;
-	key += optionsKey(given);
-	let formatter = formatterCache.get(key) as T | undefined;
+	key += optionsKey(given, names);
+	const cacheable = key.length <= MAX_FORMATTER_KEY;
+	let formatter = cacheable
+		? (formatterCache.get(key) as T | undefined)
+		: undefined;
 	if (!formatter) {
 		const settings = { ...base };
 		for (const name of hashKeys(given)) {
 			if (name !== "locale") setOwn(settings, name, unwrap(given[name]));
 		}
 		formatter = create(locale, settings);
-		if (formatterCache.size > 500) formatterCache.clear();
-		formatterCache.set(key, formatter);
+		if (cacheable) {
+			if (formatterCache.size > 500) formatterCache.clear();
+			formatterCache.set(key, formatter);
+		}
 	}
 	if (cells) {
 		cells[kind] = {
@@ -354,56 +653,65 @@ const syncResult = (value: unknown, what: string): unknown => {
 	return value;
 };
 
-/** Finds the `>` that ends a tag, skipping `>` inside quoted attribute values. Returns -1 when the tag never ends. */
-const tagEnd = (text: string, from: number): number => {
-	let quote = "";
-	for (let i = from; i < text.length; i++) {
-		const char = text[i];
-		if (quote) {
-			if (char === quote) quote = "";
-		} else if (char === '"' || char === "'") quote = char;
-		else if (char === ">") return i;
-	}
-	return -1;
+/**
+ * Removes HTML tags and comments. Where a `<` would end up before a letter once a tag after it is removed, it is
+ * dropped too, so removing tags can't make new ones.
+ */
+const stripTags = (html: string): string => {
+	const parts: string[] = [];
+	scanHtml(
+		html,
+		(text) => {
+			const last = parts.length - 1;
+			const previous = parts[last];
+			if (previous?.endsWith("<") && /^[a-zA-Z!?/]/.test(text)) {
+				parts[last] = previous.slice(0, -1);
+			}
+			parts.push(text);
+		},
+		() => {},
+	);
+	return parts.join("");
 };
 
-/**
- * Removes HTML comments and tags in one linear pass. A `<` that never closes is kept as text.
- */
-const stripTags = (text: string): string => {
-	let result = "";
-	let index = 0;
-	let commentsCanClose = true;
-	let tagsCanClose = true;
-	for (;;) {
-		const open = text.indexOf("<", index);
-		if (open === -1) return result + text.slice(index);
-		if (commentsCanClose && text.startsWith("<!--", open)) {
-			const close = text.indexOf("-->", open + 4);
-			if (close !== -1) {
-				result += text.slice(index, open);
-				index = close + 3;
-				continue;
-			}
-			// No later comment can close either.
-			commentsCanClose = false;
-		}
-		let nameStart = open + 1;
-		const marker = text[nameStart];
-		if (marker === "!" || marker === "?" || marker === "/") nameStart++;
-		if (tagsCanClose && /[a-zA-Z]/.test(text[nameStart] ?? "")) {
-			const close = tagEnd(text, nameStart);
-			if (close !== -1) {
-				result += text.slice(index, open);
-				index = close + 1;
-				continue;
-			}
-			tagsCanClose = false;
-		}
-		result += text.slice(index, open + 1);
-		index = open + 1;
+/** `sort`'s order: natural order without `by`, by a key with a one-parameter arrow, or with a comparator. */
+const sortBy = <T>(
+	items: T[],
+	read: (item: T) => unknown,
+	by: unknown,
+): T[] => {
+	if (by === undefined || by === null) {
+		return items.sort((a, b) => compare(read(a), read(b)));
 	}
+	const fn = functionArgument(by, "sort");
+	if (fn.length >= 2) {
+		return items.sort((a, b) => {
+			const result = syncResult(fn(read(a), read(b)), "sort");
+			return typeof result === "number"
+				? result
+				: issue("type-error", '"sort" comparator must return a number');
+		});
+	}
+	const keyed = items.map((item) => ({
+		item,
+		key: syncResult(fn(read(item)), "sort"),
+	}));
+	keyed.sort((a, b) => compare(a.key, b.key));
+	return keyed.map((entry) => entry.item);
 };
+
+/** A hash of keys and values in the order given. A `Map`, so keys that look like numbers keep their place too. */
+const orderedHash = (
+	keys: unknown[],
+	values: unknown[],
+): Map<string, unknown> =>
+	new Map(keys.map((key, index) => [String(key), values[index]]));
+
+// Case changes for markup's text.
+const toUpper = (text: string): string => text.toUpperCase();
+const toLower = (text: string): string => text.toLowerCase();
+const upperPieces = (pieces: Pieces): Pieces => mapText(pieces, toUpper);
+const lowerPieces = (pieces: Pieces): Pieces => mapText(pieces, toLower);
 
 /** Escapes characters that could end a `<script>` element or break JavaScript, inside JSON strings. */
 const escapeJson = (json: string): string =>
@@ -413,57 +721,101 @@ const escapeJson = (json: string): string =>
 	);
 
 export const builtinFilters: Record<string, BuiltinEntry> = {
-	upper: define((_run, value) =>
-		toStringArgument(value, '"upper"').toUpperCase(),
+	// Changing case makes text at most three times longer, and changing it again doesn't add more, so these leave the
+	// output limit to whatever prints the result. A check here would cost the commonest filters a fifth of their speed.
+	upper: define((run, value) =>
+		typeof value === "string"
+			? value.toUpperCase()
+			: value instanceof Markup
+				? changeMarkup(run, value, upperPieces)
+				: toStringArgument(value, '"upper"').toUpperCase(),
 	),
-	lower: define((_run, value) =>
-		toStringArgument(value, '"lower"').toLowerCase(),
+	lower: define((run, value) =>
+		typeof value === "string"
+			? value.toLowerCase()
+			: value instanceof Markup
+				? changeMarkup(run, value, lowerPieces)
+				: toStringArgument(value, '"lower"').toLowerCase(),
 	),
-	capitalize: define((_run, value) => {
-		const text = toStringArgument(value, '"capitalize"');
-		const first = text.codePointAt(0);
-		if (first === undefined) return "";
-		const head = String.fromCodePoint(first);
-		return head.toUpperCase() + text.slice(head.length).toLowerCase();
-	}),
-	title: define((_run, value) =>
-		toStringArgument(value, '"title"')
-			.toLowerCase()
-			.replace(
-				/(^|[^\p{L}\p{N}'’])(\p{L})/gu,
-				(_match, before: string, letter: string) =>
-					before + letter.toUpperCase(),
-			),
+	capitalize: define((run, value) =>
+		typeof value !== "string" && value instanceof Markup
+			? changeMarkup(run, value, capitalizePieces)
+			: capitalizeText(toStringArgument(value, '"capitalize"')),
+	),
+	title: define((run, value) =>
+		value instanceof Markup
+			? changeMarkup(run, value, titlePieces)
+			: titleText(toStringArgument(value, '"title"'), true),
 	),
 	trim: define(
-		(_run, value, characters, side = "both") => {
-			const text = toStringArgument(value, '"trim"');
+		(run, value, characters, side = "both") => {
 			if (side !== "both" && side !== "start" && side !== "end") {
 				return issue(
 					"invalid-argument",
 					`"trim" side must be "both", "start" or "end", but got ${valueLabel(side)}`,
 				);
 			}
-			if (characters === undefined || characters === null) {
-				return side === "start"
-					? text.trimStart()
-					: side === "end"
-						? text.trimEnd()
-						: text.trim();
+			const set =
+				characters === undefined || characters === null
+					? null
+					: toStringArgument(characters, '"trim"');
+			if (typeof value !== "string" && value instanceof Markup) {
+				const trimText = (text: string, end: "start" | "end") =>
+					set !== null
+						? trimCharacters(text, set, end)
+						: end === "start"
+							? text.trimStart()
+							: text.trimEnd();
+				return changeMarkup(run, value, (pieces) =>
+					trimPieces(pieces, side, trimText),
+				);
 			}
-			return trimCharacters(text, toStringArgument(characters, '"trim"'), side);
+			const text = toStringArgument(value, '"trim"');
+			if (set !== null) return trimCharacters(text, set, side);
+			return side === "start"
+				? text.trimStart()
+				: side === "end"
+					? text.trimEnd()
+					: text.trim();
 		},
 		["characters", "side"],
 	),
 	replace: define(
 		(run, value, search, replacement) => {
+			const isPairs = isPlainObject(search) || search instanceof Map;
+			if (value instanceof Markup) {
+				const { strategy } = value;
+				const pairs: [string, Insert][] = [];
+				if (isPairs) {
+					const { values, keys } = entriesOf(run, search, "replace");
+					keys.forEach((key, index) => {
+						pairs.push([
+							String(key),
+							insertedPiece(values[index], strategy, '"replace"'),
+						]);
+					});
+				} else {
+					pairs.push([
+						search instanceof Markup
+							? markupText(search)
+							: toStringArgument(search, '"replace"'),
+						insertedPiece(replacement, strategy, '"replace"'),
+					]);
+				}
+				return changeMarkup(run, value, (pieces) =>
+					pieces.flatMap((piece) =>
+						typeof piece === "string"
+							? replacePairs(run, piece, pairs)
+							: [piece],
+					),
+				);
+			}
 			const text = toStringArgument(value, '"replace"');
-			if (isPlainObject(search) || search instanceof Map) {
+			if (isPairs) {
 				const { values, keys } = entriesOf(run, search, "replace");
-				consume(run, keys.length);
-				return checkLength(
-					run,
+				return joinText(
 					replacePairs(
+						run,
 						text,
 						keys.map((key, index) => [String(key), toStr(values[index])]),
 					),
@@ -474,14 +826,11 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 			const parts = text.split(needle);
 			const glue = toStringArgument(replacement, '"replace"');
 			// Each match swaps the needle for the replacement.
-			const length =
-				text.length + (parts.length - 1) * (glue.length - needle.length);
-			if (length > run.state.maxSize) {
-				return issue(
-					"limit-output",
-					`"replace" would build a string longer than the output limit of ${run.state.maxSize}`,
-				);
-			}
+			refuseLength(
+				run,
+				text.length + (parts.length - 1) * (glue.length - needle.length),
+				"replace",
+			);
 			return parts.join(glue);
 		},
 		["search", "replacement"],
@@ -502,8 +851,14 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 	),
 	truncate: define(
 		(run, value, length, ellipsis = "…") => {
-			const text = toStringArgument(value, '"truncate"');
 			const max = integerArgument(length, '"truncate" length');
+			if (value instanceof Markup) {
+				const ending = insertedPiece(ellipsis, value.strategy, '"truncate"');
+				return changeMarkup(run, value, (pieces) =>
+					truncatePieces(pieces, max, ending),
+				);
+			}
+			const text = toStringArgument(value, '"truncate"');
 			if (text.length <= max) return text;
 			const end = SURROGATE.test(text)
 				? codePointOffset(text, max)
@@ -517,22 +872,39 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		},
 		["length", "ellipsis"],
 	),
-	stripTags: define((_run, value) =>
-		stripTags(toStringArgument(value, '"stripTags"')),
-	),
-	nl2br: define((_run, value) => {
+	stripTags: define((run, value) => {
+		if (!(value instanceof Markup)) {
+			return stripTags(toStringArgument(value, '"stripTags"'));
+		}
+		// HTML markup's text stays escaped. Other markup's text is decoded, stripped and escaped again.
+		return isHtmlStrategy(value.strategy)
+			? new Markup(stripTags(value.value), value.strategy)
+			: fromPieces(run, [stripTags(markupText(value))], value.strategy);
+	}),
+	nl2br: define((run, value) => {
+		// Markup made for any strategy is also safe in HTML.
 		const html =
-			value instanceof Markup && value.strategy === "html"
+			value instanceof Markup
 				? value.value
-				: escapeHtml(toStr(value));
+				: escapeHtml(checkLength(run, toStr(value)));
+		let breaks = 0;
+		for (let i = 0; i < html.length; i++) {
+			const code = html.charCodeAt(i);
+			if (code === 10 || (code === 13 && html.charCodeAt(i + 1) !== 10)) {
+				breaks++;
+			}
+		}
+		refuseLength(run, html.length + breaks * 4, "nl2br");
 		return new Markup(html.replace(/\r\n|\n|\r/g, "<br>$&"), "html");
 	}),
 	urlEncode: define((run, value) => {
+		// Encoding again makes text three times longer each time, so it stops at the output limit.
+		if (typeof value === "string") return escapeUrl(value, run.state.maxSize);
 		const target = unwrap(value);
 		if (isPlainObject(target) || target instanceof Map) {
 			return queryString(run, target);
 		}
-		return escapeUrl(toStr(target));
+		return escapeUrl(toStr(target), run.state.maxSize);
 	}),
 	json: define(
 		(run, value, indent) => {
@@ -544,6 +916,13 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 			) {
 				return issue("type-error", '"json" indent must be a number or string');
 			}
+			// `JSON.stringify` indents by at most 10 characters.
+			const width =
+				typeof indent === "number"
+					? Math.max(0, Math.min(10, Math.floor(indent)))
+					: typeof indent === "string"
+						? Math.min(10, indent.length)
+						: 0;
 			const data = toPlainData(
 				value,
 				() =>
@@ -551,7 +930,12 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 						"invalid-argument",
 						'"json" cannot serialise a value that contains itself',
 					),
-				(count) => consume(run, count),
+				{
+					what: "json",
+					charge: (count) => consume(run, count),
+					maxLength: run.state.maxSize,
+					indent: width,
+				},
 			);
 			return checkLength(
 				run,
@@ -565,18 +949,45 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		if (typeof value === "string") return codePointLength(value);
 		if (value instanceof Markup) return codePointLength(value.value);
 		if (Array.isArray(value)) return value.length;
-		if (value instanceof Map || value instanceof Set) return value.size;
-		if (isPlainObject(value)) return hashKeys(value).length;
+		if (value instanceof Set) return value.size;
+		// Counts the entries templates can read, which is what loops see.
+		if (isPlainObject(value)) {
+			const count = hashKeys(value).length;
+			consume(run, count);
+			return count;
+		}
+		if (value instanceof Map) {
+			consume(run, value.size);
+			return mapContents(value).keys.length;
+		}
 		if (typeof value === "object" && Symbol.iterator in value) {
 			return entriesOf(run, value, "length").values.length;
 		}
 		return issue("type-error", `"length" cannot measure a ${typeName(value)}`);
 	}),
 	first: define((run, value) => {
+		if (Array.isArray(value)) return value[0] ?? null;
 		const target = unwrap(value);
 		if (typeof target === "string") {
 			const code = target.codePointAt(0);
 			return code === undefined ? null : String.fromCodePoint(code);
+		}
+		// A hash stops at its first key that templates can read.
+		if (isPlainObject(target)) {
+			for (const key in target) {
+				if (Object.hasOwn(target, key) && !BLOCKED_NAMES.has(key)) {
+					return target[key] ?? null;
+				}
+			}
+			return null;
+		}
+		if (target instanceof Map) {
+			for (const [key, item] of target) {
+				if (typeof key !== "string" || !BLOCKED_NAMES.has(key)) {
+					return item ?? null;
+				}
+			}
+			return null;
 		}
 		return listOf(run, target, "first")[0] ?? null;
 	}),
@@ -616,36 +1027,42 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 				typeof glue === "string" &&
 				(lastGlue === undefined || lastGlue === null)
 			) {
+				consume(run, value.length);
 				let text = "";
 				for (let i = 0; i < value.length; i++) {
 					const item: unknown = value[i];
+					const piece = typeof item === "string" ? item : toStr(item);
+					refuseLength(
+						run,
+						text.length + piece.length + (i > 0 ? glue.length : 0),
+						"join",
+					);
 					if (i > 0) text += glue;
-					text += typeof item === "string" ? item : toStr(item);
+					text += piece;
 				}
-				consume(run, value.length);
-				return checkLength(run, text);
+				return text;
 			}
 			const items = entriesOf(run, value, "join").values.map((item) =>
 				toStr(item),
 			);
-			consume(run, items.length);
 			const separator = toStringArgument(glue, '"join"');
-			if (lastGlue === undefined || lastGlue === null || items.length < 2) {
-				return checkLength(run, items.join(separator));
-			}
-			const last = items.pop() as string;
-			return checkLength(
-				run,
-				`${items.join(separator)}${toStringArgument(lastGlue, '"join"')}${last}`,
-			);
+			const last =
+				lastGlue === undefined || lastGlue === null || items.length < 2
+					? separator
+					: toStringArgument(lastGlue, '"join"');
+			let length =
+				items.length < 2
+					? 0
+					: (items.length - 2) * separator.length + last.length;
+			for (const item of items) length += item.length;
+			refuseLength(run, length, "join");
+			if (last === separator) return items.join(separator);
+			const final = items.pop() as string;
+			return `${items.join(separator)}${last}${final}`;
 		},
 		["glue", "lastGlue"],
 	),
-	keys: define((run, value) => {
-		const { keys } = entriesOf(run, value, "keys");
-		consume(run, keys.length);
-		return keys;
-	}),
+	keys: define((run, value) => entriesOf(run, value, "keys").keys),
 	merge: define((run, value, ...others) => {
 		const all = [value, ...others].filter(
 			(item) => item !== null && item !== undefined,
@@ -672,7 +1089,6 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 			const result: Record<string, unknown> = {};
 			for (const item of all) {
 				const { values, keys } = entriesOf(run, item, "merge");
-				consume(run, keys.length);
 				keys.forEach((key, index) => {
 					setOwn(result, String(key), values[index]);
 				});
@@ -688,35 +1104,38 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 		const target = unwrap(value);
 		if (typeof target === "string")
 			return codePoints(target).reverse().join("");
+		if (isHashLike(target)) {
+			const { values, keys } = entriesOf(run, target, "reverse");
+			return orderedHash([...keys].reverse(), [...values].reverse());
+		}
 		const items = listOf(run, target, "reverse");
 		consume(run, items.length);
 		return [...items].reverse();
 	}),
 	sort: define(
 		(run, value, by) => {
+			if (!Array.isArray(value) && isHashLike(value)) {
+				const { values, keys } = entriesOf(run, value, "sort");
+				const sorted = sortBy(
+					keys.map((key, index) => ({ key, item: values[index] })),
+					(entry) => entry.item,
+					by,
+				);
+				return orderedHash(
+					sorted.map((entry) => entry.key),
+					sorted.map((entry) => entry.item),
+				);
+			}
 			const items = [...listOf(run, value, "sort")];
 			consume(run, items.length);
-			if (by === undefined || by === null) {
-				// Strings compare by UTF-16 code units, as the default sort does, which skips calling `compare`.
-				return items.every((item) => typeof item === "string")
-					? items.sort()
-					: items.sort(compare);
+			// Strings compare by UTF-16 code units, as the default sort does, which skips calling `compare`.
+			if (
+				(by === undefined || by === null) &&
+				items.every((item) => typeof item === "string")
+			) {
+				return items.sort();
 			}
-			const fn = functionArgument(by, "sort");
-			if (fn.length >= 2) {
-				return items.sort((a, b) => {
-					const result = syncResult(fn(a, b), "sort");
-					return typeof result === "number"
-						? result
-						: issue("type-error", '"sort" comparator must return a number');
-				});
-			}
-			const keyed = items.map((item) => ({
-				item,
-				key: syncResult(fn(item), "sort"),
-			}));
-			keyed.sort((a, b) => compare(a.key, b.key));
-			return keyed.map((entry) => entry.item);
+			return sortBy(items, (item) => item, by);
 		},
 		["by"],
 	),
@@ -845,6 +1264,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 				"number",
 				run,
 				options,
+				NUMBER_OPTIONS,
 				() => ({}),
 				(locale, settings) => new Intl.NumberFormat(locale, settings),
 			);
@@ -860,6 +1280,7 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 				"plural",
 				run,
 				options,
+				PLURAL_OPTIONS,
 				() => ({}),
 				(locale, settings) => new Intl.PluralRules(locale, settings),
 			);
@@ -878,10 +1299,18 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 				"number",
 				run,
 				options,
+				PLURAL_OPTIONS,
 				() => ({}),
 				(locale, settings) => new Intl.NumberFormat(locale, settings),
 			);
-			return form.replaceAll("#", formatter.format(count));
+			const number = formatter.format(count);
+			const parts = form.split("#");
+			refuseLength(
+				run,
+				form.length + (parts.length - 1) * (number.length - 1),
+				"plural",
+			);
+			return parts.join(number);
 		},
 		["one", "other", "zero", "two", "few", "many"],
 		true,
@@ -892,15 +1321,13 @@ export const builtinFilters: Record<string, BuiltinEntry> = {
 				"date",
 				run,
 				options,
-				(settings) => {
-					const hasStyle = Object.keys(settings).some(
-						(key) => key !== "locale" && key !== "timeZone",
-					);
-					return {
-						timeZone: run.state.timeZone,
-						...(hasStyle ? {} : { dateStyle: "medium" }),
-					};
-				},
+				DATE_OPTIONS,
+				(settings) => ({
+					timeZone: run.state.timeZone,
+					...(Object.keys(settings).some((key) => DATE_STYLE_OPTIONS.has(key))
+						? {}
+						: { dateStyle: "medium" }),
+				}),
 				(locale, resolved) => new Intl.DateTimeFormat(locale, resolved),
 			);
 			if (value === null || value === undefined) return "";

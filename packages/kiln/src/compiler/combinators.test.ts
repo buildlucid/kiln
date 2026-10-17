@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
+import { unhold } from "../runtime/render.js";
 import type { Compiled, Run, Scope } from "../runtime/types.js";
 import { constant, evalAll, map1, map2 } from "./combinators.js";
 
@@ -37,6 +38,18 @@ describe("map1 and map2", () => {
 			await map2(asyncValue(1), constant(2), (a, b) => [a, b]).ev(run, scope),
 		).toEqual([1, 2]);
 	});
+
+	test("never wait for a promise from a side that isn't async", async () => {
+		const data = Promise.resolve("data");
+		const both = map2(constant(data), asyncValue(1), (a, b) => [a, b]);
+		expect(await both.ev(run, scope)).toEqual([data, 1]);
+		const read = map1(
+			asyncValue({ data }),
+			(v) => (v as { data: unknown }).data,
+		);
+		// Whatever waits takes the value back out, as for any value with a `then` member.
+		expect(unhold(await read.ev(run, scope))).toBe(data);
+	});
 });
 
 describe("evalAll", () => {
@@ -45,6 +58,18 @@ describe("evalAll", () => {
 		const values = evalAll([constant(1), asyncValue(2)])(run, scope);
 		expect(values).toBeInstanceOf(Promise);
 		expect(await values).toEqual([1, 2]);
+	});
+
+	test("waits only for expressions that are async", async () => {
+		const data = Promise.resolve("data");
+		expect(evalAll([constant(data), constant(1)])(run, scope)).toEqual([
+			data,
+			1,
+		]);
+		expect(await evalAll([constant(data), asyncValue(1)])(run, scope)).toEqual([
+			data,
+			1,
+		]);
 	});
 
 	test("a synchronous failure silences promises already started", async () => {

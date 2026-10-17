@@ -62,3 +62,13 @@ describe("ordering", () => {
 		expect(await errorCode("{{ [2, null, 1]|sort|join }}")).toBe("type-error");
 	});
 });
+
+describe("hashes", () => {
+	test("keeps the keys, in sorted order", async () => {
+		expect(
+			await render(
+				'{% for k, v in { b: 2, a: 3, "1": 1 }|sort %}{{ k }}={{ v }} {% endfor %}',
+			),
+		).toBe("1=1 b=2 a=3 ");
+	});
+});

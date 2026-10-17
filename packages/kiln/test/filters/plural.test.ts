@@ -63,3 +63,19 @@ describe("null", () => {
 		expect(await render('[{{ null|plural("a", "b") }}]')).toBe("[]");
 	});
 });
+
+describe("limits", () => {
+	test("an unknown option is an error", async () => {
+		expect(await errorCode('{{ 1|plural("a", "b", oops: 1) }}')).toBe(
+			"invalid-argument",
+		);
+	});
+
+	test("stops before building text longer than maxOutputLength", async () => {
+		expect(
+			await errorCode('{{ 1000000|plural(one: "##", other: "##") }}', {
+				limits: { maxOutputLength: 10 },
+			}),
+		).toBe("limit-output");
+	});
+});

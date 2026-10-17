@@ -85,7 +85,7 @@ Readable.fromWeb(stream).pipe(response);
 
 	<h2>Stopping a render</h2>
 
-	<p>If the visitor leaves and the stream is cancelled, Kiln stops sending, but the render runs on until it finishes. Pass the request's <code>signal</code> so the render stops as well.</p>
+	<p>If the visitor leaves and the stream is cancelled, Kiln stops sending, but the render runs on until it finishes. Pass the request's <code>signal</code> so the render stops as well. When the signal aborts, the stream ends with an <code>aborted</code> error straight away, even while the page or an island waits for your code.</p>
 
 	<h2>Limits</h2>
 

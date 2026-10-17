@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { errorCode, later, render } from "../helpers.js";
+import { errorCode, errorCodes, later, render } from "../helpers.js";
 
 describe("for", () => {
 	test("loops over array items", async () => {
@@ -36,6 +36,29 @@ describe("for", () => {
 		expect(await render(template, { context })).toBe("a1|xy|12");
 	});
 
+	test("loops over every value of a map, whatever its keys", async () => {
+		const context = {
+			map: new Map<unknown, string>([
+				[1, "a"],
+				["b", "b"],
+			]),
+		};
+		expect(
+			await render("{% for v in map %}{{ v }}{% endfor %}", { context }),
+		).toBe("ab");
+	});
+
+	test("cannot loop over an async iterable", async () => {
+		const context = {
+			items: (async function* () {
+				yield 1;
+			})(),
+		};
+		expect(
+			await errorCode("{% for x in items %}{% endfor %}", { context }),
+		).toBe("not-iterable");
+	});
+
 	test("renders else when there are no items", async () => {
 		const template = "{% for x in items %}{{ x }}{% else %}none{% endfor %}";
 		expect(await render(template, { context: { items: [] } })).toBe("none");
@@ -56,6 +79,14 @@ describe("for", () => {
 		expect(await errorCode("{% for c in 5 %}{{ c }}{% endfor %}")).toBe(
 			"not-iterable",
 		);
+	});
+
+	test("else cannot repeat", async () => {
+		expect(
+			await errorCodes(
+				"{% if true %}{% for i in [] %}{% else %}{% else %}{% endfor %}{% endif %}",
+			),
+		).toEqual(["unexpected-tag"]);
 	});
 
 	test("must be closed", async () => {

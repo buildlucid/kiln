@@ -25,6 +25,7 @@
 	<ul>
 		<li>Put a version in the key, such as <code>post.updatedAt</code>. When the post changes, so does the key, and Kiln renders the section again. You never need to clear the cache.</li>
 		<li>Kiln adds the template's name and the render's locale and time zone to every key. Two templates can use the same key, and dates and numbers are never shown in the wrong language. When the tag is indented, so is its saved copy, so Kiln adds the indentation too.</li>
+		<li>Kiln also adds a short hash of the tag's content. Editing what is inside a <code>cache</code> tag gives it new keys, so a deploy never shows copies saved from the old content, and two tags in one template only share copies when their content is the same.</li>
 		<li>Never cache content for one visitor under a key that doesn't include them, or other visitors will see it.</li>
 	</ul>
 

@@ -44,6 +44,12 @@ describe("attrs", () => {
 				limits: { maxSteps: 100 },
 			}),
 		).toBe("limit-steps");
+		expect(
+			await errorCode("{{ attrs({ class: [text, text, text] }) }}", {
+				context: { text: "x".repeat(10) },
+				limits: { maxOutputLength: 20 },
+			}),
+		).toBe("limit-output");
 	});
 
 	test("renders nothing for null", async () => {

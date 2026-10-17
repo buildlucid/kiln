@@ -61,7 +61,7 @@ import {
 } from "./compiler.js";
 
 /** Changes whenever generated code or the runtime it calls changes shape, so old modules fail loudly. */
-export const PRECOMPILED_VERSION = 2;
+export const PRECOMPILED_VERSION = 3;
 
 /**
  * A template compiled to JavaScript at build time, the default export of a module `precompile` wrote. Loaders return
@@ -304,9 +304,16 @@ const runtime = {
 		}
 		return value;
 	},
-	/** Whether the version of a block that `placeBlock` places may set a variable. */
-	blockSets: (run: Run, name: string): boolean =>
-		run.blocks.get(name)?.[0]?.def.sets ?? false,
+	/**
+	 * Whether a block that `placeBlock` placed may have set a variable. Any version of any block may run inside it,
+	 * through `parent()` and `block()`, so this is whether any of them sets one. Templates define few blocks.
+	 */
+	blockSets: (run: Run): boolean => {
+		for (const entries of run.blocks.values()) {
+			for (const entry of entries) if (entry.def.sets) return true;
+		}
+		return false;
+	},
 	/**
 	 * Locates an error thrown in generated code at the last property it read inline, where a getter in your data can
 	 * throw. Every other error is located already.
@@ -498,11 +505,18 @@ const runtime = {
 		}
 		return new Markup(runtime.str(run, span, value), strategy);
 	},
-	/** The `escape` filter, with a strategy known to be valid. */
+	/** The `escape` filter, with a strategy known to be valid. Stops once the escaped text passes the output limit. */
 	escape: (run: Run, span: Span, value: unknown, strategy: EscapeStrategy) => {
 		if (value instanceof Markup && value.strategy === strategy) return value;
 		const text = runtime.str(run, span, value);
-		return new Markup(escapeWith(text, strategy), strategy);
+		try {
+			return new Markup(
+				escapeWith(text, strategy, run.state.maxSize),
+				strategy,
+			);
+		} catch (error) {
+			throw locate(run, span, error);
+		}
 	},
 	/** Renders a component's fill for a slot, recording the slot's location on errors. */
 	fillSlot: (
@@ -512,7 +526,12 @@ const runtime = {
 		out: Out,
 	): void | Promise<void> => {
 		try {
-			const result = fill.body(fill.run, fillScope(fill), out);
+			// The fill renders in the capture the slot is in, such as a cached section.
+			const result = fill.body(
+				fill.run.within(run.capture),
+				fillScope(fill, run),
+				out,
+			);
 			if (result instanceof Promise) {
 				return result.catch((error: unknown) => {
 					throw markCaller(run, span, error);
@@ -533,13 +552,15 @@ const runtime = {
 	): void | Promise<void> => {
 		const entry = run.blocks.get(name)?.[0];
 		if (!entry) return;
-		if (entry.run === run) {
-			return entry.def.body(entry.run, blockScope(entry.def, scope), out);
+		// The block renders in the capture it is placed in, such as a cached section.
+		const blockRun = entry.run.within(run.capture);
+		if (entry.run.template === run.template) {
+			return entry.def.body(blockRun, blockScope(entry.def, scope), out);
 		}
 		// A block defined in another template records where it was placed.
 		try {
 			const result = entry.def.body(
-				entry.run,
+				blockRun,
 				blockScope(entry.def, scope),
 				out,
 			);

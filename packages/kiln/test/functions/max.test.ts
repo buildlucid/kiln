@@ -28,3 +28,14 @@ describe("dates", () => {
 		).toBe("2021-01-01T00:00:00.000Z");
 	});
 });
+
+describe("null and hashes", () => {
+	test("null is refused wherever it is", async () => {
+		expect(await errorCode("{{ max(null, 3) }}")).toBe("type-error");
+		expect(await errorCode("{{ max(3, null) }}")).toBe("type-error");
+	});
+
+	test("compares the values of one hash", async () => {
+		expect(await render("{{ max({ a: 1, b: 5 }) }}")).toBe("5");
+	});
+});

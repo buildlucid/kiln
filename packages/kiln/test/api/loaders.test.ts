@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, parse, relative, sep } from "node:path";
 import { describe, expect, test, vi } from "vite-plus/test";
 import { createKiln, memoryLoader } from "../../src/index.js";
 import { fileLoader } from "../../src/node.js";
@@ -158,6 +158,49 @@ describe("fileLoader", () => {
 		await expect(kiln.render("missing")).rejects.toMatchObject({
 			code: "missing-template",
 		});
+	});
+
+	test("folders, dot files and null characters are missing templates", async () => {
+		const root = mkdtempSync(join(tmpdir(), "kiln-"));
+		mkdirSync(join(root, "pages.kiln"));
+		mkdirSync(join(root, ".private"));
+		writeFileSync(join(root, ".env"), "SECRET");
+		writeFileSync(join(root, ".private/page.kiln"), "SECRET");
+		writeFileSync(join(root, "file.kiln"), "");
+		const loader = fileLoader({ root });
+		for (const name of [
+			"pages.kiln",
+			".env",
+			".private/page.kiln",
+			"file.kiln/inner.kiln",
+			"file.kiln\0",
+		]) {
+			expect(await loader.load(name)).toBeNull();
+		}
+		const kiln = createKiln({ loader });
+		await expect(kiln.render(".env")).rejects.toMatchObject({
+			code: "missing-template",
+		});
+	});
+
+	test("a root that ends with a separator works", async () => {
+		const root = mkdtempSync(join(tmpdir(), "kiln-"));
+		writeFileSync(join(root, "a.kiln"), "a");
+		expect(await fileLoader({ root: root + sep }).load("a.kiln")).toBe("a");
+		expect(
+			await fileLoader({ root: parse(root).root }).load(
+				relative(parse(root).root, join(root, "a.kiln")),
+			),
+		).toBe("a");
+	});
+
+	test("other read errors name the template, not the path on disk", async () => {
+		const root = mkdtempSync(join(tmpdir(), "kiln-"));
+		// A link to itself fails with ELOOP, whoever runs the test.
+		symlinkSync("loop.kiln", join(root, "loop.kiln"));
+		await expect(fileLoader({ root }).load("loop.kiln")).rejects.toThrow(
+			/^Could not read template "loop\.kiln" \(ELOOP\)$/,
+		);
 	});
 
 	test("lists every file under the root, skipping dot files and folders", async () => {

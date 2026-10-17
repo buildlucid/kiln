@@ -150,6 +150,18 @@ describe("renderStream", () => {
 		await expect(failing).rejects.toMatchObject({ code: "limit-output" });
 	});
 
+	test("errors the stream as soon as the render is aborted, even while it waits", async () => {
+		const controller = new AbortController();
+		const stream = await renderStream("<h1></h1>{{ never() }}", {
+			functions: { never: () => new Promise(() => {}) },
+			signal: controller.signal,
+		});
+		const reader = stream.getReader();
+		expect(await next(reader)).toBe("<h1></h1>");
+		controller.abort();
+		await expect(reader.read()).rejects.toMatchObject({ code: "aborted" });
+	});
+
 	test("finishes the render after the stream is cancelled", async () => {
 		const { slow, resolve } = waiting();
 		let finished = false;

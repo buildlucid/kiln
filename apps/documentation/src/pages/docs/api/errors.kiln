@@ -47,7 +47,7 @@ try {
 			<tr><td><code>template</code>, <code>line</code>, <code>column</code></td><td>Where the error happened</td></tr>
 			<tr><td><code>frame</code></td><td>The lines of source around the error, with a marker</td></tr>
 			<tr><td><code>templateStack</code></td><td>The templates involved, from the page down to the one that failed</td></tr>
-			<tr><td><code>cause</code></td><td>The original error, when your code threw: one of your functions, a getter in your data or your cache store</td></tr>
+			<tr><td><code>cause</code></td><td>The original error, when your code threw: one of your functions, a getter in your data, your loader or your cache store</td></tr>
 		</tbody>
 	</table>
 
@@ -70,8 +70,9 @@ for (const problem of diagnostics) {
 	<ul>
 		<li>A template that doesn't exist, unless the <code>include</code> says <code>ignore missing</code>.</li>
 		<li>An <code>include</code> or <code>component</code> that passes a prop the template doesn't declare, leaves out a required prop, or passes a written-out value of the wrong type, such as <code>variant: "danger"</code>.</li>
-		<li>A page with <code>props</code> that extends a layout, when the layout needs a prop the page neither declares nor sets. The page only accepts its own props, so the layout could never get it.</li>
+		<li>A page with <code>props</code> that extends a layout, when the layout needs a prop the page neither declares nor sets. The page only accepts its own props, so the layout could never get it. A page with a rest prop passes everything on, so it isn't reported.</li>
 		<li>A warning for a variable that a template with <code>props</code> reads but doesn't declare, set or get from globals. Layouts may read their page's variables, so declare those as props to remove the warning.</li>
+		<li>A warning, in the same templates, for a variable a macro reads that is neither one of its parameters nor a global. A macro can't see the template's variables.</li>
 	</ul>
 
 	<p>Apart from missing templates, these checks follow strict mode, so they are skipped when <code>strict</code> is off. <code>check</code> only knows what a template is passed when it can see the call, so it doesn't report unknown variables in templates without <code>props</code>.</p>

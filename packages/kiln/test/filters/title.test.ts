@@ -12,3 +12,19 @@ describe("title", () => {
 		);
 	});
 });
+
+describe("edge cases", () => {
+	test("a combining mark doesn't start a word", async () => {
+		expect(
+			await render("{{ text|title }}", {
+				context: { text: "e\u0301cole nai\u0308ve" },
+			}),
+		).toBe("E\u0301cole Nai\u0308ve");
+	});
+
+	test("tags in safe markup don't break a word", async () => {
+		expect(await render('{{ "<b>hello</b> wor<i>ld</i>"|raw|title }}')).toBe(
+			"<b>Hello</b> Wor<i>ld</i>",
+		);
+	});
+});

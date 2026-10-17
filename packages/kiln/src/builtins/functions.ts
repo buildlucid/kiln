@@ -7,6 +7,7 @@ import type { CallableEntry, Run } from "../runtime/types.js";
 import {
 	compare,
 	isEmpty,
+	isHashLike,
 	isPlainObject,
 	toStr,
 	typeName,
@@ -16,6 +17,7 @@ import {
 	entriesOf,
 	integerArgument,
 	listOf,
+	mapContents,
 	toDate,
 	toPlainData,
 } from "./helpers.js";
@@ -30,26 +32,33 @@ const define = (
 /** Attribute names HTML allows: no spaces, quotes, `>`, `/`, `=` or control characters. */
 const ATTRIBUTE_NAME = /^[^\s"'>/=\p{Cc}]+$/u;
 
-/** `max` and `min`, of their arguments or of one list. Charges for the items compared. */
+/** `max` and `min`, of their arguments or of the items of one list or the values of one hash. Charges for the items compared. */
 const extremes = (
 	run: Run,
 	values: unknown[],
+	what: string,
 	pick: (order: number) => boolean,
 ): unknown => {
+	const [only] = values;
 	const items =
 		values.length === 1 &&
-		(Array.isArray(values[0]) || values[0] instanceof Set)
-			? listOf(run, values[0], "max")
+		(Array.isArray(only) || only instanceof Set || isHashLike(only))
+			? entriesOf(run, only, what).values
 			: values;
-	consume(run, items.length);
-	let best: unknown = null;
-	for (const item of items) {
-		if (best === null || pick(compare(item, best))) best = item;
+	if (items === values) consume(run, items.length);
+	if (items.length === 0) return null;
+	let best = items[0];
+	for (let i = 1; i < items.length; i++) {
+		const item = items[i];
+		if (pick(compare(item, best))) best = item;
 	}
-	return best;
+	return best ?? null;
 };
 
-/** Turns one `attrs` value into its attribute text, or null to leave the attribute out. Lists are charged per item. */
+/**
+ * Turns one `attrs` value into its attribute text, or null to leave the attribute out. Lists are charged per item,
+ * and refused before they are joined if the text would pass `maxOutputLength`.
+ */
 const attributeValue = (run: Run, value: unknown): string | null => {
 	if (value === null || value === undefined || value === false) return null;
 	if (Array.isArray(value)) {
@@ -60,7 +69,16 @@ const attributeValue = (run: Run, value: unknown): string | null => {
 					item !== null && item !== undefined && item !== false && item !== "",
 			)
 			.map((item) => attributeText(item));
-		return parts.length === 0 ? null : parts.join(" ");
+		if (parts.length === 0) return null;
+		let length = parts.length - 1;
+		for (const part of parts) length += part.length;
+		if (length > run.state.maxSize) {
+			return issue(
+				"limit-output",
+				`"attrs" would build a string longer than the output limit of ${run.state.maxSize}`,
+			);
+		}
+		return parts.join(" ");
 	}
 	return attributeText(value);
 };
@@ -80,8 +98,12 @@ export const builtinFunctions: Record<string, BuiltinEntry> = {
 		},
 		["start", "end", "step"],
 	),
-	max: define((run, ...values) => extremes(run, values, (order) => order > 0)),
-	min: define((run, ...values) => extremes(run, values, (order) => order < 0)),
+	max: define((run, ...values) =>
+		extremes(run, values, "max", (order) => order > 0),
+	),
+	min: define((run, ...values) =>
+		extremes(run, values, "min", (order) => order < 0),
+	),
 	cycle: define(
 		(run, values, position) => {
 			const items = listOf(run, values, "cycle");
@@ -114,7 +136,6 @@ export const builtinFunctions: Record<string, BuiltinEntry> = {
 				);
 			}
 			const { values, keys } = entriesOf(run, target, "attrs");
-			consume(run, keys.length);
 			let html = "";
 			keys.forEach((key, index) => {
 				const name = String(key);
@@ -127,7 +148,14 @@ export const builtinFunctions: Record<string, BuiltinEntry> = {
 					return;
 				}
 				const text = attributeValue(run, value);
-				if (text !== null) html = checkLength(run, `${html} ${name}="${text}"`);
+				if (text === null) return;
+				if (html.length + name.length + text.length + 4 > run.state.maxSize) {
+					issue(
+						"limit-output",
+						`"attrs" would build a string longer than the output limit of ${run.state.maxSize}`,
+					);
+				}
+				html += ` ${name}="${text}"`;
 			});
 			return new Markup(html, "html");
 		},
@@ -136,16 +164,19 @@ export const builtinFunctions: Record<string, BuiltinEntry> = {
 	dump: define((run, ...values) => {
 		if (!run.state.env.debug) return new Markup("", "html");
 		const data = values.map((value) =>
-			toPlainData(
-				value,
-				() => "[Circular]",
-				(count) => consume(run, count),
-			),
+			toPlainData(value, () => "[Circular]", {
+				what: "dump",
+				charge: (count) => consume(run, count),
+				maxLength: run.state.maxSize,
+				indent: 2,
+			}),
 		);
-		const text =
-			JSON.stringify(data.length === 1 ? data[0] : data, null, 2) ?? "null";
+		const text = checkLength(
+			run,
+			JSON.stringify(data.length === 1 ? data[0] : data, null, 2) ?? "null",
+		);
 		return new Markup(
-			`<pre class="kiln-dump">${escapeHtml(text)}</pre>`,
+			checkLength(run, `<pre class="kiln-dump">${escapeHtml(text)}</pre>`),
 			"html",
 		);
 	}),
@@ -153,7 +184,12 @@ export const builtinFunctions: Record<string, BuiltinEntry> = {
 
 export const builtinTests: Record<string, BuiltinEntry> = {
 	null: define((_run, value) => value === null || value === undefined),
-	empty: define((_run, value) => isEmpty(value)),
+	// A `Map` is empty when a loop would see no entries in it.
+	empty: define((_run, value) =>
+		value instanceof Map
+			? mapContents(value).keys.length === 0
+			: isEmpty(value),
+	),
 	even: define(
 		(_run, value) =>
 			typeof value === "number" && Number.isInteger(value) && value % 2 === 0,

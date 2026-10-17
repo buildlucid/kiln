@@ -1,8 +1,16 @@
 import { describe, expect, test } from "vite-plus/test";
 import { KilnIssue } from "../errors.js";
 import { expose } from "../runtime/exposure.js";
+import { Markup } from "../runtime/markup.js";
 import type { Run } from "../runtime/types.js";
-import { entriesOf, functionArgument, toDate, toPlainData } from "./helpers.js";
+import {
+	entriesOf,
+	functionArgument,
+	Kept,
+	toDate,
+	toPieces,
+	toPlainData,
+} from "./helpers.js";
 
 /** A render with a step limit of 3. */
 const run = () => ({ state: { steps: 0, maxSteps: 3 } }) as Run;
@@ -84,6 +92,8 @@ describe("toDate", () => {
 			true,
 			new Date(Number.NaN),
 			"2026-13-45",
+			"2026-02-29",
+			"2026-04-31T10:00",
 		]) {
 			expect(() => toDate(value, "x")).toThrow(KilnIssue);
 		}
@@ -104,7 +114,7 @@ describe("toPlainData", () => {
 			skip: () => 1,
 			n: Number.NaN,
 		};
-		expect(toPlainData(data, () => "cycle")).toEqual({
+		expect(toPlainData(data, () => "cycle", { what: "x" })).toEqual({
 			post: { title: "T" },
 			list: [1],
 			when: "1970-01-01T00:00:00.000Z",
@@ -115,8 +125,41 @@ describe("toPlainData", () => {
 	test("calls onCycle for values that contain themselves", () => {
 		const loop: Record<string, unknown> = {};
 		loop.self = loop;
-		expect(toPlainData(loop, () => "[Circular]")).toEqual({
+		expect(toPlainData(loop, () => "[Circular]", { what: "x" })).toEqual({
 			self: "[Circular]",
 		});
+	});
+});
+
+describe("toPlainData limits", () => {
+	test("refuses data nested too deeply, and JSON longer than maxLength", () => {
+		let deep: unknown = 1;
+		for (let i = 0; i < 2000; i++) deep = [deep];
+		expect(() => toPlainData(deep, () => null, { what: "x" })).toThrow(
+			KilnIssue,
+		);
+		expect(() =>
+			toPlainData(["abcd", "abcd"], () => null, { what: "x", maxLength: 10 }),
+		).toThrow(KilnIssue);
+	});
+});
+
+describe("toPieces", () => {
+	test("decodes the entities the escapers write, and keeps tags and other entities", () => {
+		expect(
+			toPieces(new Markup('<b class="x">a &amp; b&nbsp;&#60;</b>', "html")),
+		).toEqual([
+			new Kept('<b class="x">'),
+			"a & b",
+			new Kept("&nbsp;"),
+			"<",
+			new Kept("</b>"),
+		]);
+	});
+
+	test("decodes the escape sequences of other strategies", () => {
+		expect(toPieces(new Markup(String.raw`a\u0020b`, "js"))).toEqual(["a b"]);
+		expect(toPieces(new Markup(String.raw`a\20 b`, "css"))).toEqual(["a b"]);
+		expect(toPieces(new Markup("a%20%C3%A9", "url"))).toEqual(["a é"]);
 	});
 });

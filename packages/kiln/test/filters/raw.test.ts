@@ -8,11 +8,12 @@ describe("raw", () => {
 		).toBe("<b>bold</b>");
 	});
 
-	test("must come last, because other filters return unsafe strings", async () => {
+	test("comes after filters that return plain values, which aren't safe", async () => {
 		expect(
-			await render("{{ html|raw|upper }}|{{ html|upper|raw }}", {
-				context: { html: "<b>x</b>" },
-			}),
-		).toBe("&lt;B&gt;X&lt;/B&gt;|<B>X</B>");
+			await render(
+				'{{ html|raw|split(",")|join(" ") }}|{{ html|split(",")|join(" ")|raw }}',
+				{ context: { html: "<b>x</b>,<i>y</i>" } },
+			),
+		).toBe("&lt;b&gt;x&lt;/b&gt; &lt;i&gt;y&lt;/i&gt;|<b>x</b> <i>y</i>");
 	});
 });

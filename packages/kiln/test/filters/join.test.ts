@@ -36,3 +36,20 @@ describe("edge cases", () => {
 		);
 	});
 });
+
+describe("limits", () => {
+	test("stops before building text longer than maxOutputLength", async () => {
+		expect(
+			await errorCode("{{ [text, text, text]|join }}", {
+				context: { text: "x".repeat(4) },
+				limits: { maxOutputLength: 10 },
+			}),
+		).toBe("limit-output");
+		expect(
+			await errorCode('{{ [text, text, text]|join(",", " and ") }}', {
+				context: { text: "x".repeat(4) },
+				limits: { maxOutputLength: 10 },
+			}),
+		).toBe("limit-output");
+	});
+});

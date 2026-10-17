@@ -32,6 +32,11 @@ describe("resolveTemplateName", () => {
 		["a//b", undefined],
 		["../up", "index.kiln"],
 		["./a/../../up", "index.kiln"],
+		["./", "pages/home.kiln"],
+		["../", "a/b/c.kiln"],
+		["partials/", undefined],
+		["a/.", undefined],
+		["a\0b", undefined],
 	])("refuses %j", (name, from) => {
 		expect(() => resolveTemplateName(name, from)).toThrow(KilnIssue);
 	});

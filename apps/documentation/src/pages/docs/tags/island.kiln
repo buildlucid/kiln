@@ -175,7 +175,7 @@ const stream = await kiln.renderStream("pages/product", { product }, {
 		<li>Kiln adds them after everything the page writes, even <code>&lt;/html&gt;</code>. Browsers put them in the body, where the script moves each into its place. Without JavaScript, the fallbacks stay.</li>
 		<li>An island renders with the same <code>state</code>, locale and time zone as the page.</li>
 		<li>If an island fails, the stream ends with its error, as for any error once the page has been sent. Islands that haven't arrived keep their fallbacks.</li>
-		<li><code>maxOutputLength</code> counts the islands as part of the page.</li>
+		<li>The islands count towards the page's limits. <code>maxOutputLength</code> and <code>maxSteps</code> count them as part of the page, and each island's nesting starts at the depth of its tag.</li>
 		<li>Islands inside <code>cache</code>, <code>set</code>, <code>apply</code> or a macro render in place, since their output may be reused or never sent.</li>
 		<li><code>render</code> and <code>renderBlock</code> can't stream, so with <code>streamIslands()</code> they render islands in place.</li>
 	</ul>

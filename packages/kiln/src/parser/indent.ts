@@ -1,4 +1,4 @@
-import type { LexResult, TextLine } from "../lexer/lexer.js";
+import { contentStart, type LexResult, type TextLine } from "../lexer/lexer.js";
 import type { PlacedStatement, Statement, TemplateNode } from "./ast.js";
 
 /**
@@ -84,22 +84,39 @@ const firstAtLeast = <T>(
 	return low;
 };
 
+/**
+ * Finds `<pre>` and `<textarea>` tags, and the HTML comments, scripts and styles to skip, whose `<pre` is not a tag.
+ * Each region runs to its end, or to the end of the source when it is not closed.
+ */
+const MARKUP =
+	/<!--[\s\S]*?(?:-->|$)|<(script|style)(?=[\s/>])[\s\S]*?(?:<\/\1\s*>|$)|<(\/?)(pre|textarea)(?=[\s/>])/gi;
+
+const MAY_PREFORMAT = /<(?:pre|textarea)/i;
+
 /** Where `<pre>` and `<textarea>` elements start and end in the template's text, whose whitespace is content. */
 const preformatted = (
 	text: string,
 	textTokens: LexResult["tokens"],
 ): [number, number][] => {
+	// Most templates have neither, which one scan finds.
+	if (!MAY_PREFORMAT.test(text)) return [];
+	// The template's text with everything else, such as tags and outputs, blanked out. Offsets stay the same, and the
+	// filler is not a space, so `<pre{{ x }}>` is still not a `<pre>` tag.
+	let visible = "";
+	for (const token of textTokens) {
+		visible += "\0".repeat(token.start - visible.length);
+		visible += text.slice(token.start, token.end);
+	}
 	const ranges: [number, number][] = [];
 	let open: { name: string; start: number } | null = null;
-	// One search of the whole source, keeping matches in text rather than in tags or comments.
-	for (const match of text.matchAll(/<(\/?)(pre|textarea)(?=[\s/>])/gi)) {
-		const at = match.index;
-		const token = textTokens[firstAtLeast(textTokens, at + 1, (t) => t.end)];
-		if (token === undefined || token.start > at) continue;
-		const name = (match[2] as string).toLowerCase();
-		if (open === null && match[1] === "") open = { name, start: at };
-		else if (open?.name === name && match[1] === "/") {
-			ranges.push([open.start, at]);
+	MARKUP.lastIndex = 0;
+	for (let match = MARKUP.exec(visible); match; match = MARKUP.exec(visible)) {
+		const tag = match[3];
+		if (tag === undefined) continue;
+		const name = tag.toLowerCase();
+		if (open === null && match[2] === "") open = { name, start: match.index };
+		else if (open?.name === name && match[2] === "/") {
+			ranges.push([open.start, match.index]);
 			open = null;
 		}
 	}
@@ -131,8 +148,11 @@ export const arrangeIndentation = (
 	const textLines =
 		pre.length > 0 ? lines.filter((line) => !inPre(line.start)) : lines;
 
+	// The first line starts after any byte order mark, as the lexer's lines do.
+	const lineStart = (offset: number): number =>
+		text.lastIndexOf("\n", offset - 1) + 1 || contentStart(text);
 	const lineOf = (offset: number): TextLine => {
-		const start = text.lastIndexOf("\n", offset - 1) + 1;
+		const start = lineStart(offset);
 		let indentEnd = start;
 		while (text[indentEnd] === " " || text[indentEnd] === "\t") indentEnd++;
 		return { start, indentEnd };
@@ -146,6 +166,8 @@ export const arrangeIndentation = (
 		line: TextLine;
 	}[] = [];
 	for (const node of placedNodes) {
+		// Inside `<pre>` and `<textarea>` a tag is not indented, nor is what it inserts.
+		if (inPre(node.span.start)) continue;
 		if (node.type === "Island") {
 			const end = text.lastIndexOf("{%", node.span.end - 1);
 			if (standalone.has(end)) islandEnds.push({ node, line: lineOf(end) });
@@ -166,10 +188,8 @@ export const arrangeIndentation = (
 	const cuts: [number, number][] = [];
 
 	const indentOf = (offset: number): string => {
-		const start = text.lastIndexOf("\n", offset - 1) + 1;
-		let end = start;
-		while (text[end] === " " || text[end] === "\t") end++;
-		return text.slice(start, end);
+		const line = lineOf(offset);
+		return text.slice(line.start, line.indentEnd);
 	};
 
 	const trim = (body: Body): void => {

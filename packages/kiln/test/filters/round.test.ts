@@ -34,3 +34,13 @@ describe("negative numbers", () => {
 		).toBe("-1.2|-1.3|0");
 	});
 });
+
+describe("edge cases", () => {
+	test("infinity and numbers beyond the precision are already rounded", async () => {
+		expect(
+			await render("{{ n|round }}|{{ 3.14|round(400) }}", {
+				context: { n: Number.POSITIVE_INFINITY },
+			}),
+		).toBe("Infinity|3.14");
+	});
+});

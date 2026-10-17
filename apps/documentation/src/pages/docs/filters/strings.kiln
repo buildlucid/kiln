@@ -1,9 +1,15 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-	<p>These filters change and encode text. Apply a filter with <code>|</code>, as in <code>&#123;{ title|upper }}</code>. Lengths and positions count characters as people see them (Unicode code points), not JavaScript's UTF-16 units.</p>
+	<p>These filters change and encode text. Apply a filter with <code>|</code>, as in <code>&#123;{ title|upper }}</code>. Lengths and positions count Unicode code points, not JavaScript's UTF-16 units. A letter written with a separate accent mark, or an emoji made of several code points, counts as more than one.</p>
 
 	<p>Most string filters return an empty string for null, so optional fields print nothing.</p>
+
+	<h2>Safe markup</h2>
+
+	<p>Given safe markup, such as the content of <a href="/docs/tags/apply/"><code>apply</code></a> or a value marked with <code>raw</code>, these filters return safe markup too: <code>upper</code>, <code>lower</code>, <code>capitalize</code>, <code>title</code>, <code>trim</code>, <code>replace</code>, <code>truncate</code>, <code>stripTags</code> and <code>nl2br</code>. They change only the text. Tags and entities stay as they are, and any text they add, such as a replacement, is escaped. Other filters return plain values, which are escaped when printed.</p>
+
+	{{ '{{ html|raw|upper }}'|example(context: { html: '<a href="/about">about &amp; contact</a>' }) }}
 
 	<h2><code>upper</code> and <code>lower</code></h2>
 
@@ -19,7 +25,7 @@
 
 	<h2><code>title</code></h2>
 
-	<p>Starts each word with an upper-case letter and makes the rest lower case.</p>
+	<p>Starts each word with an upper-case letter and makes the rest lower case. Accent marks and apostrophes belong to the word they are in, so "o'neil" becomes "O'neil".</p>
 
 	{{ '{{ "the QUICK brown fox"|title }}'|example }}
 
@@ -31,7 +37,7 @@
 
 	<h2><code>replace</code></h2>
 
-	<p>Replaces every match of a piece of text. Pass a hash to replace several at once. It matches plain text, not regular expressions.</p>
+	<p>Replaces every match of a piece of text. Pass a hash to replace several at once, and the longest match wins at each position. It matches plain text, not regular expressions.</p>
 
 	{{ '{{ "I like tea"|replace("tea", "coffee") }}
 {{ "Hi NAME, welcome to PLACE"|replace({ NAME: "Ada", PLACE: "Kiln" }) }}'|example }}
@@ -45,20 +51,20 @@
 
 	<h2><code>truncate</code></h2>
 
-	<p>Shortens text to a length, trims trailing spaces and adds an ellipsis if it cut anything. Pass a different ending as the second argument.</p>
+	<p>Shortens text to a length, trims trailing spaces and adds an ellipsis if it cut anything. Pass a different ending as the second argument. Given safe markup, it counts only the text and closes any tags the cut leaves open.</p>
 
 	{{ '{{ "Kiln is a template language"|truncate(13) }}
 {{ "Short"|truncate(13) }}'|example }}
 
 	<h2><code>stripTags</code></h2>
 
-	<p>Removes HTML tags and comments. It doesn't decode entities such as <code>&amp;amp;amp;</code>.</p>
+	<p>Removes HTML tags and comments. It doesn't decode entities such as <code>&amp;amp;amp;</code>, and removing a tag never leaves a new one behind. Its result is still escaped, so don't mark it with <code>raw</code> to make it safe.</p>
 
 	{{ '{{ "<p>Hello <b>world</b></p>"|stripTags }}'|example }}
 
 	<h2><code>nl2br</code></h2>
 
-	<p>Escapes the text, then adds a <code>&lt;br&gt;</code> before each line break. The result is safe HTML.</p>
+	<p>Escapes the text, then adds a <code>&lt;br&gt;</code> before each line break. Safe markup isn't escaped again. The result is safe HTML.</p>
 
 	{{ '{{ "Line one\nLine two"|nl2br }}'|example }}
 
@@ -71,7 +77,7 @@
 
 	<h2><code>json</code></h2>
 
-	<p>Turns a value into JSON. Pass a number to indent it. The output escapes <code>&lt;</code>, <code>&gt;</code> and <code>&amp;</code>, so it is safe inside a <code>&lt;script&gt;</code> tag with <code>raw</code>.</p>
+	<p>Turns a value into JSON. Pass a number to indent it. Sets, generators and other iterables become arrays. The output escapes <code>&lt;</code>, <code>&gt;</code> and <code>&amp;</code>, so it is safe inside a <code>&lt;script&gt;</code> tag with <code>raw</code>.</p>
 
 	{{ '<script>const page = {{ { title: "Home", tags: ["a", "b"] }|json|raw }};</script>'|example }}
 
@@ -83,7 +89,7 @@
 
 	<h2><code>raw</code></h2>
 
-	<p>Marks a value as safe, so it is output without escaping. Only use it for HTML you trust, and put it last in a chain of filters.</p>
+	<p>Marks a value as safe, so it is output without escaping. Only use it for HTML you trust. Put it after filters that return plain values, such as <code>split</code> and <code>join</code>.</p>
 
 	{{ '{{ html|raw }}'|example(context: { html: "<em>Trusted</em>" }) }}
 {% endblock %}

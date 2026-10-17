@@ -151,5 +151,5 @@
 
 	<h2>Checking without rendering</h2>
 
-	<p><code>check</code> compares each <code>include</code>, <code>component</code> and <code>extends</code> with the props of the template it uses, so a misspelt or missing prop shows up before the page renders. See <a href="/docs/api/errors/#checking-templates">Errors and checks</a>.</p>
+	<p><code>check</code> compares each <code>include</code>, <code>component</code> and <code>extends</code> with the props of the template it uses, so a misspelt or missing prop shows up before the page renders. A page with a rest prop can be given any prop its layout needs, so those aren't reported. See <a href="/docs/api/errors/#checking-templates">Errors and checks</a>.</p>
 {% endblock %}

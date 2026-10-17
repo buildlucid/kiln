@@ -197,6 +197,17 @@ describe("class instances", () => {
 		).toBe('{"title":"Hello world","id":7}');
 	});
 
+	test("stay hidden in a variable that held a hash on an earlier pass of a loop", async () => {
+		const template =
+			'{% for item in items %}{% set s = item %}{% if loop.last and s %}{% endif %}{{ s.password }}{% include "part" %}{% endfor %}';
+		expect(
+			await errorCode(template, {
+				context: { items: [{ password: "open" }, new Secret()] },
+				templates: { part: "" },
+			}),
+		).toBe("missing-property");
+	});
+
 	test("unlisted members, blocked names and uncalled methods stay hidden", async () => {
 		const context = { p: new Post() };
 		expect(await errorCode("{{ p.hidden }}", { context })).toBe(
@@ -288,6 +299,14 @@ describe("dangerous names", () => {
 				{ context: { m } },
 			),
 		).toBe('a=ok|ok|a|{"a":"ok"}|none');
+	});
+
+	test("a map holding only blocked names is falsy and gets its default", async () => {
+		expect(
+			await render('{{ m ? "full" : "empty" }}|{{ m|default("none") }}', {
+				context: { m: new Map([["constructor", "secret"]]) },
+			}),
+		).toBe("empty|none");
 	});
 
 	test("arrow functions cannot reach a constructor", async () => {

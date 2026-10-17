@@ -10,7 +10,12 @@ import {
 import type { EnvironmentCore } from "../runtime/types.js";
 import { BLOCKED_NAMES } from "../runtime/values.js";
 import type { Span } from "../source.js";
-import { emitter, placeArguments, setsVariables } from "./compiler.js";
+import {
+	containsNode,
+	emitter,
+	placeArguments,
+	setsVariables,
+} from "./compiler.js";
 import { PRECOMPILED_VERSION } from "./precompiled.js";
 
 /**
@@ -244,6 +249,13 @@ const literalRange = (
 	return from === null || to === null ? null : { from, to };
 };
 
+/** A call to one of your functions or filters. See `#isHostCall`. */
+type HostCallNode =
+	| (Extract<Expression, { type: "Call" }> & {
+			callee: Extract<Expression, { type: "Name" }>;
+	  })
+	| Extract<Expression, { type: "Filter" }>;
+
 /** An include's or component's template name in generated code. See `#target`. */
 type TemplateTarget =
 	| { kind: "value"; js: string }
@@ -476,7 +488,7 @@ class Generator {
 				continue;
 			}
 			this.#fn = newFunction();
-			const groups: string[][] = [];
+			let groups: string[][] = [];
 			let end = i;
 			let work = false;
 			while (end < list.length) {
@@ -495,6 +507,7 @@ class Generator {
 				continue;
 			}
 			if (work) {
+				groups = this.#parts(list.slice(i, end), groups);
 				const first = (list[i] as Statement).span;
 				const last = (list[end - 1] as Statement).span;
 				const span = this.#span({ start: first.start, end: last.end });
@@ -608,8 +621,9 @@ class Generator {
 	}
 
 	/**
-	 * Declarations at the start of a generated function: steps are counted in a local, see `#function`. Checks the
-	 * abort signal too, since a function may continue a run after a wait.
+	 * Declarations at the start of a generated function: steps are counted in a local, see `#function`, and `b` marks
+	 * where the current run of text and outputs starts in `s`, see `#parts`. Checks the abort signal too, since a
+	 * function may continue a run after a wait.
 	 */
 	#start(span: string): string[] {
 		const fn = this.#fn;
@@ -622,12 +636,13 @@ class Generator {
 		return [
 			"const state = run.state;",
 			"const maxSteps = state.maxSteps;",
+			"const maxSize = state.maxSize;",
 			"let steps = state.steps;",
 			"const signal = state.signal;",
 			`signal !== undefined && signal.aborted && aborted(run, ${span});`,
 			"const ind = out.indent;",
 			'let s = "";',
-			`let ${["q", ...declared].join(", ")};`,
+			`let ${["q", "b", ...declared].join(", ")};`,
 			...(fn.reads ? ["let at = null;"] : []),
 		];
 	}
@@ -739,8 +754,11 @@ class Generator {
 		return `++steps > maxSteps && stepLimit(run, ${span})`;
 	}
 
-	/** Counts a step and checks the abort signal, as `step` does, for loops, so a long render stops soon after an abort. */
-	#loopStep(span: string): string {
+	/**
+	 * Counts a step and checks the abort signal, as `step` does: in loops, so a long render stops soon after an abort,
+	 * and before calls to your functions and filters.
+	 */
+	#checkedStep(span: string): string {
 		return `${this.#step(span)}; signal !== undefined && signal.aborted && aborted(run, ${span});`;
 	}
 
@@ -848,7 +866,47 @@ class Generator {
 	/** Statements inside another, such as a loop's body. */
 	#body(list: Statement[], context: Context): string[] {
 		const inner = { ...context, top: false };
-		return list.flatMap((statement) => this.#statement(statement, inner));
+		return this.#parts(
+			list,
+			list.map((statement) => this.#statement(statement, inner)),
+		).flat();
+	}
+
+	/**
+	 * Checks the output limit where the closures do, given a list's statements and their lines. The closures print each
+	 * run of text and outputs as one string, see `printParts`: an output fails when that string alone is too long, and
+	 * the run fails when writing it makes the output too long, located at its start. Generated code gathers text in
+	 * `s` for longer, so it marks where each run starts in `b`, and checks the whole output after each run.
+	 */
+	#parts(list: Statement[], groups: string[][]): string[][] {
+		const isPart = (statement: Statement) =>
+			statement.type === "Text" ||
+			(statement.type === "Output" && !this.#isHostCall(statement.expression));
+		const result: string[][] = [];
+		let i = 0;
+		while (i < list.length) {
+			if (!isPart(list[i] as Statement)) {
+				result.push(groups[i] as string[]);
+				i++;
+				continue;
+			}
+			let end = i;
+			while (end < list.length && isPart(list[end] as Statement)) end++;
+			const run = groups.slice(i, end);
+			// Only outputs read where the run starts.
+			if (list.slice(i, end).some((statement) => statement.type === "Output")) {
+				run[0] = ["b = s.length;", ...(run[0] as string[])];
+			}
+			const at = this.#span((list[i] as Statement).span);
+			const last = run.length - 1;
+			run[last] = [
+				...(run[last] as string[]),
+				`if (out.s.length + s.length > maxSize) write(run, out, s, ${at});`,
+			];
+			result.push(...run);
+			i = end;
+		}
+		return result;
 	}
 
 	#output(expression: Expression, at: Span, context: Context): string[] {
@@ -863,8 +921,14 @@ class Generator {
 				return unsupported();
 			}
 		};
+		// Values can be long, so stop at the output limit before they make a string too long for JavaScript. An output in
+		// a run of text and outputs checks the run's text, and a call to one of your functions, which the closures write
+		// on its own, checks the whole output. See `#parts`.
+		const limit = this.#isHostCall(expression)
+			? `if (out.s.length + s.length > maxSize) write(run, out, s, ${span});`
+			: `if (s.length - b > maxSize) write(run, out, s, ${span});`;
 		if (expression.type === "Literal") {
-			return [step, `s += ${emitted(expression.value)};`];
+			return [step, `s += ${emitted(expression.value)};`, limit];
 		}
 		// A choice between two literals prints text emitted now.
 		if (expression.type === "Conditional") {
@@ -888,13 +952,7 @@ class Generator {
 				: strategy === false
 					? `typeof ${value} === "string" ? ${value} : print(run, ${span}, ${value}, "none")`
 					: `print(run, ${span}, ${value}, ${JSON.stringify(strategy)})`;
-		// Values can be long, so stop at the output limit before they make a string too long for JavaScript.
-		return [
-			step,
-			...code,
-			`s += ${print};`,
-			`if (s.length > state.maxSize) write(run, out, s, ${span});`,
-		];
+		return [step, ...code, `s += ${print};`, limit];
 	}
 
 	/**
@@ -1032,7 +1090,7 @@ class Generator {
 					"}",
 				];
 		return [
-			this.#loopStep(span),
+			this.#checkedStep(span),
 			...this.#value(statement.iterable, context, iterable),
 			// Arrays, the usual case, need no conversion unless the loop wants keys.
 			...(hasKeys
@@ -1073,7 +1131,7 @@ class Generator {
 		const direction = range.to < range.from ? "-" : "+";
 		const { span, length, index, value, key, hasKeys } = loop;
 		return [
-			this.#loopStep(span),
+			this.#checkedStep(span),
 			`const ${length} = ${count};`,
 			`if (${length} > maxSteps) rangeLimit(run, ${rangeSpan}, ${length});`,
 			`if ((steps += ${length}) > maxSteps) stepLimit(run, ${rangeSpan});`,
@@ -1081,7 +1139,7 @@ class Generator {
 				? [`if (${length} === 0) {`, ...indent(alternate), "}"]
 				: []),
 			`for (let ${index} = 0; ${index} < ${length}; ${index}++) {`,
-			`\t${this.#loopStep(span)}`,
+			`\t${this.#checkedStep(span)}`,
 			...(loop.scope
 				? [
 						`\tconst ${loop.scope} = childScope(${loop.outer});`,
@@ -1114,7 +1172,7 @@ class Generator {
 		const { span, values, index, value, key, keys, hasKeys } = loop;
 		const proto = `q${loop.id}`;
 		return [
-			...(starts ? [this.#loopStep(span)] : []),
+			...(starts ? [this.#checkedStep(span)] : []),
 			...(loop.scope && starts
 				? [
 						`const ${loop.scope} = childScope(${loop.outer});`,
@@ -1154,13 +1212,17 @@ class Generator {
 		this.#fn = newFunction();
 		try {
 			const inner: Context = { ...context, inLoop: true, top: true };
-			const groups = statement.body.map((child) =>
-				this.#setFlags(this.#statement(child, inner)),
+			const generated = this.#parts(
+				statement.body,
+				statement.body.map((child) => this.#statement(child, inner)),
 			);
 			if (!this.#fn.waits || this.#fn.waitsInside) {
 				restore();
 				return null;
 			}
+			// Flags are set once every statement is generated, so every lookup of a variable sets the flag a later read
+			// uses. A lookup that skipped it would leave the flag of an earlier value, which may not be a plain object.
+			const groups = generated.map((lines) => this.#setFlags(lines));
 			const segments: string[][] = [[]];
 			for (const group of groups) {
 				(segments.at(-1) as string[]).push(...group);
@@ -1282,30 +1344,32 @@ class Generator {
 		);
 	}
 
+	/** Whether an expression is a call to one of your functions or filters, which `#hostCall` generates. */
+	#isHostCall(node: Expression): node is HostCallNode {
+		if (node.type === "Call") {
+			const callee = node.callee;
+			return (
+				callee.type === "Name" &&
+				!this.#macros.has(callee.name) &&
+				this.#env.functions.get(callee.name)?.kind === "host"
+			);
+		}
+		return (
+			node.type === "Filter" &&
+			this.#env.filters.get(node.name)?.kind === "host"
+		);
+	}
+
 	#hostCall(
 		node: Expression,
 		context: Context,
 		target: string,
 	): string[] | null {
-		let kind: "function" | "filter";
-		let name: string;
-		let input: Expression | null = null;
-		let args: Argument[];
-		if (node.type === "Call" && node.callee.type === "Name") {
-			kind = "function";
-			name = node.callee.name;
-			args = node.args;
-			if (this.#macros.has(name)) return null;
-		} else if (node.type === "Filter") {
-			kind = "filter";
-			name = node.name;
-			input = node.input;
-			args = node.args;
-		} else {
-			return null;
-		}
-		const entries = kind === "filter" ? this.#env.filters : this.#env.functions;
-		if (entries.get(name)?.kind !== "host") return null;
+		if (!this.#isHostCall(node)) return null;
+		const kind = node.type === "Filter" ? "filter" : "function";
+		const name = node.type === "Filter" ? node.name : node.callee.name;
+		const input = node.type === "Filter" ? node.input : null;
+		const args = node.args;
 		if (args.some((arg) => arg.type !== "Positional")) return unsupported();
 		const fn = this.#constant(
 			`host:${kind}:${name}`,
@@ -1320,7 +1384,8 @@ class Generator {
 		this.#fn.waits = true;
 		this.#fn.waitsInside = true;
 		return [
-			`${this.#step(span)};`,
+			// An abort, perhaps from a getter in your data, stops the render before your function is called, as `step` does.
+			this.#checkedStep(span),
 			"state.steps = steps;",
 			`${target} = callHost(run, ${span}, ${fn}, [${values.join(", ")}]);`,
 			`if (${target} instanceof Promise) {`,
@@ -1394,6 +1459,7 @@ class Generator {
 			`${this.#step(span)};`,
 			...target.lines,
 			...variables.lines,
+			...variables.charge(span),
 			...this.#wait(
 				span,
 				this.#place(
@@ -1442,13 +1508,16 @@ class Generator {
 
 	/**
 	 * An include's or component's `with` value. A hash of known keys, or none, becomes the template's scope here, so
-	 * no hash is made and copied; anything else is passed to `embed`, which checks and copies it.
+	 * no hash is made and copied, and each name passed counts a step, as `embed` counts them; anything else is passed
+	 * to `embed`, which checks, counts and copies it.
 	 */
 	#variables(
 		node: Expression | null,
 		context: Context,
 	): {
 		lines: string[];
+		/** Lines that count the steps for the names passed, at the tag. */
+		charge: (span: string) => string[];
 		embed: (
 			span: string,
 			name: TemplateTarget,
@@ -1460,21 +1529,24 @@ class Generator {
 			const value = this.#temp();
 			return {
 				lines: [`${value} = ${this.#expr(node, context, false)};`],
+				charge: () => [],
 				embed: (span, name, slots, ignoreMissing) =>
 					`embed(run, out, ${span}, ${(name as { js: string }).js}, ${value}, ${slots}, ${ignoreMissing})`,
 			};
 		}
 		const scope = this.#temp();
 		const lines = [`${scope} = childScope(state.globals);`];
-		const keys: string[] = [];
+		// The names passed, in the order a hash holds its keys, as `embed` lists them: whole numbers first.
+		const order: Record<string, true> = Object.create(null);
 		for (const entry of node?.type === "Hash" ? node.entries : []) {
 			if (entry.type !== "Property") return unsupported();
 			const key = String((entry.key as { value: unknown }).value);
-			if (!keys.includes(key)) keys.push(key);
+			order[key] = true;
 			lines.push(
 				`${scope}[${JSON.stringify(key)}] = (${this.#expr(entry.value, context, false)}) ?? null;`,
 			);
 		}
+		const keys = Object.keys(order);
 		const passed = this.#constant(
 			`passed:${JSON.stringify(keys)}`,
 			"P",
@@ -1482,6 +1554,12 @@ class Generator {
 		);
 		return {
 			lines,
+			charge: (span) =>
+				keys.length === 0
+					? []
+					: [
+							`if ((steps += ${keys.length}) > maxSteps) stepLimit(run, ${span});`,
+						],
 			embed: (span, name, slots, ignoreMissing) => {
 				const rest = `${scope}, ${passed}, ${slots}, ${ignoreMissing})`;
 				return name.kind === "keyed"
@@ -1516,6 +1594,7 @@ class Generator {
 				(fill) =>
 					`${slots}.set(${JSON.stringify(fill.name)}, { body: ${this.#nested(fill.body, statement.span, context)}, run, scope: ${context.scope}, sets: ${setsIn(fill.body).size > 0} });`,
 			),
+			...variables.charge(span),
 			...this.#wait(
 				span,
 				this.#place(
@@ -1524,10 +1603,14 @@ class Generator {
 				),
 				context.top,
 			),
-			// Fills render in this scope, and may set variables in it.
+			// Fills render in this scope, and may set variables in it, as may a block they place.
 			...(fills.some((fill) => setsVariables(fill.body))
 				? this.#forgetAll()
-				: []),
+				: fills.some((fill) =>
+							containsNode(fill.body, (record) => record.type === "Block"),
+					  )
+					? this.#afterBlocks()
+					: []),
 		];
 	}
 
@@ -1600,11 +1683,13 @@ class Generator {
 				),
 				context.top,
 			),
-			// The block placed, perhaps a child template's version, may set any variable.
-			`if (blockSets(run, ${JSON.stringify(statement.name)})) {`,
-			...indent(this.#forgetAll()),
-			"}",
+			...this.#afterBlocks(),
 		];
+	}
+
+	/** Forgets every variable lookup after a block is placed when the block, perhaps a child template's version, may set any variable. */
+	#afterBlocks(): string[] {
+		return ["if (blockSets(run)) {", ...indent(this.#forgetAll()), "}"];
 	}
 
 	// Expressions
@@ -1759,8 +1844,9 @@ class Generator {
 			`[${span}, ${JSON.stringify(key)}]`,
 		);
 		this.#fn.reads = true;
+		// The object is read first, since reading it may set `at` for its own property.
 		return [
-			`(at = ${site}, ${known.target}, ${known.plain}`,
+			`(${known.target}, at = ${site}, ${known.plain}`,
 			`&& (${item} = ${value}${read}) !== undefined && typeof ${item} !== "function"`,
 			`&& (${item} !== objectPrototype${read} || hasOwn(${value}, ${JSON.stringify(key)}))`,
 			`? ${item} : readMember(run, ${span}, ${known.slow}, ${JSON.stringify(key)}, ${flags}))`,
@@ -1858,7 +1944,7 @@ class Generator {
 				// Two strings join here when the result fits the output limit; anything else goes to `concat`.
 				const a = this.#temp();
 				const b = this.#temp();
-				return `(${a} = ${left}, ${b} = ${right}, typeof ${a} === "string" && typeof ${b} === "string" && ${a}.length + ${b}.length <= state.maxSize ? ${a} + ${b} : concat(run, ${span}, ${a}, ${b}))`;
+				return `(${a} = ${left}, ${b} = ${right}, typeof ${a} === "string" && typeof ${b} === "string" && ${a}.length + ${b}.length <= maxSize ? ${a} + ${b} : concat(run, ${span}, ${a}, ${b}))`;
 			}
 			case "==":
 				return `equals(${left}, ${right})`;

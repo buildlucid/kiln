@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { errorCode, errorCodes, render } from "../helpers.js";
+import { errorCode, errorCodes, render, renderError } from "../helpers.js";
 
 describe("strings", () => {
 	test("can use single or double quotes", async () => {
@@ -50,6 +50,13 @@ describe("interpolation", () => {
 	test("must be closed", async () => {
 		expect(await errorCodes('{{ "#{ name" }}')).toContain(
 			"unclosed-interpolation",
+		);
+	});
+
+	test("cannot be used where a tag needs a plain string", async () => {
+		const error = await renderError('{% import "macros/#{ name }" as m %}');
+		expect(error.message).toContain(
+			"Expected a template name as a string but found an interpolated string",
 		);
 	});
 

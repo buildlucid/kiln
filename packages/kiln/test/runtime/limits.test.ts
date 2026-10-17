@@ -48,6 +48,19 @@ describe("maxSteps", () => {
 		).toBe("limit-steps");
 	});
 
+	test("charges includes for each variable they pass", async () => {
+		const variables = Object.fromEntries(
+			Array.from({ length: 100 }, (_, i) => [`v${i}`, i]),
+		);
+		expect(
+			await errorCode('{% include "part" with variables %}', {
+				templates: { part: "" },
+				context: { variables },
+				limits: { maxSteps: 50 },
+			}),
+		).toBe("limit-steps");
+	});
+
 	test("stops endless iterables from the host", async () => {
 		function* endless() {
 			for (let i = 0; ; i++) yield i;
@@ -72,6 +85,30 @@ describe("maxOutputLength", () => {
 		expect(
 			await errorCode("{{ text }}".repeat(600), { context: { text } }),
 		).toBe("limit-output");
+	});
+
+	test("stops the escape filter once its text passes the limit, at the filter", async () => {
+		const error = await renderError(
+			'{% set y = s|escape("js")|escape("css") %}',
+			{ context: { s: "<".repeat(50) }, limits: { maxOutputLength: 100 } },
+		);
+		expect(error).toMatchObject({ code: "limit-output", line: 1 });
+		const url = await renderError('{{ s|escape("url") }}', {
+			context: { s: "\uD800" },
+		});
+		expect(url).toMatchObject({ code: "invalid-argument", line: 1 });
+	});
+
+	test("stops at the value that passes the limit, before any later call", async () => {
+		const done = vi.fn(() => "d");
+		const error = await renderError('{% include "part" %}{{ x }}{{ done() }}', {
+			context: { x: "ab" },
+			functions: { done },
+			templates: { part: "1234" },
+			limits: { maxOutputLength: 5 },
+		});
+		expect(error).toMatchObject({ code: "limit-output", column: 21 });
+		expect(done).not.toHaveBeenCalled();
 	});
 
 	test("stops strings that could never be printed", async () => {
@@ -174,6 +211,17 @@ describe("abort signal", () => {
 		).rejects.toMatchObject({ code: "aborted" });
 	});
 
+	test("an abort stops the render while it waits for a host call", async () => {
+		const controller = new AbortController();
+		const kiln = createKiln({
+			loader: memoryLoader({ index: "a{{ never() }}b" }),
+			functions: { never: () => new Promise(() => {}) },
+		});
+		const rendering = kiln.render("index", {}, { signal: controller.signal });
+		controller.abort();
+		await expect(rendering).rejects.toMatchObject({ code: "aborted" });
+	});
+
 	test("an abort from a function stops the calls after it", async () => {
 		const controller = new AbortController();
 		const done = vi.fn(() => "d");
@@ -184,6 +232,25 @@ describe("abort signal", () => {
 		expect(
 			await errorCode("{{ cancel() }}{{ done() }}", {
 				functions: { cancel, done },
+				signal: controller.signal,
+			}),
+		).toBe("aborted");
+		expect(done).not.toHaveBeenCalled();
+	});
+
+	test("an abort from a getter in the data stops the calls after it", async () => {
+		const controller = new AbortController();
+		const done = vi.fn(() => "d");
+		const data = {
+			get stop() {
+				controller.abort();
+				return "s";
+			},
+		};
+		expect(
+			await errorCode("{{ data.stop }}{{ done() }}", {
+				context: { data },
+				functions: { done },
 				signal: controller.signal,
 			}),
 		).toBe("aborted");

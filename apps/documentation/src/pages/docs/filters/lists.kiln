@@ -24,7 +24,7 @@ posts = [
 
 	<h2><code>length</code></h2>
 
-	<p>Counts the items in an array, the keys in a hash, or the characters in a string. Null has a length of 0.</p>
+	<p>Counts the items in an array, the keys in a hash, or the characters in a string. A hash or map counts the entries a loop would see. Null has a length of 0.</p>
 
 	{{ '{{ posts|length }} posts, {{ "héllo"|length }} letters'|example(context: data) }}
 
@@ -62,13 +62,13 @@ posts = [
 
 	<h2><code>reverse</code></h2>
 
-	<p>Reverses an array or string.</p>
+	<p>Reverses an array, string or hash. A hash keeps its keys.</p>
 
 	{{ '{{ [1, 2, 3]|reverse|join(", ") }} {{ "kiln"|reverse }}'|example }}
 
 	<h2><code>sort</code></h2>
 
-	<p>Returns a sorted copy. Without an argument, it sorts numbers, strings or dates in natural order. With a one-parameter arrow function, it sorts by the result. With a two-parameter one, it uses it to compare items, like JavaScript's <code>sort</code>.</p>
+	<p>Returns a sorted copy. Without an argument, it sorts numbers, strings or dates in natural order. With a one-parameter arrow function, it sorts by the result. With a two-parameter one, it uses it to compare items, like JavaScript's <code>sort</code>. A hash keeps its keys, sorted by their values.</p>
 
 	{{ '{{ [3, 1, 2]|sort|join(", ") }}
 {{ posts|sort(p => p.date)|column("title")|join(", ") }}
@@ -88,7 +88,7 @@ posts = [
 
 	<h2><code>reduce</code></h2>
 
-	<p>Combines the items into one value. The arrow function gets the running total, the value and the key. The second argument is the starting value.</p>
+	<p>Combines the items into one value. The arrow function gets the running total, the value and the key. The second argument is the starting value. Without it, the total starts as null, which can't be added to, so pass 0 to add up numbers.</p>
 
 	{{ '{{ posts|reduce((total, p) => total + p.views, 0) }} views'|example(context: data) }}
 

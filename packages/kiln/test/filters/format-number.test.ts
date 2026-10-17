@@ -69,3 +69,11 @@ describe("null", () => {
 		expect(await render("[{{ null|formatNumber }}]")).toBe("[]");
 	});
 });
+
+describe("option names", () => {
+	test("an unknown option is an error", async () => {
+		expect(await errorCode('{{ 1|formatNumber(stlye: "percent") }}')).toBe(
+			"invalid-argument",
+		);
+	});
+});

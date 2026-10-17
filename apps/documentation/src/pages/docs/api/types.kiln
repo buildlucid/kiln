@@ -52,7 +52,7 @@ await kiln.renderBlock("pages/post", "sidebar", { post }); // Type error: no suc
 	<h2>How the data type is worked out</h2>
 
 	<ul>
-		<li>A template with <code>props</code> accepts exactly those props. This matches strict mode, which rejects anything else. A <a href="/docs/tags/props/#other-variables">rest prop</a> lets it accept any other key too.</li>
+		<li>A template with <code>props</code> accepts exactly those props. This matches strict mode, which rejects anything else. A <a href="/docs/tags/props/#other-variables">rest prop</a> lets it accept any other key too, and then it must also pass the props its layouts require, unless it sets them at its top level.</li>
 		<li>A prop with a default is optional, and also accepts null.</li>
 		<li>A page without <code>props</code> accepts any data. If its layout declares required props, the page must pass them, unless it sets them at its top level.</li>
 		<li>An untyped prop accepts any value.</li>

@@ -57,3 +57,14 @@ describe("host values", () => {
 		).toBe("[|true]");
 	});
 });
+
+describe("markup", () => {
+	test("counts as its text where a key or template name is expected", async () => {
+		expect(
+			await render(
+				'{% set name %}part{% endset %}{% include name %}|{{ { part: "key" }[name] }}|{{ { (name): 1 }|keys|join }}',
+				{ templates: { part: "included" } },
+			),
+		).toBe("included|key|part");
+	});
+});

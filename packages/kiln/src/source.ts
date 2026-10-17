@@ -1,3 +1,5 @@
+import { contentStart } from "./lexer/lexer.js";
+
 /** A range of a template's source, as zero-based offsets. `end` is exclusive. */
 export type Span = { start: number; end: number };
 
@@ -13,7 +15,8 @@ export type Position = {
 /**
  * A template's text and resolved name.
  *
- * The line index is built on first use, because only errors and tooling need lines and columns.
+ * The line index is built on first use, because only errors and tooling need lines and columns. A byte order mark at the
+ * start is not counted in columns or shown in frames, as editors hide it, but offsets still count it.
  */
 export class Source {
 	#lineStarts: number[] | undefined;
@@ -33,10 +36,11 @@ export class Source {
 			if ((starts[middle] ?? 0) <= offset) low = middle;
 			else high = middle - 1;
 		}
+		const bom = low === 0 && offset > 0 ? contentStart(this.text) : 0;
 		return {
 			offset,
 			line: low + 1,
-			column: offset - (starts[low] ?? 0) + 1,
+			column: offset - (starts[low] ?? 0) - bom + 1,
 		};
 	}
 
@@ -64,7 +68,7 @@ export class Source {
 			lines.push(`${marker} ${number} | ${text}`);
 
 			if (line === start.line) {
-				const lineEnd = (starts[line - 1] ?? 0) + text.length;
+				const lineEnd = this.#lineStart(line) + text.length;
 				const width = Math.max(1, Math.min(span.end, lineEnd) - span.start);
 				// Keep tabs so the marker lines up with tab-indented source.
 				const indent = text.slice(0, start.column - 1).replace(/[^\t]/g, " ");
@@ -76,10 +80,15 @@ export class Source {
 
 	#lineText(line: number): string {
 		const starts = this.#getLineStarts();
-		const start = starts[line - 1] ?? 0;
 		const next = starts[line];
 		const end = next === undefined ? this.text.length : next - 1;
-		return this.text.slice(start, end).replace(/\r$/, "");
+		return this.text.slice(this.#lineStart(line), end).replace(/\r$/, "");
+	}
+
+	/** Where a one-based line's text starts, after any byte order mark on the first line. */
+	#lineStart(line: number): number {
+		const start = this.#getLineStarts()[line - 1] ?? 0;
+		return line === 1 ? start + contentStart(this.text) : start;
 	}
 
 	#getLineStarts(): number[] {

@@ -69,4 +69,37 @@ describe("kiln format", () => {
 		expect(await formatCommand(["--nope", dir], io)).toBe(2);
 		expect(err).toContain("Usage: kiln format");
 	});
+
+	test("reports paths that don't exist and exits with 2, changing nothing", async () => {
+		const missing = join(dir, "nope.kiln");
+		expect(await formatCommand([missing, dir], io)).toBe(2);
+		expect(err).toBe(`${missing}: not found\n`);
+		expect(await readFile(join(dir, "pages/messy.kiln"), "utf8")).toContain(
+			"{{x}}",
+		);
+	});
+
+	test("skips files named directly that aren't .kiln files, with a warning", async () => {
+		const notes = join(dir, "notes.txt");
+		expect(await formatCommand([notes], io)).toBe(0);
+		expect(err).toBe(`${notes}: skipped, as it isn't a .kiln file\n`);
+		expect(await readFile(notes, "utf8")).toBe("{{x}}");
+	});
+
+	test("checks each file once, however often it is named", async () => {
+		const file = join(dir, "pages/messy.kiln");
+		expect(await formatCommand(["--check", file, dir, file], io)).toBe(1);
+		expect(out).toBe(`${file}\n`);
+		expect(err).toContain("1 file needs formatting");
+	});
+
+	test("reports a file it can't format, and still formats the rest", async () => {
+		const deep = join(dir, "pages/deep.kiln");
+		await writeFile(deep, `{{ 0${" + 1".repeat(50_000)} }}`);
+		expect(await formatCommand([dir], io)).toBe(1);
+		expect(err).toMatch(`${deep}: `);
+		expect(await readFile(join(dir, "pages/messy.kiln"), "utf8")).toBe(
+			"<div>\n\t<p>{{ x }}</p>\n</div>\n",
+		);
+	});
 });

@@ -6,8 +6,15 @@ import type { Addition, OutletMark } from "./outlets.js";
 import { childScope, isWithin, type Scope, sectionScope } from "./scope.js";
 import type { RenderStream } from "./stream.js";
 
-/** The part of `AbortSignal` Kiln reads. A real `AbortSignal` fits. */
-export type AbortSignalLike = { readonly aborted: boolean };
+/**
+ * The part of `AbortSignal` Kiln reads. A real `AbortSignal` fits. With the listener methods, a render stops as soon as
+ * the signal aborts, even while it waits for your code. Without them, it stops at its next step.
+ */
+export type AbortSignalLike = {
+	readonly aborted: boolean;
+	addEventListener?(type: "abort", listener: () => void): void;
+	removeEventListener?(type: "abort", listener: () => void): void;
+};
 
 export type { Scope };
 
@@ -131,12 +138,13 @@ export type SlotFill = {
 };
 
 /**
- * The scope a slot's fill renders in: its own when it may set variables. A fill from outside the cached section
- * rendering it gets a section of its own, so it can't change its caller's variables only when the section isn't saved.
+ * The scope a slot's fill renders in, from the slot's render `run`: its own when it may set variables. A fill from
+ * outside the cached section rendering it gets a section of its own, so it can't change its caller's variables only
+ * when the section isn't saved.
  */
-export const fillScope = (fill: SlotFill): Scope => {
-	const section = fill.run.state.section;
-	if (section !== null && !isWithin(fill.scope, section)) {
+export const fillScope = (fill: SlotFill, run: Run): Scope => {
+	const section = run.capture?.section;
+	if (section && !isWithin(fill.scope, section.scope)) {
 		return sectionScope(fill.scope);
 	}
 	return fill.sets ? childScope(fill.scope) : fill.scope;
@@ -228,20 +236,14 @@ export class RenderState {
 	takenOutlets = 0;
 	/** Sends output while the render waits, for `renderStream`. */
 	stream: RenderStream | null = null;
-	/** Every `add to` that ran, in order. */
-	additions: Addition[] | null = null;
+	/** Every `add to` that ran outside any capture, and the captures started there, in order. See `Capture`. */
+	additions: (Addition | Capture)[] | null = null;
 	/** The first content of each `once` tag that added. */
 	once: Map<string, string> | null = null;
-	/** How many cached sections are rendering, where an outlet can't go. */
-	caching = 0;
-	/** The scope of the innermost cached section rendering, whose content can't change variables outside it. */
-	section: Scope | null = null;
 	/** Whether `island` tags are deferred or streamed, or null to render them in place. */
 	islands: IslandMode | null = null;
 	/** The HTML of each streamed island, filling `<kiln-island stream="n">` at index n - 1, for `renderStream` to send. */
 	streamed: Promise<string>[] | null = null;
-	/** The ids of the islands deferred so far, in order, so a cached section can save the ones it made. */
-	deferred: string[] | null = null;
 	/** Whether the `<kiln-island>` script is in the render's output yet. */
 	islandScript = false;
 
@@ -257,6 +259,54 @@ export class RenderState {
 		readonly signal: AbortSignalLike | undefined,
 	) {}
 }
+
+/** A cached section rendering: its scope, whose content can't change variables outside it, and the islands it deferred. */
+export type Section = { readonly scope: Scope; readonly deferred: string[] };
+
+/**
+ * A part of a render that keeps the `add to` content it adds in a log of its own: a cached section, or a macro,
+ * `block()` or `parent()` call, which can render alongside others while promises are pending. Each capture takes its
+ * place in the log around it when it starts, so outlets get content in the template's order however the parts finish,
+ * and a cached section saves only its own. A render's `Run` carries the capture it is in.
+ */
+export class Capture {
+	/** The additions made in it, and the captures started in it, in order. Made when the first is. */
+	additions: (Addition | Capture)[] | null = null;
+
+	constructor(
+		/** The log of the capture or render it started in. */
+		readonly outer: (Addition | Capture)[],
+		/** The innermost cached section it is in, or null. */
+		readonly section: Section | null,
+	) {}
+}
+
+/** The log that additions made in `run` go to: its capture's, or the render's. */
+export const additionLog = (run: Run): (Addition | Capture)[] => {
+	const capture = run.capture;
+	return capture ? (capture.additions ??= []) : (run.state.additions ??= []);
+};
+
+/** Starts a capture inside `run`'s. With `section`, it is a cached section. */
+export const startCapture = (run: Run, section?: Section): Capture => {
+	const outer = additionLog(run);
+	const capture = new Capture(outer, section ?? run.capture?.section ?? null);
+	outer.push(capture);
+	return capture;
+};
+
+/**
+ * Ends a capture that started inside `run`'s. One that added nothing leaves the log around it when it is last there,
+ * as it is unless captures overlap, and a cached section's islands join the section around it.
+ */
+export const endCapture = (run: Run, capture: Capture): void => {
+	const outer = capture.outer;
+	if (capture.additions === null && outer.at(-1) === capture) outer.pop();
+	const section = run.capture?.section;
+	if (section && capture.section && capture.section !== section) {
+		for (const id of capture.section.deferred) section.deferred.push(id);
+	}
+};
 
 const NO_BLOCKS = new Map<string, BlockEntry[]>();
 /** The imports of a template that imports nothing, shared. */
@@ -275,7 +325,28 @@ export class Run {
 		readonly slots: Map<string, SlotFill> | null,
 		/** Variable names the caller passed, for `props` checks. */
 		readonly passed: readonly string[] | null,
+		/** The capture it renders in, or null. */
+		readonly capture: Capture | null = null,
 	) {}
+
+	/**
+	 * This render inside `capture`, for content that renders where a capture other than its own is open, such as a
+	 * block placed in a cached section or a fill in a macro.
+	 */
+	within(capture: Capture | null): Run {
+		if (capture === this.capture) return this;
+		const run = new Run(
+			this.state,
+			this.template,
+			this.depth,
+			this.slots,
+			this.passed,
+			capture,
+		);
+		run.blocks = this.blocks;
+		run.imports = this.imports;
+		return run;
+	}
 
 	get info(): RenderInfo {
 		this.#info ??= {

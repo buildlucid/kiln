@@ -24,3 +24,16 @@ describe("edge cases", () => {
 		);
 	});
 });
+
+describe("maps", () => {
+	test("a map is empty when a loop would see nothing in it", async () => {
+		expect(
+			await render("{{ blocked is empty }}|{{ numbered is empty }}", {
+				context: {
+					blocked: new Map([["__proto__", 1]]),
+					numbered: new Map([[1, "x"]]),
+				},
+			}),
+		).toBe("true|false");
+	});
+});

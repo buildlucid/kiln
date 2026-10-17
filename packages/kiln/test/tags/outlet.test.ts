@@ -84,6 +84,18 @@ describe("outlet", () => {
 		expect(await render(template)).toBe("<head><link>\n</head>\n");
 	});
 
+	test("leaves its indentation marker alone in added data", async () => {
+		const add = lines(
+			'{% add to "head" %}',
+			"<meta content={{ v }}>",
+			"{% endadd %}",
+		);
+		const page = lines("<head>", '	{% outlet "head" %}', "</head>");
+		expect(await render(lines(page, add), { context: { v: "a\uFDD0b" } })).toBe(
+			lines("<head>", "	<meta content=a\uFDD0b>", "</head>", ""),
+		);
+	});
+
 	test("can only be used once per render", async () => {
 		expect(await errorCode('{% outlet "a" %}{% outlet "a" %}')).toBe(
 			"duplicate-outlet",

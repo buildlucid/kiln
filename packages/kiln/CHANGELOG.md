@@ -36,6 +36,58 @@ All notable changes to `@lucidkiln/core` are listed here.
 - A streamed island that finishes after the render was aborted errors the stream, instead of closing it successfully.
 - `cache` saves a copy for each indentation its section is placed at.
 - Content added to an outlet lines up the same whether `add to` runs before or after the outlet.
+- Precompiled templates never read unexposed members of a class instance held in a variable that held a hash on an earlier pass of a loop.
+- `apply` escapes a plain result, such as a host filter's or text that `replace` inserts, like any other output.
+- Built-in string filters keep safe markup safe: `upper`, `lower`, `capitalize`, `title`, `trim`, `replace`, `truncate`, `stripTags` and `nl2br` change only its text, leave tags and entities alone, and escape any text they add. `truncate` closes the tags it cuts through.
+- `json`, `dump`, `join`, `attrs`, `replace`, `plural`, `nl2br`, `urlEncode`, the case filters and the `escape` filter stop at `maxOutputLength` before building a longer string, with a located `limit-output` error.
+- Streamed islands count against the page's `maxSteps`, and their nesting starts at the island tag's depth.
+- `createKiln` throws a `TypeError` for a limit that isn't a number above 0. A limit set to `undefined` keeps its default instead of turning the limit off.
+- Kiln remembers only the last thousand or so missing template names, so names from requests can't fill memory. Templates that fail to load or compile are loaded again on the next render, and a template name built from data is checked against `maxOutputLength`.
+- `replace` with a hash counts the characters it compares against `maxSteps`. Arrays, hashes and maps read by filters count every entry, `first` on a hash stops at its first key, and an include or component counts each variable it passes.
+- `json`, `dump` and `urlEncode` report `too-deep` for data nested more than 1000 levels, instead of overflowing the stack.
+- `formatNumber` and `formatDate` refuse unknown option names, and long option values are never kept in the formatter cache.
+- Templates with many tags on one long line, such as minified HTML, parse in linear time. A long run of `\u{` in a string no longer makes parsing slow.
+- Each `cache` key includes a hash of the tag's content, so editing the content gives new keys, and two tags with the same key in one template no longer share copies unless their content matches.
+- Precompiled templates read a variable again after a block changes it through `parent()` or `block()`, or from inside a component's content.
+- Precompiled templates stop at the output limit where templates rendered from source do, before calling any more of your functions, and check the abort signal before calling your functions and filters.
+- Precompiled templates name the property whose getter threw in a chain such as `page.data.value`, report undeclared props in the same order as templates rendered from source, and count each variable an include or component passes.
+- Precompiled modules have a new version. Precompile your templates again.
+- Promises in render data are never awaited, even next to a call that waits, such as `{{ later() ~ value }}`, or as a macro default. An arrow function that waits never calls `then` on a value from your data that it returns.
+- A filter's input and arguments start before either is waited for.
+- Content that macros, `block()` and `parent()` add to outlets keeps the template's order when they wait alongside each other, and a cached section saves only what it added itself.
+- Cached sections in macros that render alongside each other no longer stop later fills changing variables.
+- `for` over a map without keys loops over every value, whatever the keys. `length`, `first`, `is empty`, `default` and conditions count the same map entries a loop sees.
+- Looping over an async iterable is a clear `not-iterable` error.
+- Hash keys and template names can be markup, such as a block `set`.
+- A loader error for the template passed to `render` or `renderStream` is a `host-error` with the original as `cause`, as it is for includes. Loaders may return any thenable.
+- Invalid template names passed to `check`, `analyze`, `precompile` or `invalidate` are `KilnRenderError`s.
+- An abort stops `render` and `renderStream` straight away, even while they wait for your code.
+- Data containing U+FDD0 added to an outlet is no longer replaced by the outlet's indentation.
+- A date with a day past the end of its month, such as `2026-02-30`, is an error instead of rolling into the next month.
+- `title` keeps combining accents part of their word.
+- `max` and `min` refuse null wherever it appears, and compare the values of a single hash.
+- `round` leaves Infinity and very high precisions alone, instead of returning NaN.
+- `range` with a fractional step reaches its end and gives tidy numbers. Integer ranges count exactly.
+- `formatDate` keeps `dateStyle: "medium"` for options that don't choose what to show, such as `calendar` and `hour12`.
+- `sort` and `reverse` keep the keys of a hash, and `json` writes generators and other iterables as arrays.
+- `stripTags` doesn't let an unquoted apostrophe or an unclosed quote hide later tags, and removing tags can't create new ones.
+- A byte order mark at the start of a template is ignored, and error columns don't count it.
+- Content an `include` or `component` inserts inside `<pre>` or `<textarea>` is no longer indented. A `<pre>` inside an HTML comment, script or style no longer stops indentation from being removed.
+- A second `else`, or an `elseif` after `else`, is reported where it stands, instead of closing an outer `if` or `for`.
+- A broken `set`, `block` or `slot` tag reports one error, and its end tag still matches.
+- Number hash keys are the number as JavaScript writes it, so `{ 1.0: "a" }` has the key `"1"`.
+- `{ slots }` works as shorthand, like `{ loop }`.
+- Template names that point at a folder, such as `./`, or hold a null character, are `invalid-template-name`.
+- `fileLoader` never reads dot-files or dot-folders. It treats folders and paths through a file as missing templates, works with a root such as `/`, and its read errors never include the path on disk.
+- A character such as an emoji where it isn't allowed is reported once, not as two halves, and error messages say "an interpolated string" where a tag needs a plain string.
+- `kiln format` and `format` keep whitespace and blank lines at the start and end of a template exactly as written, and no longer add a final line break, since these show wherever the template is placed.
+- The formatter keeps trim markers on `endverbatim`, leaves the body of a `set` or `apply` whose tag shares its line as written, and keeps `<xmp>`, `<listing>` and `<plaintext>` as written.
+- A closing tag such as `</prefix>` no longer ends a `<pre>` for the formatter, and `</scripts>` no longer ends a `<script>`.
+- `format` handles indentation of any length, lines up a closing bracket with its own line, and throws `RangeError` for a `tabWidth` that isn't a whole number of at least 1.
+- Formatting a template that ends with `{% endisland %}` and no line break no longer fails its safety check.
+- `kiln format` reports paths that don't exist with exit code 2, reports a file it can't format and carries on, skips files named directly that aren't `.kiln` files with a warning, and formats each file once.
+- `check` no longer reports layout props for a page with a rest prop, and `generateTypes` adds those layout props to the page's type.
+- `check` warns about names a macro reads that are neither its parameters nor globals, about `loop` outside a loop, and about `slots` in a template without slots. `analyze` no longer treats a macro's parameter defaults as reading the page's variables.
 
 ## 1.0.0 - 2026-10-16
 

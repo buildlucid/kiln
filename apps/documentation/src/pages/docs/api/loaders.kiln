@@ -24,6 +24,12 @@ const kiln = createKiln({
 
 	<p>Reads templates from a folder. It is for Node only, so it lives in a separate entry point that never ends up in a Workers bundle.</p>
 
+	<ul>
+		<li>It never reads files or folders whose names start with a dot, such as <code>.env</code>.</li>
+		<li>A name that points to a folder, or to nothing, is a missing template.</li>
+		<li>Other read errors name the template and the error code, such as <code>EACCES</code>, but never the path on disk.</li>
+	</ul>
+
 	{% apply highlight("ts") %}
 		{% verbatim %}
 import { fileLoader } from "@lucidkiln/core/node";
@@ -36,7 +42,9 @@ const kiln = createKiln({
 
 	<h2>Your own loader</h2>
 
-	<p>A loader is an object with a <code>load</code> method. It gets a resolved name, such as <code>pages/home.kiln</code>, and returns the source or a <a href="/docs/api/precompiling/">precompiled module</a>, or null if the template doesn't exist. It can be async.</p>
+	<p>A loader is an object with a <code>load</code> method. It gets a resolved name, such as <code>pages/home.kiln</code>, and returns the source or a <a href="/docs/api/precompiling/">precompiled module</a>, or null if the template doesn't exist. It can be async, returning a promise or any other thenable.</p>
+
+	<p>Kiln keeps each template it loads until you call <code>invalidate</code>. It remembers only a limited number of missing names, so names built from requests can't fill memory. A template that fails to load or compile is loaded again the next time it is used.</p>
 
 	{% apply highlight("ts") %}
 		{% verbatim %}

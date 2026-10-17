@@ -24,3 +24,27 @@ describe("edge cases", () => {
 		expect(await render(`{{ "<p title='a>b'>x</p>"|stripTags }}`)).toBe("x");
 	});
 });
+
+describe("quotes and markup", () => {
+	test("an apostrophe in an unquoted value doesn't hide later tags", async () => {
+		expect(
+			await render("{{ text|stripTags }}", {
+				context: { text: "<img alt=it's src=x.png>me <b>now</b>" },
+			}),
+		).toBe("me now");
+	});
+
+	test("removing a tag can't leave a new one behind", async () => {
+		expect(
+			await render("{{ text|stripTags|raw }}", {
+				context: { text: "<<script>script>x<</script>/script>" },
+			}),
+		).toBe("script>x/script>");
+	});
+
+	test("safe markup stays safe, with its escaped text kept", async () => {
+		expect(
+			await render('{{ ("<p>" ~ ("<b>"|escape) ~ "</p>")|raw|stripTags }}'),
+		).toBe("&lt;b&gt;");
+	});
+});

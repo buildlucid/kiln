@@ -29,7 +29,7 @@ const html = await kiln.render("pages/post", {
 			<tr><td><code>state</code></td><td>Data for this request, passed to functions made with <code>withRender</code>. See <a href="/docs/api/extending/#request-data">Request data</a></td></tr>
 			<tr><td><code>locale</code></td><td>Overrides the environment's locale</td></tr>
 			<tr><td><code>timeZone</code></td><td>Overrides the environment's time zone</td></tr>
-			<tr><td><code>signal</code></td><td>An <code>AbortSignal</code>. Kiln stops the render when it is aborted</td></tr>
+			<tr><td><code>signal</code></td><td>An <code>AbortSignal</code>. Kiln stops the render as soon as it is aborted, even while it waits for your code</td></tr>
 			<tr><td><code>islands</code></td><td>Defers <a href="/docs/tags/island/"><code>island</code></a> tags with <code>deferIslands()</code>, or streams them with <code>streamIslands()</code> and <code>renderStream</code>. Without it, islands render in place</td></tr>
 		</tbody>
 	</table>
@@ -63,9 +63,11 @@ const results = await kiln.renderBlock("pages/search", "results", { query });
 
 	<h2>Caching</h2>
 
-	<p>Kiln compiles each template the first time it is used, then keeps the compiled version. The loader is called once per template name.</p>
+	<p>Kiln compiles each template the first time it is used, then keeps the compiled version. The loader is called once per template name. If loading or compiling fails, Kiln tries again on the next render.</p>
 
-	<p>When a template changes, for example after an edit in your CMS, call <code>invalidate</code>:</p>
+	<p>Kiln also remembers the last thousand or so names the loader didn't find, so a missing template isn't asked for on every render.</p>
+
+	<p>When a template changes or is added, for example after an edit in your CMS, call <code>invalidate</code>:</p>
 
 	{% apply highlight("ts") %}
 		{% verbatim %}
