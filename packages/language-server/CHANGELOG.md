@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Updated `outlet` hover docs. ([46e6cae](https://github.com/buildlucid/kiln/commit/46e6cae3afbbc88ded8a19dcd9018f8559d4e7ce))
+
 ## 1.1.0
 
 - Go to definition no longer sends you to the wrong file when a project has no `kiln.json`. Without one, it only finds macros in the same template. ([0541b63](https://github.com/buildlucid/kiln/commit/0541b63f3454db32100fd09de95f9de40f8ded3f))

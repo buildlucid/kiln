@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Inserted content is no longer re-indented to line up with its tag. ([46e6cae](https://github.com/buildlucid/kiln/commit/46e6cae3afbbc88ded8a19dcd9018f8559d4e7ce))
+
 ## 1.1.0
 
 - New `KilnFunctions`, `KilnFilters`, `KilnTests` and `KilnGlobals` interfaces. Add your own to them so your editor can show their types. See [Types from TypeScript](https://kilnlang.com/docs/tooling/editors/#types-from-typescript). ([d55ef63](https://github.com/buildlucid/kiln/commit/d55ef63677df3b34ea247f3b9f25562b201a18b0))
