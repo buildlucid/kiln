@@ -11,11 +11,13 @@ import {
 	TextDocumentSyncKind,
 } from "vscode-languageserver/node";
 import {
+	argumentWarnings,
 	complete,
 	definition,
 	hover,
 	links,
 	type OpenTemplate,
+	signatureHelp,
 	symbols,
 } from "./features.js";
 import {
@@ -70,6 +72,10 @@ export const startServer = (connection: Connection): void => {
 					],
 				},
 				hoverProvider: true,
+				signatureHelpProvider: {
+					triggerCharacters: ["(", ","],
+					retriggerCharacters: [":", " "],
+				},
 				definitionProvider: true,
 				documentLinkProvider: { resolveProvider: false },
 				documentSymbolProvider: true,
@@ -147,23 +153,37 @@ export const startServer = (connection: Connection): void => {
 		const diagnostics = await diagnose(project, name, document.getText()).catch(
 			() => [],
 		);
+		const warnings = await argumentWarnings(open).catch(() => []);
 		if (documents.get(document.uri)?.version !== version) return;
 		void connection.sendDiagnostics({
 			uri: document.uri,
 			version,
-			diagnostics: diagnostics.map((diagnostic) => ({
-				range: {
-					start: document.positionAt(diagnostic.start.offset),
-					end: document.positionAt(diagnostic.end.offset),
-				},
-				severity:
-					diagnostic.severity === "error"
-						? DiagnosticSeverity.Error
-						: DiagnosticSeverity.Warning,
-				code: diagnostic.code,
-				source: "kiln",
-				message: diagnostic.message,
-			})),
+			diagnostics: diagnostics
+				.map((diagnostic) => ({
+					range: {
+						start: document.positionAt(diagnostic.start.offset),
+						end: document.positionAt(diagnostic.end.offset),
+					},
+					severity:
+						diagnostic.severity === "error"
+							? DiagnosticSeverity.Error
+							: DiagnosticSeverity.Warning,
+					code: diagnostic.code,
+					source: "kiln",
+					message: diagnostic.message,
+				}))
+				.concat(
+					warnings.map((warning) => ({
+						range: {
+							start: document.positionAt(warning.start),
+							end: document.positionAt(warning.end),
+						},
+						severity: DiagnosticSeverity.Warning,
+						code: warning.code,
+						source: "kiln",
+						message: warning.message,
+					})),
+				),
 		});
 	};
 
@@ -268,6 +288,11 @@ export const startServer = (connection: Connection): void => {
 	connection.onHover(
 		withTemplate(null, (open, params) =>
 			hover(open, open.document.offsetAt(params.position)),
+		),
+	);
+	connection.onSignatureHelp(
+		withTemplate(null, (open, params) =>
+			signatureHelp(open, open.document.offsetAt(params.position)),
 		),
 	);
 	connection.onDefinition(

@@ -12,6 +12,7 @@ import {
 	InsertTextMode,
 	type LocationLink,
 	MarkupKind,
+	type SignatureHelp,
 	SymbolKind,
 } from "vscode-languageserver";
 import type { TextDocument } from "vscode-languageserver-textdocument";
@@ -24,6 +25,7 @@ import {
 	TAGS,
 	TESTS,
 } from "./builtins.js";
+import { callContext, splitParameters } from "./calls.js";
 import {
 	cursorContext,
 	enclosingDelimiter,
@@ -38,13 +40,18 @@ import {
 	bindingAt,
 	bindingsAt,
 	expressionPathAt,
+	expressionsIn,
 	type TemplateScopes,
 	templateScopes,
 } from "./scopes.js";
 import {
+	type ArgumentCheck,
 	bindingType,
+	checkArguments,
 	describeCallable,
 	expressionType,
+	namedOptions,
+	parametersType,
 	REGISTRIES,
 	type TypeContext,
 	withTypes,
@@ -345,7 +352,9 @@ export const complete = async (
 				...(manifest?.globals ?? []),
 			]);
 			const props = new Map(analysis?.props.map((prop) => [prop.name, prop]));
+			const named = await namedArgumentItems(open, text, offset);
 			return [
+				...named,
 				...[...variables].map((label) => {
 					const prop = props.get(label);
 					return {
@@ -400,10 +409,7 @@ const describedCallable = async (
 		? describeCallable(typescript, kind, name)
 		: null;
 	return described
-		? sections(
-				codeBlock(described.signature, "ts"),
-				memberDocs(described.member),
-			)
+		? sections(codeBlock(described.label, "ts"), memberDocs(described.member))
 		: null;
 };
 
@@ -788,4 +794,274 @@ export const symbols = (document: TextDocument): DocumentSymbol[] => {
 		});
 	}
 	return found;
+};
+
+/** Whether the project registers a function or filter, which replaces a built-in with the same name. */
+const isRegistered = (
+	project: Project,
+	kind: "function" | "filter",
+	name: string,
+) =>
+	(kind === "function"
+		? project.manifest?.functions
+		: project.manifest?.filters
+	)?.includes(name) ?? false;
+
+/** A built-in's documented signature, such as `round(precision?, method?)`, when it takes arguments. */
+const builtinSignature = (kind: "function" | "filter", name: string) => {
+	const doc = (kind === "function" ? FUNCTIONS : FILTERS)[name];
+	if (!doc?.signature.includes("(")) return null;
+	const label = `${kind === "filter" ? "|" : ""}${doc.signature}`;
+	const open = label.indexOf("(") + 1;
+	const list = label.slice(open, label.lastIndexOf(")"));
+	return {
+		label,
+		parameters: splitParameters(list).map((part) => ({
+			name: /^(?:\.\.\.)?(\w+)/.exec(part.text)?.[1] ?? part.text,
+			start: open + part.start,
+			end: open + part.end,
+		})),
+	};
+};
+
+/** Named arguments the function or filter at the cursor takes, such as `limit:`, when an argument could start there. */
+const namedArgumentItems = async (
+	open: OpenTemplate,
+	text: string,
+	offset: number,
+): Promise<CompletionItem[]> => {
+	const call = callContext(text, offset);
+	if (!call?.namePosition) return [];
+	const range = {
+		start: open.document.positionAt(call.start),
+		end: open.document.positionAt(offset),
+	};
+	const item = (label: string, detail?: string, docs?: string) => ({
+		label: `${label}:`,
+		kind: CompletionItemKind.Field,
+		detail,
+		documentation: docs ? markdown(docs) : undefined,
+		sortText: `0${label}`,
+		textEdit: { range, newText: `${label}: ` },
+	});
+	const builtin = isRegistered(open.project, call.kind, call.name)
+		? null
+		: builtinSignature(call.kind, call.name);
+	if (builtin) return builtin.parameters.map((param) => item(param.name));
+	if (call.kind === "function" && macrosIn(text).has(call.name)) return [];
+	const typescript = await open.project.typescript();
+	if (!typescript) return [];
+	return namedOptions(typescript, call.kind, call.name).map((member) =>
+		item(
+			member.name,
+			`${member.name}${member.optional ? "?" : ""}: ${member.type}`,
+			memberDocs(member),
+		),
+	);
+};
+
+/**
+ * The parameters of the function or filter whose arguments the cursor is in, with the one it's on active. Named
+ * arguments are gathered into the last parameter, so a named argument makes that one active and shows its own type.
+ */
+export const signatureHelp = async (
+	open: OpenTemplate,
+	offset: number,
+): Promise<SignatureHelp | null> => {
+	const text = open.document.getText();
+	const call = callContext(text, offset);
+	if (!call) return null;
+	let signature: {
+		label: string;
+		parameters: { name: string; start: number; end: number }[];
+		docs?: string | null;
+		paramDocs?: Map<string, string>;
+	} | null = null;
+	const macro = call.kind === "function" ? macrosIn(text).get(call.name) : null;
+	if (macro) {
+		const label = `${call.name}(${macro.params})`;
+		signature = {
+			label,
+			parameters: splitParameters(macro.params).map((part) => ({
+				name: /^\w+/.exec(part.text)?.[0] ?? part.text,
+				start: call.name.length + 1 + part.start,
+				end: call.name.length + 1 + part.end,
+			})),
+		};
+	} else if (!isRegistered(open.project, call.kind, call.name)) {
+		const builtin = builtinSignature(call.kind, call.name);
+		if (builtin) {
+			signature = {
+				...builtin,
+				docs: docsFor(
+					call.kind === "function" ? "functions" : "filters",
+					call.name,
+				),
+			};
+		}
+	}
+	const typescript = signature ? null : await open.project.typescript();
+	if (typescript) {
+		const described = describeCallable(typescript, call.kind, call.name);
+		if (described) {
+			const params = new Map(
+				described.member.tags.flatMap((tag) => {
+					const match = /^(\w+)\s*(.*)$/s.exec(tag.text);
+					return tag.name === "param" && match
+						? [[match[1] as string, match[2] as string] as const]
+						: [];
+				}),
+			);
+			signature = {
+				label: described.label,
+				parameters: described.parameters,
+				docs: described.member.docs,
+				paramDocs: params,
+			};
+		}
+	}
+	if (!signature || signature.parameters.length === 0) return null;
+	const last = signature.parameters.length - 1;
+	const active =
+		call.named || call.sawNamed ? last : Math.min(call.index, last);
+	let namedDocs: string | null = null;
+	if (call.named && typescript) {
+		const option = namedOptions(typescript, call.kind, call.name).find(
+			(member) => member.name === call.named,
+		);
+		if (option) {
+			namedDocs = sections(
+				codeBlock(
+					`${option.name}${option.optional ? "?" : ""}: ${option.type}`,
+					"ts",
+				),
+				memberDocs(option),
+			);
+		}
+	}
+	const found = signature;
+	return {
+		signatures: [
+			{
+				label: found.label,
+				documentation: found.docs ? markdown(found.docs) : undefined,
+				parameters: found.parameters.map((param, index) => {
+					const docs =
+						index === active && namedDocs
+							? namedDocs
+							: found.paramDocs?.get(param.name);
+					return {
+						label: [param.start, param.end] as [number, number],
+						documentation: docs ? markdown(docs) : undefined,
+					};
+				}),
+			},
+		],
+		activeSignature: 0,
+		activeParameter: active,
+	};
+};
+
+/** A warning about an argument, with its offsets in the template. */
+export type ArgumentWarning = {
+	start: number;
+	end: number;
+	code: "argument-type" | "unknown-argument";
+	message: string;
+};
+
+/**
+ * Checks the arguments of calls to the project's own functions and filters against their TypeScript types. A filter's
+ * value before the `|` is its first argument. Calls with `...` spreads, and arguments whose type is unknown, aren't
+ * checked.
+ */
+export const argumentWarnings = async (
+	open: OpenTemplate,
+): Promise<ArgumentWarning[]> => {
+	const typescript = await open.project.typescript();
+	if (!typescript) return [];
+	const text = open.document.getText();
+	const { scopes, context } = templateTypes(open, text);
+	/**
+	 * Each check, with what it's for: a filter's input, a positional or a named argument. A wrong type is reported on
+	 * the value, and a named argument the function doesn't take on its name.
+	 */
+	const checks: (ArgumentCheck & {
+		span: Span;
+		nameSpan?: Span;
+		callee: string;
+		role: "input" | "positional" | "named";
+	})[] = [];
+	for (const node of expressionsIn(scopes.ast.body)) {
+		let kind: "function" | "filter";
+		let name: string;
+		if (node.type === "Call" && node.callee.type === "Name") {
+			kind = "function";
+			name = node.callee.name;
+			if (context.macros.has(name)) continue;
+		} else if (node.type === "Filter") {
+			kind = "filter";
+			name = node.name;
+		} else continue;
+		const builtins = kind === "function" ? FUNCTIONS : FILTERS;
+		if (builtins[name] && !isRegistered(open.project, kind, name)) continue;
+		if (node.args.some((arg) => arg.type === "Spread")) continue;
+		const parameters = parametersType(kind, name, true);
+		const positional = [
+			...(node.type === "Filter" ? [node.input] : []),
+			...node.args.flatMap((arg) =>
+				arg.type === "Positional" ? [arg.value] : [],
+			),
+		];
+		positional.forEach((value, index) => {
+			checks.push({
+				type: expressionType(value, context),
+				parameters,
+				index,
+				span: value.span,
+				callee: name,
+				role: node.type === "Filter" && index === 0 ? "input" : "positional",
+			});
+		});
+		for (const arg of node.args) {
+			if (arg.type !== "Named") continue;
+			checks.push({
+				type: expressionType(arg.value, context),
+				parameters,
+				name: arg.name,
+				span: arg.value.span,
+				nameSpan: {
+					start: arg.span.start,
+					end: arg.span.start + arg.name.length,
+				},
+				callee: name,
+				role: "named",
+			});
+		}
+	}
+	return checkArguments(typescript, checks).flatMap(
+		(problem, index): ArgumentWarning[] => {
+			const check = checks[index];
+			if (!problem || !check) return [];
+			if (problem.kind === "missing") {
+				const option = "name" in check ? check.name : "";
+				return [
+					{
+						...(check.nameSpan ?? check.span),
+						code: "unknown-argument",
+						message: `\`${check.callee}\` doesn't take \`${option}\`.`,
+					},
+				];
+			}
+			const expected = `\`${problem.expected}\``;
+			const actual = `not \`${problem.actual}\``;
+			const message =
+				check.role === "input"
+					? `\`${check.callee}\` needs ${expected} before the \`|\`, ${actual}.`
+					: check.role === "named" && "name" in check
+						? `\`${check.name}\` should be ${expected}, ${actual}.`
+						: `This argument should be ${expected}, ${actual}.`;
+			return [{ ...check.span, code: "argument-type", message }];
+		},
+	);
 };

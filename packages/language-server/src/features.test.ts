@@ -12,7 +12,14 @@ import {
 	test,
 } from "vite-plus/test";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { complete, definition, hover, type OpenTemplate } from "./features.js";
+import {
+	argumentWarnings,
+	complete,
+	definition,
+	hover,
+	type OpenTemplate,
+	signatureHelp,
+} from "./features.js";
 import { openProject, type Project } from "./project.js";
 import { createTestProject } from "./test-project.js";
 
@@ -178,5 +185,67 @@ describe("TypeScript types", () => {
 				end: { character: text.indexOf("title") + 5 },
 			},
 		});
+	});
+
+	test("shows a function's parameters as you type its arguments", async () => {
+		const text = '{{ documents("pages", ';
+		const help = await signatureHelp(open(text), text.length);
+		const signature = help?.signatures[0];
+		const [start, end] = (signature?.parameters?.[1]?.label ?? [0, 0]) as [
+			number,
+			number,
+		];
+		expect(help?.activeParameter).toBe(1);
+		expect(signature?.label.slice(start, end)).toBe(
+			"query?: { limit?: number | undefined; } | undefined",
+		);
+		expect(signature?.parameters?.[0]?.documentation).toMatchObject({
+			value: "The collection's key.",
+		});
+
+		const named = '{{ documents("pages", limit: ';
+		const fromNamed = await signatureHelp(open(named), named.length);
+		expect(fromNamed?.activeParameter).toBe(1);
+		expect(
+			fromNamed?.signatures[0]?.parameters?.[1]?.documentation,
+		).toMatchObject({
+			value: "```ts\nlimit?: number | undefined\n```",
+		});
+
+		const builtin = "{{ 1.5|round(";
+		const fromBuiltin = await signatureHelp(open(builtin), builtin.length);
+		expect(fromBuiltin?.signatures[0]?.label).toBe(
+			"|round(precision?, method?)",
+		);
+	});
+
+	test("completes named arguments with their types", async () => {
+		const text = '{{ documents("pages", li }}';
+		const items = await complete(open(text), text.indexOf(" }}"));
+		expect(items[0]).toMatchObject({
+			label: "limit:",
+			detail: "limit?: number | undefined",
+			textEdit: { newText: "limit: " },
+		});
+	});
+
+	test("warns about arguments that don't fit their parameters", async () => {
+		const text = [
+			"{% props page: Page, other %}",
+			'{{ documents(2) }}{{ documents("pages", limit: "2") }}{{ documents("pages", limt: 2) }}',
+			'{{ 2|markdown }}{{ "ok"|markdown(inline: true) }}{{ documents(other, limit: other) }}{{ 2|round }}',
+		].join("\n");
+		const warnings = await argumentWarnings(open(text));
+		expect(
+			warnings.map((warning) => [
+				text.slice(warning.start, warning.end),
+				warning.message,
+			]),
+		).toEqual([
+			["2", "This argument should be `string`, not `number`."],
+			['"2"', "`limit` should be `number`, not `string`."],
+			["limt", "`documents` doesn't take `limt`."],
+			["2", "`markdown` needs `string` before the `|`, not `number`."],
+		]);
 	});
 });

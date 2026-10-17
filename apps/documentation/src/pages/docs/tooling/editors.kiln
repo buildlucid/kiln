@@ -112,6 +112,7 @@ npx kiln-language-server --stdio
 		<li><strong>Completions</strong> for tags, filters, functions, tests, variables in scope, <code>loop</code>'s properties, template names in <code>extends</code>, <code>include</code>, <code>component</code> and <code>import</code>, the props of the component or template you're passing data to, and properties after a dot when the language server knows the value's type. Tags and built-ins show the same docs as hover.</li>
 		<li><strong>Hover</strong> for tags, filters, functions, tests, variables and templates. Tags and built-ins show their docs from this site, up to the first example, with a link to the section. End tags, such as <code>endfor</code>, show the tag they close. A template shows its props. Your own functions, filters, tests, globals and typed values show their type and doc comment from <a href="#types-from-typescript">TypeScript</a>.</li>
 		<li><strong>HTML completions and hover</strong> outside <code>&#123;{ }}</code> and <code>&#123;% %}</code>: elements, attributes and their values, such as the values of <code>button</code>'s <code>type</code>, with MDN's description and a link to its page. They come from the HTML service VS Code uses.</li>
+		<li><strong>Signature help</strong> for functions and filters: their parameters as you type the arguments, with the one you're on highlighted.</li>
 		<li><strong>Go to definition</strong> for template names, macros, blocks and variables. A variable goes to the prop, <code>set</code>, <code>for</code>, macro argument or import that brings it into scope. Your own functions, filters, tests, globals and the properties of typed values go to their <a href="#types-from-typescript">TypeScript</a> source.</li>
 		<li><strong>Links</strong> on template names, and a list of the template's blocks, macros and slots for your editor's outline.</li>
 	</ul>
@@ -178,6 +179,8 @@ await writeFile("kiln.json", generateManifest(kiln, { root: "src/templates" }));
 		<li>Completes properties after a dot, such as <code>post.</code>, or <code>brick.</code> inside a loop over <code>page.bricks</code>.</li>
 		<li>Shows the type and doc comment of your functions, filters, tests, globals and their properties when you hover over them.</li>
 		<li>Goes to the TypeScript source of a function, filter, test, global or property.</li>
+		<li>Shows your function's or filter's parameters and their types as you type its arguments, and completes <a href="/docs/language/expressions/#calling-functions">named arguments</a>, such as <code>limit:</code>.</li>
+		<li>Warns when an argument doesn't fit the parameter's type, such as text where a number belongs, or when a named argument isn't one the function takes.</li>
 	</ul>
 
 	<p>The editor still never runs your code. It asks your project's own copy of TypeScript what the types are.</p>
@@ -259,5 +262,7 @@ declare module "@lucidkiln/core" {
 		</tbody>
 	</table>
 
-	<p>When the editor can't tell a value's type, as for an untyped prop or a macro argument, it doesn't guess. You get no property completions for that value.</p>
+	<p>A literal has its own type: <code>"tags"</code> is a string and <code>2</code> is a number. Named arguments are gathered into one hash at the end, so the editor checks them against the function's last parameter.</p>
+
+	<p>When the editor can't tell a value's type, as for an untyped prop or a macro argument, it doesn't guess. You get no property completions for that value, and no warnings about the arguments it's passed to.</p>
 {% endblock %}

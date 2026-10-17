@@ -1,4 +1,5 @@
 import type { Argument, Expression, PropType } from "@lucidkiln/core/syntax";
+import { splitParameters } from "./calls.js";
 import {
 	type BindingSource,
 	bindingAt,
@@ -14,6 +15,8 @@ import type { Member, TypeScriptProject } from "./typescript.js";
  * - `Item`, `Key`: what `for` gives for each pass.
  * - `Result`: what a call gives once Kiln waits for it. `Params` and `Returns` describe the function for hover.
  * - `Members`: the values whose properties a template can read, so lists, maps and primitives complete nothing.
+ * - `Last`: a function's last parameter, which named arguments are gathered into.
+ * - `Fits`, `NamedFit`: whether an argument fits its parameter. Unknown types always fit, so the editor never guesses.
  */
 const PRELUDE = `import type { KilnFilters, KilnFunctions, KilnGlobals, KilnTests, KilnTypes, Markup, RenderAware } from "@lucidkiln/core";
 type Named<N extends string> = N extends keyof KilnTypes ? KilnTypes[N] : unknown;
@@ -24,6 +27,9 @@ type Returns<F> = F extends RenderAware<any, any, infer R> ? R : F extends (...a
 type Result<F> = Awaited<Returns<F>>;
 type Params<F> = F extends RenderAware<any, infer A, any> ? A : F extends (...args: infer A) => any ? A : never;
 type Tail<A> = A extends readonly [unknown?, ...infer R] ? R : A;
+type Last<A> = Required<A> extends readonly [...unknown[], infer L] ? L : A extends readonly (infer E)[] ? E : unknown;
+type Fits<A, P> = [P] extends [never] ? true : unknown extends P ? true : unknown extends A ? true : [Exclude<A, Markup>] extends [P] ? true : false;
+type NamedFit<L, K, A> = unknown extends L ? "ok" : [L] extends [never] ? "ok" : NonNullable<L> extends infer O ? string extends keyof O ? "ok" : K extends keyof O ? Fits<A, Exclude<O[K], undefined>> extends true ? "ok" : "mismatch" : "missing" : "ok";
 type Members<V> = NonNullable<V> extends infer O ? O extends string | number | boolean | bigint | symbol | Function | Date | Markup | readonly unknown[] | ReadonlyMap<unknown, unknown> | ReadonlySet<unknown> ? never : O : never;
 `;
 
@@ -311,19 +317,40 @@ export const withTypes = <T>(
 	return typescript.query(source, use);
 };
 
+/** The TypeScript type of a registered function, filter or test, by kind and name. */
+const callableType = (kind: keyof typeof REGISTRIES, name: string) =>
+	`Get<${REGISTRIES[kind]}, ${JSON.stringify(name)}>`;
+
+/** Its parameters as a tuple: a filter's first parameter is the value before the `|`, so `withInput` keeps it. */
+export const parametersType = (
+	kind: "function" | "filter" | "test",
+	name: string,
+	withInput = false,
+) => {
+	const params = `Params<${callableType(kind, name)}>`;
+	return kind === "function" || withInput ? params : `Tail<${params}>`;
+};
+
+/** A described function, filter or test: its signature and where each parameter sits in it. */
+export type Signature = {
+	label: string;
+	parameters: { name: string; start: number; end: number }[];
+	member: Member;
+};
+
 /** A host function, filter or test as hover shows it, such as `documents(collection: string): Promise<Page[]>`. */
 export const describeCallable = (
 	typescript: TypeScriptProject,
 	kind: "function" | "filter" | "test",
 	name: string,
-): { signature: string; member: Member } | null => {
-	const registry = REGISTRIES[kind];
-	const callable = `Get<${registry}, ${JSON.stringify(name)}>`;
-	const params =
-		kind === "function" ? `Params<${callable}>` : `Tail<Params<${callable}>>`;
-	return withTypes(
+): Signature | null =>
+	withTypes(
 		typescript,
-		{ Registry: registry, Parameters: params, Return: `Returns<${callable}>` },
+		{
+			Registry: REGISTRIES[kind],
+			Parameters: parametersType(kind, name),
+			Return: `Returns<${callableType(kind, name)}>`,
+		},
 		(read) => {
 			const member = read
 				.members("Registry")
@@ -332,8 +359,73 @@ export const describeCallable = (
 			const result = read.describe("Return");
 			if (!member || !parameters || !result) return null;
 			const list = parameters.replace(/^\[|\]$/g, "");
-			const prefix = kind === "filter" ? "|" : kind === "test" ? "is " : "";
-			return { signature: `${prefix}${name}(${list}): ${result}`, member };
+			const prefix = `${kind === "filter" ? "|" : kind === "test" ? "is " : ""}${name}(`;
+			return {
+				label: `${prefix}${list}): ${result}`,
+				parameters: splitParameters(list).map((part) => ({
+					name: /^(?:\.\.\.)?([\w$]+)/.exec(part.text)?.[1] ?? part.text,
+					start: prefix.length + part.start,
+					end: prefix.length + part.end,
+				})),
+				member,
+			};
 		},
+	);
+
+/** The names a function or filter takes as named arguments: the properties of its last parameter. */
+export const namedOptions = (
+	typescript: TypeScriptProject,
+	kind: "function" | "filter",
+	name: string,
+): Member[] =>
+	withTypes(
+		typescript,
+		{ Options: `Members<Last<${parametersType(kind, name)}>>` },
+		(read) => read.members("Options"),
+	) ?? [];
+
+/** One argument to check: its type, and the parameter it goes to, by position or by name. */
+export type ArgumentCheck = {
+	type: string;
+	parameters: string;
+} & ({ index: number } | { name: string });
+
+/** What's wrong with an argument, with the types to show: `missing` is a named argument the function doesn't take. */
+export type ArgumentProblem =
+	| { kind: "mismatch"; expected: string; actual: string }
+	| { kind: "missing" };
+
+/** Checks arguments against their parameters with one TypeScript query. Null for an argument that fits. */
+export const checkArguments = (
+	typescript: TypeScriptProject,
+	checks: ArgumentCheck[],
+): (ArgumentProblem | null)[] => {
+	if (checks.length === 0) return [];
+	const aliases: Record<string, string> = {};
+	checks.forEach((check, index) => {
+		const expected =
+			"index" in check
+				? `Required<${check.parameters}>[${check.index}]`
+				: `Exclude<Get<Last<${check.parameters}>, ${JSON.stringify(check.name)}>, undefined>`;
+		aliases[`Fit${index}`] =
+			"index" in check
+				? `Fits<${check.type}, ${expected}> extends true ? "ok" : "mismatch"`
+				: `NamedFit<Last<${check.parameters}>, ${JSON.stringify(check.name)}, ${check.type}>`;
+		aliases[`Expected${index}`] = expected;
+		aliases[`Actual${index}`] = check.type;
+	});
+	return (
+		withTypes(typescript, aliases, (read) =>
+			checks.map((_, index): ArgumentProblem | null => {
+				const fit = read.describe(`Fit${index}`);
+				if (fit === '"missing"') return { kind: "missing" };
+				if (fit !== '"mismatch"') return null;
+				return {
+					kind: "mismatch",
+					expected: read.describe(`Expected${index}`) ?? "unknown",
+					actual: read.describe(`Actual${index}`) ?? "unknown",
+				};
+			}),
+		) ?? checks.map(() => null)
 	);
 };

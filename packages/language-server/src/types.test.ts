@@ -2,7 +2,13 @@ import { rm } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { expressionPathAt, templateScopes } from "./scopes.js";
 import { createTestProject, TYPESCRIPT_VERSIONS } from "./test-project.js";
-import { describeCallable, expressionType, withTypes } from "./types.js";
+import {
+	checkArguments,
+	describeCallable,
+	expressionType,
+	parametersType,
+	withTypes,
+} from "./types.js";
 import { openTypeScript, type TypeScriptProject } from "./typescript.js";
 
 /** The names of the properties TypeScript finds on the value of `expression` in `text`. */
@@ -85,7 +91,7 @@ describe.each(Object.keys(TYPESCRIPT_VERSIONS))("TypeScript %s", (version) => {
 
 	test("describes functions and filters with their docs and source", () => {
 		const documents = describeCallable(typescript, "function", "documents");
-		expect(documents?.signature).toBe(
+		expect(documents?.label).toBe(
 			"documents(collection: string, query?: { limit?: number | undefined; } | undefined): Promise<Page[]>",
 		);
 		expect(documents?.member.docs).toBe(
@@ -95,11 +101,38 @@ describe.each(Object.keys(TYPESCRIPT_VERSIONS))("TypeScript %s", (version) => {
 			{ name: "param", text: "collection The collection's key." },
 		]);
 		expect(documents?.member.location?.path).toMatch(/src\/kiln\.ts$/);
-		expect(describeCallable(typescript, "function", "locale")?.signature).toBe(
+		expect(describeCallable(typescript, "function", "locale")?.label).toBe(
 			"locale(fallback: string): string",
 		);
-		expect(describeCallable(typescript, "filter", "markdown")?.signature).toBe(
+		expect(describeCallable(typescript, "filter", "markdown")?.label).toBe(
 			"|markdown(options?: { inline?: boolean | undefined; } | undefined): string",
 		);
+	});
+
+	test("checks arguments against their parameters", () => {
+		const parameters = parametersType("function", "documents");
+		expect(
+			checkArguments(typescript, [
+				{ type: "string", parameters, index: 0 },
+				{ type: "number", parameters, index: 0 },
+				{ type: "unknown", parameters, index: 0 },
+				{ type: "number", parameters, name: "limit" },
+				{ type: "string", parameters, name: "limit" },
+				{ type: "number", parameters, name: "limt" },
+				{
+					type: "number",
+					parameters: parametersType("function", "missing"),
+					index: 0,
+				},
+			]),
+		).toEqual([
+			null,
+			{ kind: "mismatch", expected: "string", actual: "number" },
+			null,
+			null,
+			{ kind: "mismatch", expected: "number", actual: "string" },
+			{ kind: "missing" },
+			null,
+		]);
 	});
 });

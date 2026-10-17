@@ -7,6 +7,8 @@
 - Go to definition now works for variables. It goes to the prop, `set`, `for`, macro argument or import that brings the variable into scope.
 - Completions for variables now follow Kiln's scope rules, so a loop's variables stop at `endfor`.
 - With TypeScript 6 or later, the editor reads the types of your functions, filters, tests, globals and prop types. It completes properties after a dot, shows types and doc comments on hover, and goes to the TypeScript source. See [Types from TypeScript](https://kilnlang.com/docs/tooling/editors/#types-from-typescript).
+- Signature help for functions and filters shows their parameters as you type the arguments, with the one you're on highlighted.
+- With TypeScript, the editor completes named arguments such as `limit:` with their types, and warns when an argument doesn't fit its parameter or isn't one the function takes.
 
 ## 1.0.0
 
