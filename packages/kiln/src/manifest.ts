@@ -1,5 +1,5 @@
 import { environmentOf, type Kiln } from "./environment.js";
-import { type HtmlChecks, htmlChecksOption } from "./html.js";
+import { type HtmlChecks, htmlChecksOption } from "./html/index.js";
 import { variableNames } from "./runtime/scope.js";
 import type { CallableEntry } from "./runtime/types.js";
 

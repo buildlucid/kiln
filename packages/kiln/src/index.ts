@@ -37,7 +37,7 @@ export {
 	type HtmlCheckLevel,
 	type HtmlChecks,
 	templateText,
-} from "./html.js";
+} from "./html/index.js";
 export { generateManifest, type KilnManifest } from "./manifest.js";
 export { expose, lookup } from "./runtime/exposure.js";
 export {

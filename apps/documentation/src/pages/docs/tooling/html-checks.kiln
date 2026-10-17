@@ -1,7 +1,7 @@
 {% extends "layouts/docs" %}
 
 {% block content %}
-	<p><a href="/docs/api/errors/#checking-templates"><code>check</code></a> warns about HTML that is obsolete or hard to use with assistive technology, such as an image with no <code>alt</code> or a <code>&lt;center&gt;</code> element. The language server reports the same warnings as you type. Nothing is checked while rendering, so pages render just as fast.</p>
+	<p><a href="/docs/api/errors/#checking-templates"><code>check</code></a> warns about HTML that is invalid, obsolete or hard to use with assistive technology, such as an image with no <code>alt</code>, a <code>&lt;div&gt;</code> inside a <code>&lt;p&gt;</code> or a skipped heading level. The language server reports the same warnings as you type. Nothing is checked while rendering, so pages render just as fast.</p>
 
 	<p>components/card.kiln:</p>
 
@@ -28,16 +28,27 @@ html-button-type       3:2  <button> has no type attribute, so it submits any fo
 
 	<h2>Rules</h2>
 
+	<p>The rules follow the HTML standard and WAI-ARIA, as the <a href="https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements">MDN HTML reference</a> describes them. <strong>Spec</strong> rules report HTML that the standards say is wrong. <strong>Advice</strong> rules report HTML that is valid but works badly for people, following MDN's guidance and WCAG.</p>
+
 	<table>
-		<thead><tr><th>Code</th><th>Reports</th></tr></thead>
+		<thead><tr><th>Code</th><th>Reports</th><th>Kind</th></tr></thead>
 		<tbody>
-			<tr><td><code>html-obsolete-element</code></td><td>An element the HTML standard has made obsolete. See <a href="#obsolete-elements">Obsolete elements</a></td></tr>
-			<tr><td><code>html-img-alt</code></td><td>An <code>&lt;img&gt;</code> with no <code>alt</code> attribute</td></tr>
-			<tr><td><code>html-button-type</code></td><td>A <code>&lt;button&gt;</code> with no <code>type</code> attribute</td></tr>
-			<tr><td><code>html-lang</code></td><td>An <code>&lt;html&gt;</code> element with no <code>lang</code> attribute</td></tr>
-			<tr><td><code>html-tabindex</code></td><td>A <code>tabindex</code> above 0</td></tr>
-			<tr><td><code>html-aria-attribute</code></td><td>An <code>aria-</code> attribute that WAI-ARIA doesn't define, such as <code>aria-labeledby</code></td></tr>
-			<tr><td><code>html-role</code></td><td>A <code>role</code> that WAI-ARIA doesn't define, or an abstract role such as <code>widget</code> that pages must not use</td></tr>
+			<tr><td><code>html-obsolete-element</code></td><td>An element the HTML standard has made obsolete. See <a href="#obsolete-elements">Obsolete elements</a></td><td>Spec</td></tr>
+			<tr><td><code>html-obsolete-attribute</code></td><td>An attribute the HTML standard has made obsolete, such as <code>align</code> or <code>bgcolor</code>. See <a href="#obsolete-attributes">Obsolete attributes</a></td><td>Spec</td></tr>
+			<tr><td><code>html-attribute-value</code></td><td>A value an attribute doesn't accept, such as <code>type="emial"</code>, or a boolean attribute set to <code>"false"</code>. See <a href="#attribute-values">Attribute values</a></td><td>Spec</td></tr>
+			<tr><td><code>html-img-alt</code></td><td>An <code>&lt;img&gt;</code> with no <code>alt</code> attribute</td><td>Spec</td></tr>
+			<tr><td><code>html-button-type</code></td><td>A <code>&lt;button&gt;</code> with no <code>type</code> attribute</td><td>Advice</td></tr>
+			<tr><td><code>html-lang</code></td><td>An <code>&lt;html&gt;</code> element with no <code>lang</code> attribute, or a <code>lang</code> that isn't a valid language tag</td><td>Advice</td></tr>
+			<tr><td><code>html-iframe-title</code></td><td>An <code>&lt;iframe&gt;</code> with no <code>title</code> attribute</td><td>Advice</td></tr>
+			<tr><td><code>html-viewport-zoom</code></td><td>A viewport <code>&lt;meta&gt;</code> that stops people zooming</td><td>Advice</td></tr>
+			<tr><td><code>html-tabindex</code></td><td>A <code>tabindex</code> above 0</td><td>Advice</td></tr>
+			<tr><td><code>html-aria-attribute</code></td><td>An <code>aria-</code> attribute that WAI-ARIA doesn't define, such as <code>aria-labeledby</code></td><td>Spec</td></tr>
+			<tr><td><code>html-role</code></td><td>A <code>role</code> that WAI-ARIA doesn't define, or an abstract role such as <code>widget</code> that pages must not use</td><td>Spec</td></tr>
+			<tr><td><code>html-redundant-role</code></td><td>A <code>role</code> an element already has, such as <code>&lt;nav role="navigation"&gt;</code></td><td>Advice</td></tr>
+			<tr><td><code>html-aria-hidden-focusable</code></td><td><code>aria-hidden="true"</code> on an element people can tab to</td><td>Spec</td></tr>
+			<tr><td><code>html-heading-order</code></td><td>A heading that skips a level, such as an <code>&lt;h4&gt;</code> straight after an <code>&lt;h2&gt;</code></td><td>Advice</td></tr>
+			<tr><td><code>html-nested-interactive</code></td><td>A link, button or other interactive element inside an <code>&lt;a&gt;</code> or a <code>&lt;button&gt;</code>, or a <code>&lt;label&gt;</code> inside a <code>&lt;label&gt;</code></td><td>Spec</td></tr>
+			<tr><td><code>html-permitted-content</code></td><td>An element its parent can't hold, such as a <code>&lt;div&gt;</code> in a <code>&lt;p&gt;</code> or an <code>&lt;li&gt;</code> outside a list. See <a href="#nesting">Nesting</a></td><td>Spec</td></tr>
 		</tbody>
 	</table>
 
@@ -62,6 +73,16 @@ html-button-type       3:2  <button> has no type attribute, so it submits any fo
 
 	<p><code>lang</code> tells screen readers which voice and pronunciation to use, and tells browsers which language to translate from. Put it on <code>&lt;html&gt;</code>, such as <code>&lt;html lang="en-GB"&gt;</code>.</p>
 
+	<p>On any element, a written-out <code>lang</code> must be a valid language tag. <code>lang="en_GB"</code> is reported, since language tags join their parts with <code>-</code>. An empty <code>lang</code> is allowed: it means the language is unknown.</p>
+
+	<h3>Frames</h3>
+
+	<p>Screen readers announce an <code>&lt;iframe&gt;</code> by its <code>title</code>, so people can decide whether to go into it. Describe what it holds, such as <code>title="Map of our office"</code>.</p>
+
+	<h3>Zooming</h3>
+
+	<p>People with low vision zoom in to read. A viewport <code>&lt;meta&gt;</code> whose <code>content</code> has <code>user-scalable=no</code>, or a <code>maximum-scale</code> below 2, stops them. WCAG asks that text can be zoomed to 200%.</p>
+
 	<h3>Tab order</h3>
 
 	<p>A <code>tabindex</code> above 0 moves an element ahead of everything else when someone tabs through the page, so the order no longer follows what they see. Use <code>0</code> to make an element focusable in its normal place, or <code>-1</code> to focus it only from script. Only written-out numbers are checked.</p>
@@ -71,6 +92,10 @@ html-button-type       3:2  <button> has no type attribute, so it submits any fo
 	<p>Browsers ignore an <code>aria-</code> attribute or a <code>role</code> they don't know, so a typo quietly does nothing. The rules follow WAI-ARIA 1.2, plus the attributes and roles the 1.3 draft adds, such as <code>aria-description</code>. Roles from DPUB-ARIA and Graphics-ARIA, which start with <code>doc-</code> and <code>graphics-</code>, are accepted.</p>
 
 	<p>A <code>role</code> may list several roles as fallbacks, such as <code>role="switch checkbox"</code>, and each one is checked. Roles match in any case. Only written-out values are checked.</p>
+
+	<p><code>html-redundant-role</code> reports a <code>role</code> that repeats the role an element always has, such as <code>&lt;button role="button"&gt;</code>, <code>&lt;main role="main"&gt;</code> or <code>&lt;a href="/" role="link"&gt;</code>. Lists are left alone: <code>&lt;ul role="list"&gt;</code> brings back list semantics that Safari drops from lists styled with <code>list-style: none</code>.</p>
+
+	<p><code>aria-hidden="true"</code> hides an element from screen readers. On a link, button, form field or an element with <code>tabindex="0"</code>, people can still tab to it, and hear nothing. Remove it, or make the element unfocusable too. It is checked on the element itself only, and only when Kiln can see all of its attributes.</p>
 
 	<h2>Obsolete elements</h2>
 
@@ -98,6 +123,126 @@ html-button-type       3:2  <button> has no type attribute, so it submits any fo
 		</tbody>
 	</table>
 
+	<h2>Obsolete attributes</h2>
+
+	<p>These attributes are obsolete in the HTML standard. Most of them set how things look, which CSS now does. The warning says what to use instead when it isn't CSS, such as <code>id</code> in place of <code>&lt;a name&gt;</code>.</p>
+
+	<table>
+		<thead><tr><th>Element</th><th>Obsolete attributes</th></tr></thead>
+		<tbody>
+			<tr><td><code>a</code></td><td><code>charset</code>, <code>coords</code>, <code>methods</code>, <code>name</code>, <code>rev</code>, <code>shape</code>, <code>urn</code></td></tr>
+			<tr><td><code>area</code></td><td><code>nohref</code>, <code>type</code></td></tr>
+			<tr><td><code>body</code></td><td><code>alink</code>, <code>background</code>, <code>bgcolor</code>, <code>link</code>, <code>text</code>, <code>vlink</code>, and the margin attributes, such as <code>marginwidth</code> and <code>topmargin</code></td></tr>
+			<tr><td><code>br</code></td><td><code>clear</code></td></tr>
+			<tr><td><code>caption</code>, <code>div</code>, <code>h1</code> to <code>h6</code>, <code>legend</code>, <code>p</code></td><td><code>align</code></td></tr>
+			<tr><td><code>col</code>, <code>tbody</code>, <code>thead</code>, <code>tfoot</code>, <code>tr</code></td><td><code>align</code>, <code>char</code>, <code>charoff</code>, <code>valign</code>, plus <code>width</code> on <code>col</code> and <code>bgcolor</code> on <code>tr</code></td></tr>
+			<tr><td><code>td</code>, <code>th</code></td><td><code>abbr</code> (on <code>td</code> only), <code>align</code>, <code>axis</code>, <code>bgcolor</code>, <code>char</code>, <code>charoff</code>, <code>height</code>, <code>nowrap</code>, <code>scope</code> (on <code>td</code> only), <code>valign</code>, <code>width</code></td></tr>
+			<tr><td><code>dl</code>, <code>menu</code>, <code>ol</code></td><td><code>compact</code></td></tr>
+			<tr><td><code>ul</code></td><td><code>compact</code>, <code>type</code></td></tr>
+			<tr><td><code>li</code></td><td><code>type</code></td></tr>
+			<tr><td><code>embed</code></td><td><code>align</code>, <code>hspace</code>, <code>name</code>, <code>vspace</code></td></tr>
+			<tr><td><code>head</code></td><td><code>profile</code></td></tr>
+			<tr><td><code>hr</code></td><td><code>align</code>, <code>color</code>, <code>noshade</code>, <code>size</code>, <code>width</code></td></tr>
+			<tr><td><code>html</code></td><td><code>manifest</code>, <code>version</code></td></tr>
+			<tr><td><code>iframe</code></td><td><code>align</code>, <code>allowtransparency</code>, <code>frameborder</code>, <code>framespacing</code>, <code>hspace</code>, <code>longdesc</code>, <code>marginheight</code>, <code>marginwidth</code>, <code>scrolling</code>, <code>vspace</code></td></tr>
+			<tr><td><code>img</code></td><td><code>align</code>, <code>border</code>, <code>hspace</code>, <code>longdesc</code>, <code>lowsrc</code>, <code>name</code>, <code>vspace</code></td></tr>
+			<tr><td><code>input</code></td><td><code>align</code>, <code>hspace</code>, <code>ismap</code>, <code>usemap</code>, <code>vspace</code></td></tr>
+			<tr><td><code>link</code></td><td><code>charset</code>, <code>rev</code>, <code>target</code></td></tr>
+			<tr><td><code>meta</code></td><td><code>scheme</code></td></tr>
+			<tr><td><code>object</code></td><td><code>align</code>, <code>archive</code>, <code>border</code>, <code>classid</code>, <code>code</code>, <code>codebase</code>, <code>codetype</code>, <code>declare</code>, <code>hspace</code>, <code>standby</code>, <code>vspace</code></td></tr>
+			<tr><td><code>option</code></td><td><code>name</code></td></tr>
+			<tr><td><code>pre</code></td><td><code>width</code></td></tr>
+			<tr><td><code>script</code></td><td><code>charset</code>, <code>event</code>, <code>for</code>, <code>language</code></td></tr>
+			<tr><td><code>table</code></td><td><code>align</code>, <code>bgcolor</code>, <code>border</code>, <code>cellpadding</code>, <code>cellspacing</code>, <code>frame</code>, <code>rules</code>, <code>summary</code>, <code>width</code></td></tr>
+		</tbody>
+	</table>
+
+	<h2>Attribute values</h2>
+
+	<p>Many attributes only accept certain keywords. A browser treats any other value as the default, so a typo such as <code>type="emial"</code> quietly gives a plain text field. Kiln reports a written-out value that isn't one of these, and suggests the closest. Keywords match in any case, apart from <code>&lt;ol type&gt;</code>, where <code>a</code> and <code>A</code> differ.</p>
+
+	<table>
+		<thead><tr><th>Attribute</th><th>On</th><th>Values</th></tr></thead>
+		<tbody>
+			<tr><td><code>type</code></td><td><code>input</code></td><td><code>button</code>, <code>checkbox</code>, <code>color</code>, <code>date</code>, <code>datetime-local</code>, <code>email</code>, <code>file</code>, <code>hidden</code>, <code>image</code>, <code>month</code>, <code>number</code>, <code>password</code>, <code>radio</code>, <code>range</code>, <code>reset</code>, <code>search</code>, <code>submit</code>, <code>tel</code>, <code>text</code>, <code>time</code>, <code>url</code>, <code>week</code></td></tr>
+			<tr><td><code>type</code></td><td><code>button</code></td><td><code>button</code>, <code>reset</code>, <code>submit</code></td></tr>
+			<tr><td><code>type</code></td><td><code>ol</code></td><td><code>1</code>, <code>a</code>, <code>A</code>, <code>i</code>, <code>I</code></td></tr>
+			<tr><td><code>method</code>, <code>formmethod</code></td><td><code>form</code>, and <code>button</code> and <code>input</code></td><td><code>get</code>, <code>post</code>, <code>dialog</code></td></tr>
+			<tr><td><code>enctype</code>, <code>formenctype</code></td><td><code>form</code>, and <code>button</code> and <code>input</code></td><td><code>application/x-www-form-urlencoded</code>, <code>multipart/form-data</code>, <code>text/plain</code></td></tr>
+			<tr><td><code>autocomplete</code></td><td><code>form</code></td><td><code>on</code>, <code>off</code></td></tr>
+			<tr><td><code>loading</code></td><td><code>img</code>, <code>iframe</code></td><td><code>eager</code>, <code>lazy</code></td></tr>
+			<tr><td><code>decoding</code></td><td><code>img</code></td><td><code>async</code>, <code>auto</code>, <code>sync</code></td></tr>
+			<tr><td><code>fetchpriority</code></td><td><code>img</code>, <code>iframe</code>, <code>link</code>, <code>script</code></td><td><code>auto</code>, <code>high</code>, <code>low</code></td></tr>
+			<tr><td><code>crossorigin</code></td><td><code>audio</code>, <code>img</code>, <code>link</code>, <code>script</code>, <code>video</code></td><td>Empty, <code>anonymous</code>, <code>use-credentials</code></td></tr>
+			<tr><td><code>referrerpolicy</code></td><td><code>a</code>, <code>area</code>, <code>iframe</code>, <code>img</code>, <code>link</code>, <code>script</code></td><td>Empty, <code>no-referrer</code>, <code>no-referrer-when-downgrade</code>, <code>origin</code>, <code>origin-when-cross-origin</code>, <code>same-origin</code>, <code>strict-origin</code>, <code>strict-origin-when-cross-origin</code>, <code>unsafe-url</code></td></tr>
+			<tr><td><code>target</code>, <code>formtarget</code></td><td><code>a</code>, <code>area</code>, <code>base</code>, <code>form</code>, and <code>button</code> and <code>input</code></td><td>Any name, or a keyword: <code>_blank</code>, <code>_parent</code>, <code>_self</code>, <code>_top</code>, <code>_unfencedTop</code>. Names can't start with <code>_</code>, so <code>target="_new"</code> is reported</td></tr>
+			<tr><td><code>preload</code></td><td><code>audio</code>, <code>video</code></td><td>Empty, <code>auto</code>, <code>metadata</code>, <code>none</code></td></tr>
+			<tr><td><code>scope</code></td><td><code>th</code></td><td><code>col</code>, <code>colgroup</code>, <code>row</code>, <code>rowgroup</code></td></tr>
+			<tr><td><code>kind</code></td><td><code>track</code></td><td><code>captions</code>, <code>chapters</code>, <code>descriptions</code>, <code>metadata</code>, <code>subtitles</code></td></tr>
+			<tr><td><code>wrap</code></td><td><code>textarea</code></td><td><code>hard</code>, <code>soft</code></td></tr>
+			<tr><td><code>shape</code></td><td><code>area</code></td><td><code>circle</code>, <code>default</code>, <code>poly</code>, <code>rect</code></td></tr>
+			<tr><td><code>capture</code></td><td><code>input</code></td><td><code>environment</code>, <code>user</code></td></tr>
+			<tr><td><code>sandbox</code></td><td><code>iframe</code></td><td>Any of <code>allow-downloads</code>, <code>allow-forms</code>, <code>allow-modals</code>, <code>allow-orientation-lock</code>, <code>allow-pointer-lock</code>, <code>allow-popups</code>, <code>allow-popups-to-escape-sandbox</code>, <code>allow-presentation</code>, <code>allow-same-origin</code>, <code>allow-scripts</code>, <code>allow-storage-access-by-user-activation</code>, <code>allow-top-navigation</code>, <code>allow-top-navigation-by-user-activation</code>, <code>allow-top-navigation-to-custom-protocols</code>, separated by spaces</td></tr>
+			<tr><td><code>blocking</code></td><td><code>link</code>, <code>script</code>, <code>style</code></td><td><code>render</code></td></tr>
+			<tr><td><code>popovertargetaction</code></td><td><code>button</code>, <code>input</code></td><td><code>hide</code>, <code>show</code>, <code>toggle</code></td></tr>
+			<tr><td><code>command</code></td><td><code>button</code></td><td><code>close</code>, <code>hide-popover</code>, <code>request-close</code>, <code>show-modal</code>, <code>show-popover</code>, <code>toggle-popover</code>, or a custom command starting with <code>--</code></td></tr>
+			<tr><td><code>shadowrootmode</code></td><td><code>template</code></td><td><code>closed</code>, <code>open</code></td></tr>
+			<tr><td><code>dir</code></td><td>Any element</td><td><code>auto</code>, <code>ltr</code>, <code>rtl</code></td></tr>
+			<tr><td><code>hidden</code></td><td>Any element</td><td>Empty, <code>hidden</code>, <code>until-found</code></td></tr>
+			<tr><td><code>contenteditable</code></td><td>Any element</td><td>Empty, <code>false</code>, <code>plaintext-only</code>, <code>true</code></td></tr>
+			<tr><td><code>draggable</code></td><td>Any element</td><td><code>false</code>, <code>true</code></td></tr>
+			<tr><td><code>spellcheck</code></td><td>Any element</td><td>Empty, <code>false</code>, <code>true</code></td></tr>
+			<tr><td><code>translate</code></td><td>Any element</td><td>Empty, <code>no</code>, <code>yes</code></td></tr>
+			<tr><td><code>autocapitalize</code></td><td>Any element</td><td><code>characters</code>, <code>none</code>, <code>off</code>, <code>on</code>, <code>sentences</code>, <code>words</code></td></tr>
+			<tr><td><code>inputmode</code></td><td>Any element</td><td><code>decimal</code>, <code>email</code>, <code>none</code>, <code>numeric</code>, <code>search</code>, <code>tel</code>, <code>text</code>, <code>url</code></td></tr>
+			<tr><td><code>enterkeyhint</code></td><td>Any element</td><td><code>done</code>, <code>enter</code>, <code>go</code>, <code>next</code>, <code>previous</code>, <code>search</code>, <code>send</code></td></tr>
+			<tr><td><code>popover</code></td><td>Any element</td><td>Empty, <code>auto</code>, <code>hint</code>, <code>manual</code></td></tr>
+		</tbody>
+	</table>
+
+	<p>Custom elements, whose names contain a <code>-</code>, define their own attributes, so only the attributes for any element are checked on them.</p>
+
+	<h3>Boolean attributes</h3>
+
+	<p>A boolean attribute such as <code>disabled</code> is on whenever it is there, whatever its value. <code>disabled="false"</code> still disables the button, and <code>autoplay="false"</code> still plays the video. Kiln reports a boolean attribute written with <code>"false"</code>, <code>"0"</code>, <code>"no"</code> or <code>"off"</code>. Leave the attribute out to turn it off, or use <code>attrs</code>, which leaves out <code>false</code>:</p>
+
+	{% apply highlight("kiln") %}
+		{% verbatim %}
+<button{{ attrs({ type: "submit", disabled: saving }) }}>Save</button>
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>The boolean attributes are <code>allowfullscreen</code>, <code>async</code>, <code>autofocus</code>, <code>autoplay</code>, <code>checked</code>, <code>controls</code>, <code>default</code>, <code>defer</code>, <code>disabled</code>, <code>formnovalidate</code>, <code>inert</code>, <code>ismap</code>, <code>itemscope</code>, <code>loop</code>, <code>multiple</code>, <code>muted</code>, <code>nomodule</code>, <code>novalidate</code>, <code>open</code>, <code>playsinline</code>, <code>readonly</code>, <code>required</code>, <code>reversed</code>, <code>selected</code>, <code>shadowrootclonable</code>, <code>shadowrootdelegatesfocus</code> and <code>shadowrootserializable</code>, on the elements that have them.</p>
+
+	<h2>Nesting</h2>
+
+	<p>Some rules look at which elements are open around each one. Kiln follows the browser's rules for end tags HTML lets you leave out, such as <code>&lt;/li&gt;</code>, <code>&lt;/p&gt;</code> and <code>&lt;/td&gt;</code>.</p>
+
+	<h3>Heading order</h3>
+
+	<p>Screen reader users move around a page by its headings, and the levels tell them how sections fit together. A heading may go back up any number of levels, but should only go down one at a time, so an <code>&lt;h2&gt;</code> is followed by an <code>&lt;h3&gt;</code>, not an <code>&lt;h4&gt;</code>.</p>
+
+	<p>The first heading in a template can be any level, since a component may start at <code>&lt;h3&gt;</code>. After that, each heading is compared with the one before it in the same template.</p>
+
+	<h3>Interactive elements</h3>
+
+	<p>A link or button can't contain another link, button, form field, <code>&lt;details&gt;</code>, <code>&lt;iframe&gt;</code> or an element with <code>tabindex</code>. Browsers handle it differently, and keyboard and screen reader users often can't reach the inner one. A <code>&lt;label&gt;</code> can't contain another <code>&lt;label&gt;</code>.</p>
+
+	<h3>Permitted content</h3>
+
+	<p><code>html-permitted-content</code> follows the "Permitted content" and "Permitted parents" of each element on MDN. It reports:</p>
+
+	<ul>
+		<li>An element that only holds text and inline elements, such as <code>&lt;p&gt;</code>, <code>&lt;span&gt;</code>, <code>&lt;button&gt;</code> or a heading, holding a block, such as a <code>&lt;div&gt;</code>, <code>&lt;ul&gt;</code> or <code>&lt;h2&gt;</code>. A <code>&lt;p&gt;</code> doesn't hold it at all: the browser ends the paragraph before it.</li>
+		<li>Children a parent can't hold: only <code>&lt;li&gt;</code> in <code>&lt;ul&gt;</code>, <code>&lt;ol&gt;</code> and <code>&lt;menu&gt;</code>; <code>&lt;dt&gt;</code>, <code>&lt;dd&gt;</code> and <code>&lt;div&gt;</code> in <code>&lt;dl&gt;</code>; table parts in <code>&lt;table&gt;</code>, rows in <code>&lt;thead&gt;</code>, <code>&lt;tbody&gt;</code> and <code>&lt;tfoot&gt;</code>, and cells in <code>&lt;tr&gt;</code>; <code>&lt;source&gt;</code> and <code>&lt;img&gt;</code> in <code>&lt;picture&gt;</code>; headings and <code>&lt;p&gt;</code> in <code>&lt;hgroup&gt;</code>; and <code>&lt;col&gt;</code> in <code>&lt;colgroup&gt;</code>. <code>&lt;script&gt;</code> and <code>&lt;template&gt;</code> are allowed in all of these.</li>
+		<li>An element outside the parent it needs: <code>&lt;li&gt;</code> outside a list, <code>&lt;dt&gt;</code> and <code>&lt;dd&gt;</code> outside <code>&lt;dl&gt;</code>, table parts outside a table, <code>&lt;summary&gt;</code> outside <code>&lt;details&gt;</code>, <code>&lt;legend&gt;</code> outside <code>&lt;fieldset&gt;</code>, <code>&lt;figcaption&gt;</code> outside <code>&lt;figure&gt;</code>, <code>&lt;source&gt;</code> outside <code>&lt;picture&gt;</code> or a media element, <code>&lt;track&gt;</code> outside a media element, and <code>&lt;rt&gt;</code> and <code>&lt;rp&gt;</code> outside <code>&lt;ruby&gt;</code>.</li>
+		<li>A <code>&lt;summary&gt;</code> or <code>&lt;legend&gt;</code> that isn't the first child of its <code>&lt;details&gt;</code> or <code>&lt;fieldset&gt;</code>.</li>
+		<li>A <code>&lt;form&gt;</code> inside a <code>&lt;form&gt;</code>, which the browser ignores, and a <code>&lt;header&gt;</code> or <code>&lt;footer&gt;</code> inside a <code>&lt;header&gt;</code> or <code>&lt;footer&gt;</code>.</li>
+		<li>A <code>&lt;main&gt;</code> inside anything other than <code>&lt;html&gt;</code>, <code>&lt;body&gt;</code>, <code>&lt;div&gt;</code>, <code>&lt;form&gt;</code> or a custom element.</li>
+	</ul>
+
+	<p>What <code>&lt;select&gt;</code>, <code>&lt;optgroup&gt;</code> and <code>&lt;option&gt;</code> may hold has grown with customisable selects, so they aren't checked.</p>
+
 	<h2>What Kiln can see</h2>
 
 	<p>The rules read the HTML written in the template, not the page it renders. Kiln only warns when it is sure, so it may miss a problem but shouldn't report one that isn't there.</p>
@@ -113,6 +258,15 @@ html-button-type       3:2  <button> has no type attribute, so it submits any fo
 		<li>A template that starts with an XML declaration, such as a feed or a sitemap, isn't checked.</li>
 	</ul>
 
+	<p>For nesting and heading order:</p>
+
+	<ul>
+		<li>Only elements written in the same template count. A template's top-level content could end up anywhere, so its parent is unknown, and so is the parent of the content of a <code>macro</code>, <code>fill</code>, <code>set</code>, <code>apply</code>, <code>add</code>, <code>island</code> or <code>component</code>, and of a page's blocks. Rules that need the parent skip those elements.</li>
+		<li>If the branches of an <code>if</code> leave different elements open, or a <code>for</code> loop opens an element it doesn't close, Kiln no longer knows which elements are open at that point. Elements opened after it are checked again.</li>
+		<li>An <code>include</code>, <code>component</code>, <code>island</code>, <code>slot</code> or <code>block</code> may hold headings, so the heading after it is compared with nothing. So is the heading after an output that may hold headings, such as <code>&#123;{ post.body|raw }}</code>. An output inside an element that can't hold headings, such as a <code>&lt;p&gt;</code>, doesn't count.</li>
+		<li>The same goes for the heading after an <code>if</code> whose branches end on different headings, or a <code>for</code> loop with headings in it.</li>
+	</ul>
+
 	{% apply highlight("kiln") %}
 		{% verbatim %}
 {# Not reported: the if may add alt #}
@@ -126,7 +280,7 @@ html-button-type       3:2  <button> has no type attribute, so it submits any fo
 		{% endverbatim %}
 	{% endapply %}
 
-	<p>Some problems need the whole rendered page, such as skipped heading levels, repeated <code>id</code> values or a form field without a label. Kiln doesn't check these. Run an HTML validator or an accessibility checker over your rendered pages for them.</p>
+	<p>Some problems need the whole rendered page, such as heading order across a layout, a page and its components, repeated <code>id</code> values, a form field without a label, or more than one <code>&lt;main&gt;</code>. Kiln doesn't check these. Run an HTML validator or an accessibility checker over your rendered pages for them.</p>
 
 	<h2>Turning rules off</h2>
 

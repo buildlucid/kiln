@@ -35,14 +35,14 @@ const OBSOLETE = [
 
 describe("html-obsolete-element", () => {
 	test("reports an obsolete element, with what to use instead", async () => {
-		expect(await check("<p>\n\t<center>Hi</center>\n</p>")).toEqual([
+		expect(await check("<div>\n\t<center>Hi</center>\n</div>")).toEqual([
 			{
 				code: "html-obsolete-element",
 				message: "<center> is obsolete. Use CSS instead",
 				severity: "warning",
 				template: "index.kiln",
-				start: { offset: 5, line: 2, column: 2 },
-				end: { offset: 12, line: 2, column: 9 },
+				start: { offset: 7, line: 2, column: 2 },
+				end: { offset: 14, line: 2, column: 9 },
 			},
 		]);
 	});

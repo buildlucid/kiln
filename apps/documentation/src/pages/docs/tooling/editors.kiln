@@ -53,27 +53,6 @@
 		{% endverbatim %}
 	{% endapply %}
 
-	<h3>Installing from source</h3>
-
-	<p>To try a version that isn't published yet, clone the Kiln repository, then run <code>zed: install dev extension</code> and pick its <code>editors/zed</code> folder. Zed builds the extension itself. Building it needs Rust installed with <code>rustup</code>.</p>
-
-	<p>The extension uses the language server from your project when your <code>package.json</code> lists <code>@lucidkiln/language-server</code>. Otherwise it uses one on your <code>PATH</code>, or installs it from npm. To run a build of your own instead, point Zed at it:</p>
-
-	{% apply highlight("json") %}
-		{% verbatim %}
-{
-	"lsp": {
-		"kiln": {
-			"binary": {
-				"path": "node",
-				"arguments": ["/path/to/kiln/packages/language-server/dist/main.js", "--stdio"]
-			}
-		}
-	}
-}
-		{% endverbatim %}
-	{% endapply %}
-
 	<h2>Other editors</h2>
 
 	<p>Install the language server from npm and point your editor at it. It talks over standard input and output.</p>

@@ -20,7 +20,7 @@ import {
 	type HtmlCheckLevels,
 	type HtmlChecks,
 	resolveHtmlChecks,
-} from "./html.js";
+} from "./html/index.js";
 import { resolveTemplateName } from "./names.js";
 import type { EscapeStrategy } from "./parser/ast.js";
 import { ESCAPE_STRATEGIES } from "./parser/ast.js";
