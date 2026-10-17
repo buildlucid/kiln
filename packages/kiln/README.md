@@ -1,5 +1,5 @@
 <p align="center">
-	<img src="assets/banner.png" alt="Kiln: fast, safe templates for server-rendered websites" width="100%">
+	<img src="https://raw.githubusercontent.com/buildlucid/kiln/master/packages/kiln/assets/banner.png" alt="Kiln: fast, safe templates for server-rendered websites" width="100%">
 </p>
 
 # Kiln
@@ -35,4 +35,4 @@ Then follow the [quick start](https://kilnlang.com/docs/quick-start/) to render 
 
 ## Licence
 
-[MIT](LICENSE)
+[MIT](https://github.com/buildlucid/kiln/blob/master/packages/kiln/LICENSE)
