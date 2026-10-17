@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
 
 - Inserted content is no longer re-indented to line up with its tag. ([46e6cae](https://github.com/buildlucid/kiln/commit/46e6cae3afbbc88ded8a19dcd9018f8559d4e7ce))
+- `withRender` now keeps your function's type parameters, and `RenderAware` takes the whole function type. ([08f192c](https://github.com/buildlucid/kiln/commit/08f192cd0fcf7913039bd065d9ced29d5453a73a))
 
 ## 1.1.0
 

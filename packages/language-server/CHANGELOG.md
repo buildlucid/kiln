@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
 
 - Updated `outlet` hover docs. ([46e6cae](https://github.com/buildlucid/kiln/commit/46e6cae3afbbc88ded8a19dcd9018f8559d4e7ce))
+- Calls to generic functions now get their type from the arguments. ([08f192c](https://github.com/buildlucid/kiln/commit/08f192cd0fcf7913039bd065d9ced29d5453a73a))
+- A literal's type is now its exact value, so `"page"` is `"page"` rather than `string`. ([08f192c](https://github.com/buildlucid/kiln/commit/08f192cd0fcf7913039bd065d9ced29d5453a73a))
 
 ## 1.1.0
 
