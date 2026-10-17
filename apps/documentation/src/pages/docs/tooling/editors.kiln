@@ -109,10 +109,10 @@ npx kiln-language-server --stdio
 	<ul>
 		<li><strong>Errors as you type.</strong> The same problems <a href="/docs/api/errors/#checking-templates"><code>check</code></a> reports, from syntax errors to props a component doesn't declare.</li>
 		<li><strong>Formatting.</strong> The whole file or a selection, using the <a href="/docs/tooling/formatting/">formatter</a>.</li>
-		<li><strong>Completions</strong> for tags, filters, functions, tests, variables in scope, <code>loop</code>'s properties, template names in <code>extends</code>, <code>include</code>, <code>component</code> and <code>import</code>, and the props of the component or template you're passing data to. Tags and built-ins show the same docs as hover.</li>
-		<li><strong>Hover</strong> for tags, filters, functions, tests and templates. Tags and built-ins show their docs from this site, up to the first example, with a link to the section. End tags, such as <code>endfor</code>, show the tag they close. A template shows its props.</li>
+		<li><strong>Completions</strong> for tags, filters, functions, tests, variables in scope, <code>loop</code>'s properties, template names in <code>extends</code>, <code>include</code>, <code>component</code> and <code>import</code>, the props of the component or template you're passing data to, and properties after a dot when the language server knows the value's type. Tags and built-ins show the same docs as hover.</li>
+		<li><strong>Hover</strong> for tags, filters, functions, tests, variables and templates. Tags and built-ins show their docs from this site, up to the first example, with a link to the section. End tags, such as <code>endfor</code>, show the tag they close. A template shows its props. Your own functions, filters, tests, globals and typed values show their type and doc comment from <a href="#types-from-typescript">TypeScript</a>.</li>
 		<li><strong>HTML completions and hover</strong> outside <code>&#123;{ }}</code> and <code>&#123;% %}</code>: elements, attributes and their values, such as the values of <code>button</code>'s <code>type</code>, with MDN's description and a link to its page. They come from the HTML service VS Code uses.</li>
-		<li><strong>Go to definition</strong> for template names, macros and blocks.</li>
+		<li><strong>Go to definition</strong> for template names, macros, blocks and variables. A variable goes to the prop, <code>set</code>, <code>for</code>, macro argument or import that brings it into scope. Your own functions, filters, tests, globals and the properties of typed values go to their <a href="#types-from-typescript">TypeScript</a> source.</li>
 		<li><strong>Links</strong> on template names, and a list of the template's blocks, macros and slots for your editor's outline.</li>
 	</ul>
 
@@ -150,7 +150,7 @@ npx kiln-language-server --stdio
 		</tbody>
 	</table>
 
-	<p>The editor never runs your code. It only needs the names. Without a <code>kiln.json</code>, the language server can't tell which names your project adds or where template names start, so it reports syntax errors and <a href="/docs/tooling/html-checks/">HTML checks</a> only.</p>
+	<p>The editor never runs your code. It only needs the names. Without a <code>kiln.json</code>, the language server can't tell which names your project adds or where template names start, so it reports syntax errors and <a href="/docs/tooling/html-checks/">HTML checks</a> only, and go to definition stays inside the current template.</p>
 
 	<h3>Generating kiln.json</h3>
 
@@ -169,4 +169,95 @@ await writeFile("kiln.json", generateManifest(kiln, { root: "src/templates" }));
 	{% endapply %}
 
 	<p>Names are sorted, so the file only changes when you add or remove one.</p>
+
+	<h2>Types from TypeScript</h2>
+
+	<p>If your project uses TypeScript, the language server can read the types of your functions, filters, tests, globals and prop types. With them, it:</p>
+
+	<ul>
+		<li>Completes properties after a dot, such as <code>post.</code>, or <code>brick.</code> inside a loop over <code>page.bricks</code>.</li>
+		<li>Shows the type and doc comment of your functions, filters, tests, globals and their properties when you hover over them.</li>
+		<li>Goes to the TypeScript source of a function, filter, test, global or property.</li>
+	</ul>
+
+	<p>The editor still never runs your code. It asks your project's own copy of TypeScript what the types are.</p>
+
+	<h3>Describing your functions</h3>
+
+	<p>Add your functions, filters, tests and globals to Kiln's interfaces through module augmentation, the same way as <a href="/docs/api/types/#your-own-types">project-wide prop types</a>:</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { createKiln } from "@lucidkiln/core";
+import { fileLoader } from "@lucidkiln/core/node";
+
+const functions = {
+	/** Finds the published documents in a collection, newest first. */
+	documents: async (collection: string, query: { limit?: number } = {}) =>
+		db.list(collection, query),
+};
+const filters = { markdown };
+const globals = { site: { name: "Kiln", url: "https://kilnlang.com" } };
+
+export const kiln = createKiln({
+	loader: fileLoader({ root: "src/templates" }),
+	functions,
+	filters,
+	globals,
+	types: { Post: (value) => value instanceof PostView },
+});
+
+type Functions = typeof functions;
+type Filters = typeof filters;
+type Globals = typeof globals;
+
+declare module "@lucidkiln/core" {
+	interface KilnFunctions extends Functions {}
+	interface KilnFilters extends Filters {}
+	interface KilnGlobals extends Globals {}
+	interface KilnTypes {
+		Post: PostView;
+	}
+}
+		{% endverbatim %}
+	{% endapply %}
+
+	<ul>
+		<li>The interfaces are <code>KilnFunctions</code>, <code>KilnFilters</code>, <code>KilnTests</code>, <code>KilnGlobals</code> and <code>KilnTypes</code>.</li>
+		<li>They only describe your project to tools. <code>createKiln</code> doesn't check them against what you register, so keep them next to the code that registers your functions.</li>
+		<li>More than one file can add to them. A plugin can describe the functions it registers, and you add yours.</li>
+		<li>Keep each function's own type. A map typed as <code>Record&lt;string, KilnCallable&gt;</code> tells the editor only that each entry is some function.</li>
+		<li>For a function wrapped in <a href="/docs/api/extending/#request-data"><code>withRender</code></a>, the editor leaves out the first argument, which Kiln passes for you.</li>
+		<li>For a filter, the first argument is the value before the <code>|</code>.</li>
+		<li>Prop types come from <code>KilnTypes</code>. If you pass your type map to the generated <code>Schema</code> instead, add it to <code>KilnTypes</code> too, with <code>interface KilnTypes extends HostTypes {}</code>.</li>
+	</ul>
+
+	<h3>What the editor needs</h3>
+
+	<ul>
+		<li>TypeScript 6 or later installed in your project.</li>
+		<li>A <code>tsconfig.json</code> in the folder holding <code>kiln.json</code> or a folder above it, which includes the file with your declarations. The editor uses the nearest one.</li>
+	</ul>
+
+	<p>Without them, everything else on this page still works. The editor sees changes to TypeScript files when you save them. The first hover or completion after you open a project can take a moment while TypeScript starts.</p>
+
+	<h3>How the editor follows types</h3>
+
+	<p>The editor works out a value's type from where it comes from:</p>
+
+	<table>
+		<thead><tr><th>Value</th><th>Type</th></tr></thead>
+		<tbody>
+			<tr><td>A prop</td><td>Its type in <a href="/docs/tags/props/"><code>props</code></a>, with your types from <code>KilnTypes</code>.</td></tr>
+			<tr><td>A global</td><td>Its type in <code>KilnGlobals</code>.</td></tr>
+			<tr><td>A call to your function or filter</td><td>What it returns. When that is a promise, the value Kiln waits for.</td></tr>
+			<tr><td>A built-in filter</td><td>The type the filter gives, such as an item of the list for <code>first</code>, the same list for <code>sort</code>, and a number for <code>length</code>.</td></tr>
+			<tr><td><code>for item in list</code></td><td>An item of the list, or a value of a hash or map. In <code>for key, value in …</code>, the key is a number for a list and a string for a hash.</td></tr>
+			<tr><td>An arrow function's parameter in <code>map</code>, <code>filter</code> or <code>sort</code></td><td>An item of the list.</td></tr>
+			<tr><td><code>set name = value</code></td><td>The value's type. A <code>set</code> block holds markup.</td></tr>
+			<tr><td><code>a.b</code>, <code>a["b"]</code>, <code>a[0]</code></td><td>The property's or item's type.</td></tr>
+		</tbody>
+	</table>
+
+	<p>When the editor can't tell a value's type, as for an untyped prop or a macro argument, it doesn't guess. You get no property completions for that value.</p>
 {% endblock %}

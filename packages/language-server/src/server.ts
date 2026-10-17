@@ -31,6 +31,8 @@ export const startServer = (connection: Connection): void => {
 
 	let workspaceFolders: string[] = [];
 	let canWatchFiles = false;
+	/** Whether the client takes `LocationLink`s from go to definition. Plain locations lose the clicked range. */
+	let definitionLinks = false;
 	/** Open projects, by the path of their `kiln.json`, or their folder when they have none. */
 	const projects = new Map<string, Promise<Project>>();
 
@@ -45,6 +47,8 @@ export const startServer = (connection: Connection): void => {
 		canWatchFiles =
 			params.capabilities.workspace?.didChangeWatchedFiles
 				?.dynamicRegistration === true;
+		definitionLinks =
+			params.capabilities.textDocument?.definition?.linkSupport === true;
 		return {
 			capabilities: {
 				textDocumentSync: TextDocumentSyncKind.Incremental,
@@ -229,9 +233,14 @@ export const startServer = (connection: Connection): void => {
 		),
 	);
 	connection.onDefinition(
-		withTemplate(null, (open, params) =>
-			definition(open, open.document.offsetAt(params.position)),
-		),
+		withTemplate(null, async (open, params) => {
+			const link = await definition(
+				open,
+				open.document.offsetAt(params.position),
+			);
+			if (!link || definitionLinks) return link && [link];
+			return { uri: link.targetUri, range: link.targetSelectionRange };
+		}),
 	);
 	connection.onDocumentLinks(withTemplate([], (open) => links(open)));
 	connection.onDocumentSymbol(

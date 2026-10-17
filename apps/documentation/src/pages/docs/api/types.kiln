@@ -120,4 +120,6 @@ const kiln = createKiln<undefined, Schema<HostTypes>>({
 	</ul>
 
 	<p>For project-wide defaults, you can still add to the exported <code>KilnTemplates</code> and <code>KilnTypes</code> interfaces through TypeScript module augmentation. Environments without an explicit schema use those defaults. An explicit schema uses only its own template and host-type maps.</p>
+
+	<p>Your editor reads <code>KilnTypes</code> too, along with <code>KilnFunctions</code>, <code>KilnFilters</code>, <code>KilnTests</code> and <code>KilnGlobals</code>, to complete properties and show types in templates. See <a href="/docs/tooling/editors/#types-from-typescript">Types from TypeScript</a>.</p>
 {% endblock %}

@@ -9,7 +9,7 @@ import {
 	type Hover,
 	InsertTextFormat,
 	InsertTextMode,
-	type Location,
+	type LocationLink,
 	MarkupKind,
 	SymbolKind,
 } from "vscode-languageserver";
@@ -382,15 +382,10 @@ export const hover = async (
 	return value ? { contents: markdown(value), range } : null;
 };
 
-const fileLocation = (
-	project: Project,
-	name: string,
-	line = 0,
-	character = 0,
-): Location => ({
-	uri: pathToFileURL(pathOf(project, name)).href,
-	range: { start: { line, character }, end: { line, character } },
-});
+const point = (line: number, character: number) => {
+	const position = { line, character };
+	return { start: position, end: position };
+};
 
 /** The line and column of an offset in another template's text. */
 const positionIn = (text: string, offset: number) => {
@@ -398,28 +393,48 @@ const positionIn = (text: string, offset: number) => {
 	return { line: lines.length - 1, character: (lines.at(-1) as string).length };
 };
 
+/**
+ * Where the name under the cursor is defined. The link's origin is the whole name, so editors underline all of
+ * `"layouts/base"` rather than one word of it. Without `kiln.json`, template names have no root, so only macros in this
+ * template are found.
+ */
 export const definition = async (
 	open: OpenTemplate,
 	offset: number,
-): Promise<Location | null> => {
+): Promise<LocationLink | null> => {
 	const { document, project, name } = open;
 	const text = document.getText();
 	const symbol = symbolAt(text, offset);
 	if (!symbol) return null;
+	const link = (uri: string, range: LocationLink["targetRange"]) => ({
+		originSelectionRange: {
+			start: document.positionAt(symbol.start),
+			end: document.positionAt(symbol.end),
+		},
+		targetUri: uri,
+		targetRange: range,
+		targetSelectionRange: range,
+	});
+	const inTemplate = (template: string, line = 0, character = 0) =>
+		link(pathToFileURL(pathOf(project, template)).href, point(line, character));
 	const load = (template: string) =>
 		project.overlay.get(template) ?? readTemplate(project, template);
-
-	if (symbol.kind === "template") {
-		const target = resolveName(symbol.name, name ?? undefined);
-		return target ? fileLocation(project, target) : null;
-	}
 
 	if (symbol.kind === "function") {
 		const local = macrosIn(text).get(symbol.name);
 		if (local) {
 			const position = document.positionAt(local.start);
-			return { uri: document.uri, range: { start: position, end: position } };
+			return link(document.uri, point(position.line, position.character));
 		}
+	}
+	if (!project.manifest) return null;
+
+	if (symbol.kind === "template") {
+		const target = resolveName(symbol.name, name ?? undefined);
+		return target ? inTemplate(target) : null;
+	}
+
+	if (symbol.kind === "function") {
 		// A macro brought in with `from "x" import name`.
 		for (const match of text.matchAll(
 			/\{%-?\s*from\s+(["'])([^"']*)\1\s+import\s+([^%]*)%\}/g,
@@ -432,12 +447,7 @@ export const definition = async (
 				const macro = source ? macrosIn(source).get(original) : null;
 				if (target && source && macro) {
 					const position = positionIn(source, macro.start);
-					return fileLocation(
-						project,
-						target,
-						position.line,
-						position.character,
-					);
+					return inTemplate(target, position.line, position.character);
 				}
 			}
 		}
@@ -466,7 +476,7 @@ export const definition = async (
 				: null;
 			if (source && block) {
 				const position = positionIn(source, block.index);
-				return fileLocation(project, parent, position.line, position.character);
+				return inTemplate(parent, position.line, position.character);
 			}
 			current = parent;
 		}
