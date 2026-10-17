@@ -5,7 +5,10 @@ import {
 	type Markup,
 	memoryLoader,
 	type TemplateBlock,
+	type RenderAware,
+	type RenderInfo,
 	type TemplateContext,
+	withRender,
 } from "../../src/index.js";
 
 class PostView {
@@ -155,5 +158,22 @@ describe("environment schemas", () => {
 			createKiln<undefined, EmailSchema>({ loader });
 		};
 		expectTypeOf(calls).toBeFunction();
+	});
+});
+
+describe("withRender", () => {
+	test("keeps the function's argument and result types", () => {
+		const document = withRender(
+			(render: RenderInfo<{ locale: string }>, slug: string) =>
+				`${render.state.locale}/${slug}`,
+		);
+		expectTypeOf(document).toEqualTypeOf<
+			RenderAware<{ locale: string }, [slug: string], string>
+		>();
+		createKiln<{ locale: string }>({
+			loader,
+			functions: { document },
+			types: { Post: (value) => value instanceof PostView },
+		});
 	});
 });

@@ -23,6 +23,10 @@
 		"./format": {
 			"types": "./dist/format.d.ts",
 			"import": "./dist/format.js"
+		},
+		"./syntax": {
+			"types": "./dist/syntax.d.ts",
+			"import": "./dist/syntax.js"
 		}
 	},
 	"bin": {

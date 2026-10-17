@@ -4,6 +4,11 @@ import { pathToFileURL } from "node:url";
 import * as bundledKiln from "@lucidkiln/core";
 import type { Diagnostic, Kiln, KilnManifest } from "@lucidkiln/core";
 import * as bundledFormat from "@lucidkiln/core/format";
+import {
+	type FileChange,
+	openTypeScript,
+	type TypeScriptProject,
+} from "./typescript.js";
 
 type KilnModule = Pick<typeof bundledKiln, "createKiln">;
 type FormatModule = Pick<
@@ -34,6 +39,15 @@ export type Project = {
 	format: FormatModule;
 	/** Unsaved text of open templates, by name. The loader reads these before the disk. */
 	overlay: Map<string, string>;
+	/**
+	 * The project's own TypeScript, started the first time it's needed. Null without `kiln.json`, a `tsconfig.json`, or
+	 * TypeScript 6 or later.
+	 */
+	typescript: () => Promise<TypeScriptProject | null>;
+	/** Tells the project's TypeScript, if it started, which TypeScript files changed on disk. */
+	typescriptChanged: (changes: FileChange[]) => void;
+	/** Stops the project's TypeScript, if it started. */
+	close: () => void;
 };
 
 /**
@@ -240,7 +254,23 @@ export const openProject = async (
 		manifest = null;
 		kiln = createKiln(options);
 	}
-	return { manifestPath, manifest, root, kiln, format, overlay };
+	let typescript: Promise<TypeScriptProject | null> | undefined;
+	const folder = manifestPath && manifest ? dirname(manifestPath) : null;
+	return {
+		manifestPath,
+		manifest,
+		root,
+		kiln,
+		format,
+		overlay,
+		typescript: () =>
+			(typescript ??= folder
+				? openTypeScript(folder, warn)
+				: Promise.resolve(null)),
+		typescriptChanged: (changes) =>
+			void typescript?.then((opened) => opened?.changed(changes)),
+		close: () => void typescript?.then((opened) => opened?.close()),
+	};
 };
 
 /** Checks a template's text and returns its own diagnostics. */

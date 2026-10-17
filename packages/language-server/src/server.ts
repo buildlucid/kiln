@@ -5,6 +5,7 @@ import {
 	type Connection,
 	DiagnosticSeverity,
 	DidChangeWatchedFilesNotification,
+	FileChangeType,
 	type TextEdit,
 	TextDocuments,
 	TextDocumentSyncKind,
@@ -82,7 +83,12 @@ export const startServer = (connection: Connection): void => {
 	connection.onInitialized(() => {
 		if (!canWatchFiles) return;
 		void connection.client.register(DidChangeWatchedFilesNotification.type, {
-			watchers: [{ globPattern: "**/*.kiln" }, { globPattern: "**/kiln.json" }],
+			watchers: [
+				{ globPattern: "**/*.kiln" },
+				{ globPattern: "**/kiln.json" },
+				{ globPattern: "**/*.{ts,tsx,mts,cts}" },
+				{ globPattern: "**/tsconfig*.json" },
+			],
 		});
 	});
 
@@ -187,9 +193,40 @@ export const startServer = (connection: Connection): void => {
 		await checkProject(open.project);
 	});
 
+	/** Closes every open project, so the next request opens them again from their settings. */
+	const closeProjects = async () => {
+		const open = [...projects.values()];
+		projects.clear();
+		for (const project of open) (await project).close();
+	};
+
+	connection.onShutdown(closeProjects);
+
 	connection.onDidChangeWatchedFiles(async ({ changes }) => {
-		if (changes.some((change) => change.uri.endsWith("/kiln.json"))) {
-			projects.clear();
+		const isSettings = (uri: string) =>
+			uri.endsWith("/kiln.json") || /\/tsconfig[^/]*\.json$/.test(uri);
+		const typescriptChanges = changes.flatMap((change) =>
+			change.uri.startsWith("file:") && /\.[cm]?tsx?$/.test(change.uri)
+				? [
+						{
+							path: fileURLToPath(change.uri),
+							kind:
+								change.type === FileChangeType.Created
+									? ("created" as const)
+									: change.type === FileChangeType.Deleted
+										? ("deleted" as const)
+										: ("changed" as const),
+						},
+					]
+				: [],
+		);
+		if (typescriptChanges.length > 0) {
+			for (const project of projects.values()) {
+				(await project).typescriptChanged(typescriptChanges);
+			}
+		}
+		if (changes.some((change) => isSettings(change.uri))) {
+			await closeProjects();
 			// Populate every new project before checking callers, so cross-template checks see all unsaved text.
 			for (const document of documents.all()) {
 				const open = await openTemplate(document);
@@ -200,7 +237,8 @@ export const startServer = (connection: Connection): void => {
 			}
 		} else {
 			for (const change of changes) {
-				if (!change.uri.startsWith("file:")) continue;
+				if (!change.uri.startsWith("file:") || !change.uri.endsWith(".kiln"))
+					continue;
 				const path = fileURLToPath(change.uri);
 				const project = await projectFor(path);
 				const name = nameOf(project, path);

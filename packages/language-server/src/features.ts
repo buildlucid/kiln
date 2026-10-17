@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import type { AnalysedProp, Analysis, PropType } from "@lucidkiln/core";
+import type { Expression, Span } from "@lucidkiln/core/syntax";
 import {
 	type CompletionItem,
 	CompletionItemKind,
@@ -32,6 +33,23 @@ import {
 import { type DocKind, docsFor } from "./docs.js";
 import { htmlCompletions, htmlHover } from "./html.js";
 import { listTemplates, pathOf, type Project, resolveName } from "./project.js";
+import {
+	type Binding,
+	bindingAt,
+	bindingsAt,
+	expressionPathAt,
+	type TemplateScopes,
+	templateScopes,
+} from "./scopes.js";
+import {
+	bindingType,
+	describeCallable,
+	expressionType,
+	REGISTRIES,
+	type TypeContext,
+	withTypes,
+} from "./types.js";
+import type { Member, SourceLocation } from "./typescript.js";
 
 /** A template open in the editor, with its project and template name. */
 export type OpenTemplate = {
@@ -102,33 +120,108 @@ const builtinItems = (
 		.map((label) => ({ label, kind, detail: "From your project" })),
 ];
 
-/** Names a template sets or brings into scope before `offset`: loop variables, sets, macros and imports. */
-const localNames = (text: string, offset: number): string[] => {
-	const before = text.slice(0, offset);
-	const names = new Set<string>();
-	for (const match of before.matchAll(
-		/\{%-?\s*for\s+(\w+)(?:\s*,\s*(\w+))?\s+in\b/g,
-	)) {
-		names.add(match[1] as string);
-		if (match[2]) names.add(match[2]);
-	}
-	for (const match of before.matchAll(/\{%-?\s*(?:set|macro)\s+(\w+)/g)) {
-		names.add(match[1] as string);
-	}
-	for (const match of before.matchAll(
-		/\{%-?\s*import\s+["'][^"']*["']\s+as\s+(\w+)/g,
-	)) {
-		names.add(match[1] as string);
-	}
-	for (const match of before.matchAll(
-		/\{%-?\s*from\s+["'][^"']*["']\s+import\s+([^%]*)%\}/g,
-	)) {
-		for (const part of (match[1] as string).split(",")) {
-			const alias = /(\w+)\s*$/.exec(part.trim())?.[1];
-			if (alias) names.add(alias);
+/** Parses a template and finds its variables, with what `expressionType` needs to work out their types. */
+const templateTypes = (
+	open: OpenTemplate,
+	text: string,
+): { scopes: TemplateScopes; context: TypeContext } => {
+	const manifest = open.project.manifest;
+	const scopes = templateScopes(
+		text,
+		(name) => name in TESTS || (manifest?.tests.includes(name) ?? false),
+	);
+	const macros = new Set([
+		...macrosIn(text).keys(),
+		...scopes.bindings
+			.filter((binding) => binding.source.kind === "import")
+			.map((binding) => binding.name),
+	]);
+	return {
+		scopes,
+		context: {
+			scopes,
+			functions: manifest?.functions ?? [],
+			filters: manifest?.filters ?? [],
+			macros,
+		},
+	};
+};
+
+/** The property under the cursor in `a.b`, with the expression it's read from. */
+const propertyAt = (
+	scopes: TemplateScopes,
+	text: string,
+	offset: number,
+): { name: string; object: Expression; span: Span } | null => {
+	const path = expressionPathAt(scopes.ast, offset);
+	for (let index = path.length - 1; index >= 0; index--) {
+		const node = path[index] as Expression;
+		if (node.type !== "Member") continue;
+		const { property } = node;
+		if (
+			property.type === "Literal" &&
+			typeof property.value === "string" &&
+			offset >= property.span.start &&
+			offset <= property.span.end &&
+			text[property.span.start - 1] === "."
+		) {
+			return { name: property.value, object: node.object, span: property.span };
 		}
 	}
-	return [...names];
+	return null;
+};
+
+/** A member's doc comment and tags, as Markdown. */
+const memberDocs = (member: Member) =>
+	[
+		member.docs,
+		...member.tags.map((tag) => `*@${tag.name}* ${tag.text}`.trim()),
+	]
+		.filter(Boolean)
+		.join("\n\n");
+
+/** The properties TypeScript finds on the value of `object`. Empty without TypeScript. */
+const membersOf = async (
+	open: OpenTemplate,
+	object: Expression,
+	context: TypeContext,
+): Promise<Member[]> => {
+	const typescript = await open.project.typescript();
+	if (!typescript) return [];
+	const type = expressionType(object, context);
+	return (
+		withTypes(typescript, { Value: `Members<${type}>` }, (read) =>
+			read.members("Value"),
+		) ?? []
+	);
+};
+
+/** A function, filter, test or global the project describes in TypeScript. */
+const registered = async (
+	open: OpenTemplate,
+	kind: keyof typeof REGISTRIES,
+	name: string,
+): Promise<Member | null> => {
+	const typescript = await open.project.typescript();
+	if (!typescript) return null;
+	return (
+		withTypes(typescript, { Registry: REGISTRIES[kind] }, (read) =>
+			read.members("Registry").find((member) => member.name === name),
+		) ?? null
+	);
+};
+
+const BINDING_NOTES: Record<Binding["source"]["kind"], string> = {
+	prop: "A prop of this template.",
+	rest: "The variables passed to this template that it doesn't declare.",
+	set: "Set in this template.",
+	capture: "Set in this template, from a `set` block.",
+	item: "A loop variable.",
+	key: "A loop variable.",
+	arrow: "An arrow function's parameter.",
+	with: "From the `with` tag.",
+	param: "A macro argument.",
+	import: "Imported macros.",
 };
 
 export const complete = async (
@@ -205,6 +298,26 @@ export const complete = async (
 				CompletionItemKind.Function,
 				manifest?.tests ?? [],
 			);
+		case "member": {
+			// A placeholder name lets the template parse while nothing follows the dot yet.
+			const patched =
+				context.start === offset
+					? `${text.slice(0, offset)}__kiln__${text.slice(offset)}`
+					: text;
+			const types = templateTypes(open, patched);
+			const property = propertyAt(types.scopes, patched, context.start);
+			if (!property) return [];
+			const members = await membersOf(open, property.object, types.context);
+			return members.map((member) => ({
+				label: member.name,
+				kind: CompletionItemKind.Property,
+				detail: `${member.name}${member.optional ? "?" : ""}: ${member.type}`,
+				documentation: memberDocs(member)
+					? markdown(memberDocs(member))
+					: undefined,
+				textEdit: { range: replace(), newText: member.name },
+			}));
+		}
 		case "loop":
 			return Object.entries(LOOP_PROPERTIES).map(([label, description]) => ({
 				label,
@@ -223,10 +336,12 @@ export const complete = async (
 		}
 		case "expression": {
 			const analysis = name ? await analyse(project, name, text) : null;
+			const { scopes } = templateTypes(open, text);
 			const variables = new Set([
 				...(analysis?.props.map((prop) => prop.name) ?? []),
 				...(analysis?.rest ? [analysis.rest] : []),
-				...localNames(text, offset),
+				...bindingsAt(scopes, offset).map((binding) => binding.name),
+				...macrosIn(text).keys(),
 				...(manifest?.globals ?? []),
 			]);
 			const props = new Map(analysis?.props.map((prop) => [prop.name, prop]));
@@ -263,7 +378,8 @@ const macrosIn = (text: string) =>
 		]),
 	);
 
-const codeBlock = (code: string) => `\`\`\`kiln\n${code}\n\`\`\``;
+const codeBlock = (code: string, language = "kiln") =>
+	`\`\`\`${language}\n${code}\n\`\`\``;
 
 /** A hover's parts, such as a signature and its docs, with a rule between each. Missing parts are left out. */
 const sections = (...parts: (string | null | undefined)[]) =>
@@ -273,6 +389,46 @@ const sections = (...parts: (string | null | undefined)[]) =>
 const tagSyntax = (snippet: string) =>
 	`{% ${snippet.replace(/\$\{\d+:([^}]*)\}/g, "$1").replace(/\$\{?\d+\}?/g, "…")}`;
 
+/** A registered function, filter or test as the project's TypeScript describes it: its signature, then its docs. */
+const describedCallable = async (
+	open: OpenTemplate,
+	kind: "function" | "filter" | "test",
+	name: string,
+) => {
+	const typescript = await open.project.typescript();
+	const described = typescript
+		? describeCallable(typescript, kind, name)
+		: null;
+	return described
+		? sections(
+				codeBlock(described.signature, "ts"),
+				memberDocs(described.member),
+			)
+		: null;
+};
+
+/** The variable a name refers to: the one it declares when the cursor is on a declaration, or the one in scope. */
+const bindingFor = (
+	scopes: TemplateScopes,
+	symbol: { name: string; start: number },
+) =>
+	scopes.bindings.find(
+		(binding) =>
+			binding.name === symbol.name &&
+			symbol.start >= binding.definition.start &&
+			symbol.start < binding.definition.end,
+	) ?? bindingAt(scopes, symbol.name, symbol.start);
+
+/** The property under the cursor in `a.b`, and what TypeScript knows about it. */
+const memberAt = async (open: OpenTemplate, text: string, offset: number) => {
+	const types = templateTypes(open, text);
+	const property = propertyAt(types.scopes, text, offset);
+	if (!property) return null;
+	const members = await membersOf(open, property.object, types.context);
+	const member = members.find((item) => item.name === property.name);
+	return member ? { member, span: property.span } : null;
+};
+
 export const hover = async (
 	open: OpenTemplate,
 	offset: number,
@@ -280,17 +436,33 @@ export const hover = async (
 	const { document, project, name } = open;
 	const text = document.getText();
 	const symbol = symbolAt(text, offset);
+	const rangeOf = (span: Span) => ({
+		start: document.positionAt(span.start),
+		end: document.positionAt(span.end),
+	});
 	if (!symbol) {
-		return enclosingDelimiter(text, offset)
-			? null
-			: htmlHover(document, offset);
+		if (!enclosingDelimiter(text, offset)) return htmlHover(document, offset);
+		const found = await memberAt(open, text, offset);
+		if (!found) return null;
+		const { member } = found;
+		return {
+			contents: markdown(
+				sections(
+					codeBlock(
+						`${member.name}${member.optional ? "?" : ""}: ${member.type}`,
+						"ts",
+					),
+					memberDocs(member),
+				),
+			),
+			range: rangeOf(found.span),
+		};
 	}
-	const range = {
-		start: document.positionAt(symbol.start),
-		end: document.positionAt(symbol.end),
-	};
 	const fromProject = (names: readonly string[] | undefined, what: string) =>
 		names?.includes(symbol.name) ? `A ${what} your project registers.` : null;
+	/** Whether the project registers a name, which replaces a built-in with the same name. */
+	const registers = (names: readonly string[] | undefined) =>
+		names?.includes(symbol.name) ?? false;
 	let value: string | null = null;
 
 	/** A built-in's signature, then its docs. */
@@ -311,16 +483,20 @@ export const hover = async (
 		}
 		case "filter": {
 			const doc = FILTERS[symbol.name];
-			value = doc
-				? builtin(`|${doc.signature}`, "filters")
-				: fromProject(project.manifest?.filters, "filter");
+			value =
+				doc && !registers(project.manifest?.filters)
+					? builtin(`|${doc.signature}`, "filters")
+					: ((await describedCallable(open, "filter", symbol.name)) ??
+						fromProject(project.manifest?.filters, "filter"));
 			break;
 		}
 		case "test": {
 			const doc = TESTS[symbol.name];
-			value = doc
-				? builtin(`is ${doc.signature}`, "tests")
-				: fromProject(project.manifest?.tests, "test");
+			value =
+				doc && !registers(project.manifest?.tests)
+					? builtin(`is ${doc.signature}`, "tests")
+					: ((await describedCallable(open, "test", symbol.name)) ??
+						fromProject(project.manifest?.tests, "test"));
 			break;
 		}
 		case "loop": {
@@ -334,25 +510,52 @@ export const hover = async (
 			const macro = macrosIn(text).get(symbol.name);
 			const doc = FUNCTIONS[symbol.name];
 			if (macro) value = codeBlock(`macro ${symbol.name}(${macro.params})`);
-			else if (doc) value = builtin(doc.signature, "functions");
-			else value = fromProject(project.manifest?.functions, "function");
+			else if (doc && !registers(project.manifest?.functions))
+				value = builtin(doc.signature, "functions");
+			else
+				value =
+					(await describedCallable(open, "function", symbol.name)) ??
+					fromProject(project.manifest?.functions, "function");
 			break;
 		}
 		case "variable": {
-			const analysis = name ? await analyse(project, name, text) : null;
-			const prop = analysis?.props.find((item) => item.name === symbol.name);
-			if (prop)
+			const types = templateTypes(open, text);
+			const binding = bindingFor(types.scopes, symbol);
+			if (binding?.source.kind === "prop" || binding?.source.kind === "rest") {
+				const analysis = name ? await analyse(project, name, text) : null;
+				const prop = analysis?.props.find((item) => item.name === symbol.name);
 				value = sections(
-					codeBlock(describeProp(prop)),
-					"A prop of this template.",
+					codeBlock(prop ? describeProp(prop) : `...${symbol.name}`),
+					BINDING_NOTES[binding.source.kind],
 				);
-			else if (symbol.name === analysis?.rest) {
+			} else if (binding) {
+				const typescript = await project.typescript();
+				const type = typescript
+					? withTypes(
+							typescript,
+							{ Value: bindingType(binding.source, types.context) },
+							(read) => read.describe("Value"),
+						)
+					: null;
 				value = sections(
-					codeBlock(`...${symbol.name}`),
-					"The variables passed to this template that it doesn't declare.",
+					codeBlock(
+						type && type !== "unknown"
+							? `${symbol.name}: ${type}`
+							: symbol.name,
+						"ts",
+					),
+					BINDING_NOTES[binding.source.kind],
 				);
-			} else if (project.manifest?.globals.includes(symbol.name)) {
-				value = "A global your project provides.";
+			} else {
+				const global = await registered(open, "global", symbol.name);
+				value = global
+					? sections(
+							codeBlock(`${symbol.name}: ${global.type}`, "ts"),
+							memberDocs(global),
+						)
+					: project.manifest?.globals.includes(symbol.name)
+						? "A global your project provides."
+						: null;
 			}
 			break;
 		}
@@ -379,7 +582,7 @@ export const hover = async (
 			value = lines.join("\n\n");
 		}
 	}
-	return value ? { contents: markdown(value), range } : null;
+	return value ? { contents: markdown(value), range: rangeOf(symbol) } : null;
 };
 
 const point = (line: number, character: number) => {
@@ -395,8 +598,11 @@ const positionIn = (text: string, offset: number) => {
 
 /**
  * Where the name under the cursor is defined. The link's origin is the whole name, so editors underline all of
- * `"layouts/base"` rather than one word of it. Without `kiln.json`, template names have no root, so only macros in this
- * template are found.
+ * `"layouts/base"` rather than one word of it.
+ *
+ * Variables go to where the template declares them. Without `kiln.json`, template names have no root, so nothing in
+ * other templates is found. With the project's TypeScript, its functions, filters, tests, globals and the properties of
+ * typed values go to their TypeScript source.
  */
 export const definition = async (
 	open: OpenTemplate,
@@ -404,27 +610,73 @@ export const definition = async (
 ): Promise<LocationLink | null> => {
 	const { document, project, name } = open;
 	const text = document.getText();
-	const symbol = symbolAt(text, offset);
-	if (!symbol) return null;
-	const link = (uri: string, range: LocationLink["targetRange"]) => ({
+	const link = (
+		origin: Span,
+		uri: string,
+		range: LocationLink["targetRange"],
+	): LocationLink => ({
 		originSelectionRange: {
-			start: document.positionAt(symbol.start),
-			end: document.positionAt(symbol.end),
+			start: document.positionAt(origin.start),
+			end: document.positionAt(origin.end),
 		},
 		targetUri: uri,
 		targetRange: range,
 		targetSelectionRange: range,
 	});
+	const inSource = (origin: Span, location: SourceLocation) =>
+		link(
+			origin,
+			pathToFileURL(location.path).href,
+			point(location.line, location.character),
+		);
+	const symbol = symbolAt(text, offset);
+	if (!symbol) {
+		if (!enclosingDelimiter(text, offset)) return null;
+		const found = await memberAt(open, text, offset);
+		return found?.member.location
+			? inSource(found.span, found.member.location)
+			: null;
+	}
 	const inTemplate = (template: string, line = 0, character = 0) =>
-		link(pathToFileURL(pathOf(project, template)).href, point(line, character));
+		link(
+			symbol,
+			pathToFileURL(pathOf(project, template)).href,
+			point(line, character),
+		);
 	const load = (template: string) =>
 		project.overlay.get(template) ?? readTemplate(project, template);
+	/** Goes to a function, filter, test or global in the project's TypeScript. */
+	const inTypeScript = async (kind: keyof typeof REGISTRIES) => {
+		const member = await registered(open, kind, symbol.name);
+		return member?.location ? inSource(symbol, member.location) : null;
+	};
 
+	// A block name goes to the same block in the layout this template extends.
+	const blockName =
+		symbol.kind === "variable" &&
+		/\{%-?\s*block\s+$/.test(
+			text.slice(Math.max(0, symbol.start - 40), symbol.start),
+		);
+
+	if (symbol.kind === "variable" && !blockName) {
+		const binding = bindingFor(templateTypes(open, text).scopes, symbol);
+		if (binding) {
+			return link(symbol, document.uri, {
+				start: document.positionAt(binding.definition.start),
+				end: document.positionAt(binding.definition.end),
+			});
+		}
+		return inTypeScript("global");
+	}
 	if (symbol.kind === "function") {
 		const local = macrosIn(text).get(symbol.name);
 		if (local) {
 			const position = document.positionAt(local.start);
-			return link(document.uri, point(position.line, position.character));
+			return link(
+				symbol,
+				document.uri,
+				point(position.line, position.character),
+			);
 		}
 	}
 	if (!project.manifest) return null;
@@ -432,6 +684,9 @@ export const definition = async (
 	if (symbol.kind === "template") {
 		const target = resolveName(symbol.name, name ?? undefined);
 		return target ? inTemplate(target) : null;
+	}
+	if (symbol.kind === "filter" || symbol.kind === "test") {
+		return inTypeScript(symbol.kind);
 	}
 
 	if (symbol.kind === "function") {
@@ -451,14 +706,10 @@ export const definition = async (
 				}
 			}
 		}
-		return null;
+		return inTypeScript("function");
 	}
 
-	// A block name goes to the same block in the layout this template extends.
-	const tag = /\{%-?\s*block\s+$/.exec(
-		text.slice(Math.max(0, symbol.start - 40), symbol.start),
-	);
-	if (symbol.kind === "variable" && tag && name) {
+	if (blockName && name) {
 		let current = name;
 		for (let depth = 0; depth < 20; depth++) {
 			const analysis = await analyse(

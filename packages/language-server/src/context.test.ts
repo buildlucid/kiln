@@ -40,7 +40,9 @@ describe("cursorContext", () => {
 		expect(at("{{ a || b‸")).toMatchObject({ kind: "expression" });
 		expect(at("{% if a is not em‸")).toMatchObject({ kind: "test", start: 15 });
 		expect(at("{{ loop.ind‸")).toMatchObject({ kind: "loop", start: 8 });
-		expect(at("{{ post.ti‸")).toBeNull();
+		expect(at("{{ post.ti‸")).toMatchObject({ kind: "member", start: 8 });
+		expect(at("{{ posts[0].‸")).toMatchObject({ kind: "member", start: 12 });
+		expect(at("{{ 1.‸")).toBeNull();
 	});
 
 	test("finds template names in strings", () => {

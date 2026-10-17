@@ -8,12 +8,16 @@ import { BLOCK_TAGS } from "./builtins.js";
  * - `filter`, `test`: a name after `|`, or after `is` or `is not`.
  * - `loop`: a property after `loop.`.
  * - `prop`: a key in the `with { }` hash of an `include`, `component` or `island` of `template`.
+ * - `member`: a property name after a dot, such as `page.title`.
  * - `expression`: a variable or function name.
  */
 export type CursorContext =
 	| { kind: "tag"; start: number; end: number | null; open: string | null }
 	| { kind: "template"; start: number; prefix: string }
-	| { kind: "filter" | "test" | "loop" | "expression"; start: number }
+	| {
+			kind: "filter" | "test" | "loop" | "member" | "expression";
+			start: number;
+	  }
 	| { kind: "prop"; start: number; template: string };
 
 /** Where the output or tag around `offset` opens, and its kind. Null outside one, or inside a comment. */
@@ -96,6 +100,10 @@ export const cursorContext = (
 		);
 	if (props && /(?:^|,)\s*$/.test(props[3] as string)) {
 		return { kind: "prop", start, template: props[2] as string };
+	}
+	// A dot after a name, `]` or `)`, but not a decimal point.
+	if (/[\w\])]\??\.$/.test(head) && !/(?:^|[^\w$])\d+\.$/.test(head)) {
+		return { kind: "member", start };
 	}
 	if (/[.\w]$/.test(head) || /["']$/.test(head)) return null;
 	return { kind: "expression", start };

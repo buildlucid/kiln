@@ -84,6 +84,32 @@ export type Loader = {
 export interface KilnTypes {}
 
 /**
+ * TypeScript types for the functions a project registers, which editors read to show types and complete properties.
+ * Empty until the host adds to it. `createKiln` doesn't check it against what you register.
+ *
+ * ```ts
+ * type Functions = typeof functions;
+ * declare module "@lucidkiln/core" {
+ * 	interface KilnFunctions extends Functions {}
+ * }
+ * ```
+ */
+// oxlint-disable-next-line typescript/no-empty-interface, typescript/no-empty-object-type -- filled in by declaration merging
+export interface KilnFunctions {}
+
+/** Like `KilnFunctions`, for filters. A filter's first argument is the value before the `|`. */
+// oxlint-disable-next-line typescript/no-empty-interface, typescript/no-empty-object-type -- filled in by declaration merging
+export interface KilnFilters {}
+
+/** Like `KilnFunctions`, for tests. */
+// oxlint-disable-next-line typescript/no-empty-interface, typescript/no-empty-object-type -- filled in by declaration merging
+export interface KilnTests {}
+
+/** Like `KilnFunctions`, for globals. */
+// oxlint-disable-next-line typescript/no-empty-interface, typescript/no-empty-object-type -- filled in by declaration merging
+export interface KilnGlobals {}
+
+/**
  * Project-wide template defaults, keyed by name without `.kiln`. An explicit schema on `createKiln` replaces these.
  */
 // oxlint-disable-next-line typescript/no-empty-interface, typescript/no-empty-object-type -- filled in by declaration merging
@@ -139,10 +165,17 @@ export type TemplateBlock<
 
 const renderAware: unique symbol = Symbol("kiln.renderAware");
 
-/** A host function that receives `RenderInfo` before its arguments. Create it with `withRender`. */
-export type RenderAware<State> = {
+/**
+ * A host function that receives `RenderInfo` before its arguments. Create it with `withRender`. `Args` and `Result` keep
+ * the function's own types, so editors can show them.
+ */
+export type RenderAware<
+	State,
+	Args extends unknown[] = never,
+	Result = unknown,
+> = {
 	readonly [renderAware]: true;
-	readonly call: (render: RenderInfo<State>, ...args: never) => unknown;
+	readonly call: (render: RenderInfo<State>, ...args: Args) => Result;
 };
 
 /** A function, filter or test a host registers. Parameter types are the host's to declare. */
@@ -261,9 +294,9 @@ export type Kiln<
  */
 export const withRender = <State, Args extends unknown[], Result>(
 	fn: (render: RenderInfo<State>, ...args: Args) => Result,
-): RenderAware<State> => ({
+): RenderAware<State, Args, Result> => ({
 	[renderAware]: true,
-	call: fn as unknown as RenderAware<State>["call"],
+	call: fn,
 });
 
 const DEFAULT_LIMITS: Limits = {
