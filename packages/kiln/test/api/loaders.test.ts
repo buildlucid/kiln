@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	realpathSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, parse, relative, sep } from "node:path";
 import { describe, expect, test, vi } from "vite-plus/test";
@@ -189,17 +195,50 @@ describe("fileLoader", () => {
 		expect(await fileLoader({ root: root + sep }).load("a.kiln")).toBe("a");
 		expect(
 			await fileLoader({ root: parse(root).root }).load(
-				relative(parse(root).root, join(root, "a.kiln")),
+				relative(parse(root).root, join(realpathSync(root), "a.kiln")),
 			),
 		).toBe("a");
 	});
 
+	test("skips symlinks to files, folders, hidden files and cycles", async () => {
+		const root = mkdtempSync(join(tmpdir(), "kiln-"));
+		const outside = mkdtempSync(join(tmpdir(), "kiln-outside-"));
+		writeFileSync(join(root, "page.kiln"), "inside");
+		writeFileSync(join(root, ".env"), "hidden");
+		writeFileSync(join(outside, "page.kiln"), "outside");
+		symlinkSync(join(root, "page.kiln"), join(root, "alias.kiln"));
+		symlinkSync(join(root, ".env"), join(root, "secret.kiln"));
+		symlinkSync(join(outside, "page.kiln"), join(root, "external.kiln"));
+		symlinkSync(outside, join(root, "folder"), "dir");
+		symlinkSync("loop.kiln", join(root, "loop.kiln"));
+		const loader = fileLoader({ root });
+		for (const name of [
+			"alias.kiln",
+			"secret.kiln",
+			"external.kiln",
+			"folder/page.kiln",
+			"loop.kiln",
+		]) {
+			expect(await loader.load(name)).toBeNull();
+		}
+		expect(await loader.list()).toEqual(["page.kiln"]);
+	});
+
+	test("the configured root itself can be a symlink", async () => {
+		const root = mkdtempSync(join(tmpdir(), "kiln-"));
+		mkdirSync(join(root, "actual"));
+		writeFileSync(join(root, "actual/page.kiln"), "ok");
+		symlinkSync(join(root, "actual"), join(root, "templates"), "dir");
+		const loader = fileLoader({ root: join(root, "templates") });
+		expect(await loader.load("page.kiln")).toBe("ok");
+		expect(await loader.list()).toEqual(["page.kiln"]);
+	});
+
 	test("other read errors name the template, not the path on disk", async () => {
 		const root = mkdtempSync(join(tmpdir(), "kiln-"));
-		// A link to itself fails with ELOOP, whoever runs the test.
-		symlinkSync("loop.kiln", join(root, "loop.kiln"));
-		await expect(fileLoader({ root }).load("loop.kiln")).rejects.toThrow(
-			/^Could not read template "loop\.kiln" \(ELOOP\)$/,
+		const name = "x".repeat(300) + ".kiln";
+		await expect(fileLoader({ root }).load(name)).rejects.toThrow(
+			`Could not read template "${name}" (ENAMETOOLONG)`,
 		);
 	});
 

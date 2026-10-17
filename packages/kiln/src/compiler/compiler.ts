@@ -1924,7 +1924,7 @@ class Compiler {
 				? value.map((item) => part(run, item))
 				: [part(run, value)];
 			const { locale, timeZone, islands } = run.state;
-			let key = `${templateName}|${locale}|${timeZone}|${JSON.stringify(parts)}`;
+			let key = `${JSON.stringify(run.state.env.cacheNamespace)}|${templateName}|${locale}|${timeZone}|${JSON.stringify(parts)}`;
 			if (out.indent !== "") {
 				key += `|indent|${JSON.stringify([out.indent, out.inline])}`;
 			}

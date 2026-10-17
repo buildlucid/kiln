@@ -32,11 +32,17 @@ await writeFile("src/kiln.d.ts", types);
 
 	<h2>What it checks</h2>
 
-	<p>Once the file exists, <code>render</code> and <code>renderBlock</code> use it:</p>
+	<p>The file exports a <code>Schema</code> type. Pass it as the second type argument to <code>createKiln</code>. The first argument is your request state, or <code>undefined</code> when you have none:</p>
 
 	{% apply highlight("ts") %}
 		{% verbatim %}
 // pages/post.kiln starts with {% props post: Post, related: Post[] = [] %}
+import type { Schema } from "./kiln.js";
+
+const kiln = createKiln<undefined, Schema<{ Post: PostView }>>({
+	loader,
+	types: { Post: (value) => value instanceof PostView },
+});
 
 await kiln.render("pages/post", { post }); // OK
 await kiln.render("pages/post", { pots: post }); // Type error: "pots" isn't a prop
@@ -48,6 +54,8 @@ await kiln.renderBlock("pages/post", "sidebar", { post }); // Type error: no suc
 	{% endapply %}
 
 	<p>Names are checked the same way with or without <code>.kiln</code>. A name that isn't in the file, such as one built at runtime, still works. Kiln can't know which template it is, so it accepts any data.</p>
+
+	<p>Each environment has its own schema. Generate a file for each template root and import its <code>Schema</code> under a different name, such as <code>SiteSchema</code> and <code>EmailSchema</code>. They can describe the same template name with different props without affecting each other. A schema applies to <code>render</code>, <code>renderBlock</code> and <code>renderStream</code>.</p>
 
 	<h2>How the data type is worked out</h2>
 
@@ -83,21 +91,18 @@ await kiln.renderBlock("pages/post", "sidebar", { post }); // Type error: no suc
 	<p>A prop type such as <code>Post</code> is one your app defines. Give it two things:</p>
 
 	<ul>
-		<li>A TypeScript type, by adding it to <code>KilnTypes</code>.</li>
+		<li>A TypeScript type, by passing a map of your types to the generated <code>Schema</code>.</li>
 		<li>A check that runs when a template receives the value, in the <code>types</code> option.</li>
 	</ul>
 
 	{% apply highlight("ts") %}
 		{% verbatim %}
 import { createKiln } from "@lucidkiln/core";
+import type { Schema } from "./kiln.js";
 
-declare module "@lucidkiln/core" {
-	interface KilnTypes {
-		Post: PostView;
-	}
-}
+type HostTypes = { Post: PostView };
 
-const kiln = createKiln({
+const kiln = createKiln<undefined, Schema<HostTypes>>({
 	loader,
 	types: {
 		Post: (value) => value instanceof PostView,
@@ -109,8 +114,10 @@ const kiln = createKiln({
 	<ul>
 		<li>Type names start with a capital letter, followed by letters, digits or underscores.</li>
 		<li>A check gets the value and returns true when it fits. It must not be async.</li>
-		<li>Once <code>KilnTypes</code> lists a type, TypeScript makes sure <code>types</code> has a check for it, and that the check narrows to the right type.</li>
+		<li>When the schema lists a host type, TypeScript requires a check for it that narrows to the right type.</li>
 		<li>Checks run in strict mode only, like every other prop check. See <a href="/docs/tags/props/#how-values-are-checked">How values are checked</a>.</li>
-		<li>A type with a check but no <code>KilnTypes</code> entry is <code>unknown</code> in the generated file.</li>
+		<li>A type with a check but no entry in your type map is <code>unknown</code> in the generated file.</li>
 	</ul>
+
+	<p>For project-wide defaults, you can still add to the exported <code>KilnTemplates</code> and <code>KilnTypes</code> interfaces through TypeScript module augmentation. Environments without an explicit schema use those defaults. An explicit schema uses only its own template and host-type maps.</p>
 {% endblock %}

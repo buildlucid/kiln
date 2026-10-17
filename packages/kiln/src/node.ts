@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { lstat, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import type { Loader } from "./environment.js";
 
@@ -17,9 +17,9 @@ export type FileLoaderOptions = {
 /**
  * A loader that reads templates from disk. Node only; use `memoryLoader` on Cloudflare Workers.
  *
- * It never reads files or folders whose names start with a dot, and `list` skips them too. A name that is missing, is a
- * folder or holds a null character loads as null, so Kiln reports `missing-template`. Other errors name the template
- * and the error code, never the path on disk.
+ * It skips dot files and folders and symlinks below the root, without entering them. The root itself may be a symlink.
+ * A name that is missing, is a folder or holds a null character loads as null, so Kiln reports `missing-template`.
+ * Other errors name the template and the error code, never the path on disk.
  *
  * ```ts
  * const kiln = createKiln({ loader: fileLoader({ root: "src/site" }) });
@@ -38,6 +38,12 @@ export const fileLoader = (
 			// Kiln never resolves names above the root, but check anyway.
 			if (!path.startsWith(prefix)) return null;
 			try {
+				// Check every component: rejecting only a symlink at the final file still follows linked folders.
+				let current = root;
+				for (const part of relative(root, path).split(sep)) {
+					current = join(current, part);
+					if ((await lstat(current)).isSymbolicLink()) return null;
+				}
 				return await readFile(path, "utf8");
 			} catch (error) {
 				const code = (error as { code?: unknown }).code;
@@ -48,17 +54,19 @@ export const fileLoader = (
 			}
 		},
 		list: async () => {
-			const entries = await readdir(root, {
-				recursive: true,
-				withFileTypes: true,
-			});
-			return entries.flatMap((entry) => {
-				if (!entry.isFile()) return [];
-				const name = relative(root, join(entry.parentPath, entry.name))
-					.split(sep)
-					.join("/");
-				return isHidden(name) ? [] : [name];
-			});
+			const names: string[] = [];
+			const visit = async (folder: string, from: string): Promise<void> => {
+				for (const entry of await readdir(folder, { withFileTypes: true })) {
+					if (entry.name.startsWith(".")) continue;
+					const name = from + entry.name;
+					if (entry.isFile()) names.push(name);
+					else if (entry.isDirectory()) {
+						await visit(join(folder, entry.name), name + "/");
+					}
+				}
+			};
+			await visit(root, "");
+			return names.sort();
 		},
 	};
 };

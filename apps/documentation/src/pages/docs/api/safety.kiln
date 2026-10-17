@@ -45,6 +45,8 @@ const kiln = createKiln({
 
 	<p>The limits count steps, output and nesting, but not the memory a template keeps alive, such as a list holding many long strings. Rely on your platform's memory limits as well. On Cloudflare Workers, the platform's CPU limit is a final backstop.</p>
 
+	<p>Your host functions are responsible for bounding concurrent I/O and for timeouts on their own work. Async <code>map</code> and <code>filter</code> start every callback at once, so use shared pools or queues for calls to databases and APIs. See <a href="/docs/language/async-data/#async-in-filters">Async in filters</a>.</p>
+
 	<h2>Other safeguards</h2>
 
 	<ul>
@@ -53,6 +55,6 @@ const kiln = createKiln({
 		<li>Templates can't compile other templates from strings.</li>
 		<li>Kiln never generates code while rendering. <a href="/docs/api/precompiling/">Precompiled templates</a> are JavaScript you build and ship, so only precompile templates you trust.</li>
 		<li><code>dump</code> outputs nothing unless you turn on <code>debug</code>.</li>
-		<li>A failed render returns no partial output.</li>
+		<li>A failed <code>render</code> or <code>renderBlock</code> returns no partial output. A <a href="/docs/api/streaming/">stream</a> may already have sent output when it fails.</li>
 	</ul>
 {% endblock %}

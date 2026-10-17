@@ -1,7 +1,7 @@
 {
 	"name": "kiln",
 	"displayName": "Kiln",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"private": true,
 	"type": "module",
 	"description": "Kiln templates: highlighting, formatting, errors as you type, completions and go to definition.",
@@ -75,7 +75,6 @@
 		}
 	},
 	"scripts": {
-		"build": "tsc --noEmit && vp pack && cp ../zed/snippets/kiln.json dist/snippets.json",
 		"package": "vsce package --no-dependencies"
 	},
 	"devDependencies": {

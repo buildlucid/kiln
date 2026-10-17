@@ -1,4 +1,4 @@
-import { environmentOf, type Kiln } from "./environment.js";
+import { environmentOf, type Kiln, type KilnSchema } from "./environment.js";
 import { type HtmlChecks, htmlChecksOption } from "./html/index.js";
 import { variableNames } from "./runtime/scope.js";
 import type { CallableEntry } from "./runtime/types.js";
@@ -29,8 +29,8 @@ const hostNames = (registry: ReadonlyMap<string, CallableEntry>) =>
  * await writeFile("kiln.json", generateManifest(kiln, { root: "src/templates" }));
  * ```
  */
-export const generateManifest = <State>(
-	kiln: Kiln<State>,
+export const generateManifest = <State, Schema extends KilnSchema>(
+	kiln: Kiln<State, Schema>,
 	options: { root: string },
 ): string => {
 	const env = environmentOf(kiln);

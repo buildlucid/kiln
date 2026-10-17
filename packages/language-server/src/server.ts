@@ -1,4 +1,4 @@
-import { dirname } from "node:path";
+import { dirname, isAbsolute, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
@@ -86,7 +86,12 @@ export const startServer = (connection: Connection): void => {
 	const projectFor = async (path: string): Promise<Project> => {
 		const folder =
 			workspaceFolders
-				.filter((candidate) => path.startsWith(candidate))
+				.filter((candidate) => {
+					const name = relative(candidate, path);
+					return (
+						name !== ".." && !name.startsWith(".." + sep) && !isAbsolute(name)
+					);
+				})
 				.sort((a, b) => b.length - a.length)[0] ?? null;
 		const manifestPath = await findManifest(dirname(path), folder);
 		const fallbackRoot = folder ?? dirname(path);
@@ -181,6 +186,14 @@ export const startServer = (connection: Connection): void => {
 	connection.onDidChangeWatchedFiles(async ({ changes }) => {
 		if (changes.some((change) => change.uri.endsWith("/kiln.json"))) {
 			projects.clear();
+			// Populate every new project before checking callers, so cross-template checks see all unsaved text.
+			for (const document of documents.all()) {
+				const open = await openTemplate(document);
+				if (open?.name) {
+					open.project.overlay.set(open.name, document.getText());
+					open.project.kiln.invalidate(open.name);
+				}
+			}
 		} else {
 			for (const change of changes) {
 				if (!change.uri.startsWith("file:")) continue;

@@ -13,3 +13,4 @@ coverage
 .cloudflare/
 .wrangler/
 AGENTS.md
+RELEASING.md

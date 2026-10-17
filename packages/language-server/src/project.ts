@@ -68,28 +68,22 @@ export const pathOf = (project: Project, name: string): string =>
 
 /** Every template under the root, skipping dot folders and node_modules. */
 export const listTemplates = async (project: Project): Promise<string[]> => {
-	try {
-		const entries = await readdir(project.root, {
-			recursive: true,
-			withFileTypes: true,
-		});
-		return entries
-			.filter((entry) => entry.isFile() && entry.name.endsWith(".kiln"))
-			.map((entry) =>
-				relative(project.root, join(entry.parentPath, entry.name))
-					.split(sep)
-					.join("/"),
-			)
-			.filter(
-				(name) =>
-					!name
-						.split("/")
-						.some((part) => part.startsWith(".") || part === "node_modules"),
-			)
-			.sort();
-	} catch {
-		return [];
-	}
+	const names: string[] = [];
+	const visit = async (folder: string, from: string): Promise<void> => {
+		// An unreadable folder should not hide templates found elsewhere in the project.
+		const entries = await readdir(folder, { withFileTypes: true }).catch(
+			() => [],
+		);
+		for (const entry of entries) {
+			if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+			const name = from + entry.name;
+			if (entry.isDirectory())
+				await visit(join(folder, entry.name), name + "/");
+			else if (entry.isFile() && name.endsWith(".kiln")) names.push(name);
+		}
+	};
+	await visit(project.root, "");
+	return names.sort();
 };
 
 /** The nearest `kiln.json` in `folder` or above it, stopping at `stop` when given. */

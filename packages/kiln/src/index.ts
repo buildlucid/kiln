@@ -4,6 +4,7 @@ export {
 	type Kiln,
 	type KilnCallable,
 	type KilnOptions,
+	type KilnSchema,
 	type KilnTemplates,
 	type KilnTypes,
 	type Limits,

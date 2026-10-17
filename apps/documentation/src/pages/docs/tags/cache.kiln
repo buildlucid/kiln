@@ -25,9 +25,25 @@
 	<ul>
 		<li>Put a version in the key, such as <code>post.updatedAt</code>. When the post changes, so does the key, and Kiln renders the section again. You never need to clear the cache.</li>
 		<li>Kiln adds the template's name and the render's locale and time zone to every key. Two templates can use the same key, and dates and numbers are never shown in the wrong language. When the tag is indented, so is its saved copy, so Kiln adds the indentation too.</li>
-		<li>Kiln also adds a short hash of the tag's content. Editing what is inside a <code>cache</code> tag gives it new keys, so a deploy never shows copies saved from the old content, and two tags in one template only share copies when their content is the same.</li>
+		<li>Kiln also adds a short hash of the tag's content. Editing that source gives it new keys, and two tags in one template only share copies when their content is the same. The hash does not cover included templates, macros, block overrides, slot fills or your functions.</li>
 		<li>Never cache content for one visitor under a key that doesn't include them, or other visitors will see it.</li>
 	</ul>
+
+	<h2>Deployments and shared stores</h2>
+
+	<p>Set <code>cacheNamespace</code> when cached output survives a deployment. Include your app's identity and a build version, and change the version whenever templates or rendering code change. Kiln includes the namespace in every cache key, so the new build cannot reuse output from the old one. Give separate apps or tenants separate namespaces when they share a store.</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+const kiln = createKiln({
+	loader,
+	cache,
+	cacheNamespace: `website:${buildId}`,
+});
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>The default namespace is an empty string. A namespace does not replace the tag's key: include visitor data and any other values that change between renders. If different pages override a block or fill a slot inside the same cached section, include their identity in the key too. <code>invalidate</code> clears compiled templates; it does not clear saved fragment output.</p>
 
 	<h2>How long copies last</h2>
 

@@ -1,6 +1,6 @@
 id = "kiln"
 name = "Kiln"
-version = "0.1.0"
+version = "1.0.0"
 schema_version = 1
 description = "Kiln templates: highlighting, formatting, errors as you type, completions and go to definition."
 authors = ["William Yallop <hello@williamyallop.com>"]
@@ -12,10 +12,8 @@ snippets = ["./snippets/kiln.json"]
 name = "Kiln Language Server"
 languages = ["Kiln"]
 
-# The grammar lives in this repository, under packages/tree-sitter-kiln. `rev` must be a committed sha, since Zed
-# checks out that revision. While developing, `repository` points at a local checkout; switch it back to
-# "https://github.com/buildlucid/kiln" with a pushed sha before publishing.
+# Pin the grammar to a commit available from the public repository. Update it when the grammar or queries change.
 [grammars.kiln]
-repository = "file:///Users/williamyallop/Documents/projects/protodigital/internal/kiln"
-rev = "c668fa8e7c5d783b2fc52ef15bcd1b02dbbb1db6"
+repository = "https://github.com/buildlucid/kiln"
+rev = "9d3699253f1cb27e367b88d5ebcd5eb838eae123"
 path = "packages/tree-sitter-kiln"

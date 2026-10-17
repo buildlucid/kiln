@@ -37,6 +37,31 @@ describe("async calls", () => {
 		expect(await render(template, { functions })).toBe("2,4|2,3|3|2");
 	});
 
+	test.each(["map", "filter"])(
+		"%s starts all callbacks without the statement concurrency cap",
+		async (filter) => {
+			const barrier = Promise.withResolvers<void>();
+			let active = 0;
+			let most = 0;
+			const load = (value: number) => {
+				active++;
+				most = Math.max(most, active);
+				if (active === 100) barrier.resolve();
+				return barrier.promise.then(() => {
+					active--;
+					return value;
+				});
+			};
+			expect(
+				await render(`{{ (1..100)|${filter}(n => load(n))|length }}`, {
+					functions: { load },
+				}),
+			).toBe("100");
+			expect(most).toBe(100);
+			expect(active).toBe(0);
+		},
+	);
+
 	test("work in conditions, loops, includes and macros", async () => {
 		const template =
 			'{% macro m(v) %}<{{ later(v) }}>{% endmacro %}{% if later(true) %}{% for x in later([1, 2]) %}{{ m(x) }}{% endfor %}{% endif %}{% include later("part") with { v: later("p") } %}';

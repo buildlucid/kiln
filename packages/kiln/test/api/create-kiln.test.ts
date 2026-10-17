@@ -71,6 +71,13 @@ describe("createKiln", () => {
 		);
 	});
 
+	test("refuses a cache namespace that is not a string", () => {
+		const cacheNamespace = 1 as unknown as string;
+		expect(() =>
+			createKiln({ loader: memoryLoader({}), cacheNamespace }),
+		).toThrow(/cacheNamespace/);
+	});
+
 	test("refuses limits that aren't numbers above 0, and keeps the default for undefined", async () => {
 		const loader = memoryLoader({
 			index: "{% for i in 1..2000000 %}{% endfor %}",

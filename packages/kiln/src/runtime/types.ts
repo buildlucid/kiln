@@ -228,6 +228,8 @@ export interface EnvironmentCore {
 	readonly types: ReadonlyMap<string, TypeCheck>;
 	/** The store for the `cache` tag. Without one, the tag renders its content every time. */
 	readonly cache: KilnCache | null;
+	/** App and build identity included in fragment cache keys. */
+	readonly cacheNamespace: string;
 	/** Goes up whenever `invalidate` drops templates, so templates found earlier are looked up again. */
 	readonly generation: number;
 	load(

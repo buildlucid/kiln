@@ -4,6 +4,8 @@
 
 # Kiln
 
+[![Tests](https://github.com/buildlucid/kiln/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/buildlucid/kiln/actions/workflows/test.yml)
+
 Kiln is a template language for building websites on the server. The syntax will feel familiar if you know Twig, Jinja or Liquid.
 
 **[Read the documentation at kilnlang.com](https://kilnlang.com)**

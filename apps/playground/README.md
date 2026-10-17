@@ -16,4 +16,4 @@ npm run build -w @lucidkiln/core
 npm run dev -w @lucidkiln/playground
 ```
 
-`dev` builds the static page, then serves everything on http://localhost:4700. Run `npm run build -w @lucidkiln/playground` again after changing a template the static page uses.
+`dev` builds the static page, then serves everything on http://localhost:4700. Run `npx vp run @lucidkiln/playground#build` again after changing a template the static page uses.

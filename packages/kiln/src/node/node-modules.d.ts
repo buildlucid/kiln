@@ -3,10 +3,18 @@ declare module "node:fs/promises" {
 	export function readFile(path: string, encoding: "utf8"): Promise<string>;
 	export function writeFile(path: string, data: string): Promise<void>;
 	export function stat(path: string): Promise<{ isDirectory(): boolean }>;
+	export function lstat(path: string): Promise<{ isSymbolicLink(): boolean }>;
 	export function readdir(
 		path: string,
-		options: { recursive: true; withFileTypes: true },
-	): Promise<{ name: string; parentPath: string; isFile(): boolean }[]>;
+		options: { recursive?: true; withFileTypes: true },
+	): Promise<
+		{
+			name: string;
+			parentPath: string;
+			isFile(): boolean;
+			isDirectory(): boolean;
+		}[]
+	>;
 }
 
 declare module "node:path" {

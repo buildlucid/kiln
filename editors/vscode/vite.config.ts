@@ -24,4 +24,17 @@ export default defineConfig({
 			resolve: { mainFields: ["module", "main"] },
 		},
 	},
+	run: {
+		tasks: {
+			build: {
+				command: [
+					"tsc --noEmit",
+					"vp pack",
+					"cp ../zed/snippets/kiln.json dist/snippets.json",
+				],
+				dependsOn: ["@lucidkiln/language-server#build"],
+				cache: false,
+			},
+		},
+	},
 });

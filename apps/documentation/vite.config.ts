@@ -44,7 +44,12 @@ export default defineConfig({
 							file.type === "asset" &&
 							file.names.includes("geist-latin-wght-normal.woff2"),
 					);
-					if (!font) throw new Error("preload-font: Geist's latin font is missing from the build");
+					if (!font) {
+						throw new Error(
+							"preload-font: Geist's latin font is missing from the build",
+						);
+					}
+
 					return [
 						{
 							tag: "link",

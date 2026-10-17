@@ -5,7 +5,6 @@
 	"description": "A Hono app for trying Kiln features by hand, starting with server islands.",
 	"type": "module",
 	"scripts": {
-		"build": "node scripts/build.ts",
 		"dev": "node scripts/build.ts && node --watch src/server.ts",
 		"start": "node src/server.ts"
 	},

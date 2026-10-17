@@ -84,37 +84,58 @@ export type Loader = {
 export interface KilnTypes {}
 
 /**
- * The data and block names of each template, keyed by name without `.kiln`. Empty until the file `generateTypes` writes fills it in, so `render` accepts any name and data.
+ * Project-wide template defaults, keyed by name without `.kiln`. An explicit schema on `createKiln` replaces these.
  */
 // oxlint-disable-next-line typescript/no-empty-interface, typescript/no-empty-object-type -- filled in by declaration merging
 export interface KilnTemplates {}
 
-/** The `types` option: a type guard for each type in `KilnTypes`, plus any other checks. */
-export type TypeChecks = {
-	[Name in keyof KilnTypes]: (value: unknown) => value is KilnTypes[Name];
+/** The template and host-type maps for one environment. `generateTypes` writes a schema for each template root. */
+export type KilnSchema = {
+	templates: Record<string, { context: object; blocks: string }>;
+	types: object;
+};
+
+type DefaultSchema = {
+	templates: { [Name in keyof KilnTemplates]: KilnTemplates[Name] };
+	types: KilnTypes;
+};
+
+/** The `types` option: a type guard for each host type, plus any other checks. */
+export type TypeChecks<Types extends object = KilnTypes> = {
+	[Name in keyof Types]: (value: unknown) => value is Types[Name];
 } & Record<string, TypeCheck>;
 
-/** A template name. Names from `KilnTemplates` complete in editors, and any other string is accepted. */
-// oxlint-disable-next-line typescript/no-redundant-type-constituents -- `KilnTemplates` is empty until the host's generated file fills it in
-export type TemplateName = (keyof KilnTemplates & string) | (string & {});
+/** A template name. Known names complete in editors, and any other string is accepted. */
+// oxlint-disable-next-line typescript/no-redundant-type-constituents -- known names may be empty before types are generated
+export type TemplateName<Templates extends object = KilnTemplates> =
+	| (keyof Templates & string)
+	| (string & {});
 
-type TemplateEntry<Name extends string> = (
+type TemplateEntry<Name extends string, Templates extends object> = (
 	Name extends `${infer Base}.kiln` ? Base : Name
 ) extends infer Key
-	? Key extends keyof KilnTemplates
-		? KilnTemplates[Key]
+	? Key extends keyof Templates
+		? Templates[Key]
 		: undefined
 	: undefined;
 
-/** The data `render` takes for a template. Any data for a name `KilnTemplates` doesn't list. */
-export type TemplateContext<Name extends string> =
-	TemplateEntry<Name> extends { context: infer Context }
+/** The data `render` takes for a template. Any data for a name its template map doesn't list. */
+export type TemplateContext<
+	Name extends string,
+	Templates extends object = KilnTemplates,
+> =
+	TemplateEntry<Name, Templates> extends { context: infer Context }
 		? Context
 		: Record<string, unknown>;
 
-/** The block names `renderBlock` takes for a template. Any name for a template `KilnTemplates` doesn't list. */
-export type TemplateBlock<Name extends string> =
-	TemplateEntry<Name> extends { blocks: infer Block } ? Block : string;
+/** The block names `renderBlock` takes for a template. Any name for a template its map doesn't list. */
+export type TemplateBlock<
+	Name extends string,
+	Templates extends object = KilnTemplates,
+> =
+	TemplateEntry<Name, Templates> extends { blocks: infer Block }
+		? Block
+		: string;
 
 const renderAware: unique symbol = Symbol("kiln.renderAware");
 
@@ -138,13 +159,14 @@ export type Limits = {
 	maxDepth: number;
 };
 
-export type KilnOptions<State = undefined> = {
+export type KilnOptions<
+	State = undefined,
+	Schema extends KilnSchema = DefaultSchema,
+> = {
 	loader: Loader;
 	functions?: Record<string, KilnCallable<State>>;
 	filters?: Record<string, KilnCallable<State>>;
 	tests?: Record<string, KilnCallable<State>>;
-	/** Checks for host prop types, such as `Post`. Names start with a capital letter. */
-	types?: TypeChecks;
 	globals?: Record<string, unknown>;
 	/** Undefined variables and missing properties are errors. Default `true`. */
 	strict?: boolean;
@@ -158,10 +180,14 @@ export type KilnOptions<State = undefined> = {
 	debug?: boolean;
 	/** Where the `cache` tag saves output, such as `memoryCache()`. Without it, the tag renders every time. */
 	cache?: KilnCache;
+	/** App and build identity added to fragment cache keys. Default `""`. */
+	cacheNamespace?: string;
 	limits?: Partial<Limits>;
 	/** Which HTML rules `check` reports, and at what level. Default `true`, every rule as a warning. */
 	htmlChecks?: HtmlChecks;
-};
+} & (keyof Schema["types"] extends never
+	? { types?: TypeChecks<Schema["types"]> }
+	: { types: TypeChecks<Schema["types"]> });
 
 type BaseRenderOptions = {
 	locale?: string;
@@ -188,27 +214,30 @@ type RenderArguments<Context, State> = [
 		: [options: RenderOptions<State>]),
 ];
 
-export type Kiln<State = undefined> = {
+export type Kiln<
+	State = undefined,
+	Schema extends KilnSchema = DefaultSchema,
+> = {
 	/** Renders a template. Rejects with `KilnSyntaxError` or `KilnRenderError`. */
-	render<Name extends TemplateName>(
+	render<Name extends TemplateName<Schema["templates"]>>(
 		name: Name,
-		...args: RenderArguments<TemplateContext<Name>, State>
+		...args: RenderArguments<TemplateContext<Name, Schema["templates"]>, State>
 	): Promise<string>;
 	/**
 	 * Renders one block of a template, such as a fragment for an htmx or fetch request. Child templates' top-level statements run first, as in `render`.
 	 */
-	renderBlock<Name extends TemplateName>(
+	renderBlock<Name extends TemplateName<Schema["templates"]>>(
 		name: Name,
-		block: TemplateBlock<Name>,
-		...args: RenderArguments<TemplateContext<Name>, State>
+		block: TemplateBlock<Name, Schema["templates"]>,
+		...args: RenderArguments<TemplateContext<Name, Schema["templates"]>, State>
 	): Promise<string>;
 	/**
 	 * Renders a template as a stream of UTF-8 bytes, sending each part as soon as it is final. Resolves once the first
 	 * part is ready, or rejects as `render` would when the render fails before then. A later failure errors the stream.
 	 */
-	renderStream<Name extends TemplateName>(
+	renderStream<Name extends TemplateName<Schema["templates"]>>(
 		name: Name,
-		...args: RenderArguments<TemplateContext<Name>, State>
+		...args: RenderArguments<TemplateContext<Name, Schema["templates"]>, State>
 	): Promise<ReadableStream<Uint8Array>>;
 	/** Parses and checks a template without rendering it. Pass `source` to check unsaved text. */
 	check(name: string, source?: string): Promise<Diagnostic[]>;
@@ -347,7 +376,7 @@ const registry = <State>(
 	return entries;
 };
 
-class Environment<State> implements EnvironmentCore {
+class Environment<State, Schema extends KilnSchema> implements EnvironmentCore {
 	readonly strict: boolean;
 	readonly debug: boolean;
 	readonly autoescape: EscapeStrategy | false;
@@ -360,6 +389,7 @@ class Environment<State> implements EnvironmentCore {
 	readonly locale: string;
 	readonly timeZone: string;
 	readonly cache: KilnCache | null;
+	readonly cacheNamespace: string;
 	readonly htmlChecks: HtmlCheckLevels;
 	readonly #loader: Loader;
 	readonly #cache = new Map<
@@ -372,7 +402,7 @@ class Environment<State> implements EnvironmentCore {
 	readonly #names = new Map<string, string>();
 	generation = 0;
 
-	constructor(options: KilnOptions<State>) {
+	constructor(options: KilnOptions<State, Schema>) {
 		if (typeof options.loader?.load !== "function") {
 			throw new TypeError("createKiln needs a loader with a load(name) method");
 		}
@@ -392,8 +422,15 @@ class Environment<State> implements EnvironmentCore {
 		) {
 			throw new TypeError("createKiln needs a cache with get and set methods");
 		}
+		if (
+			options.cacheNamespace !== undefined &&
+			typeof options.cacheNamespace !== "string"
+		) {
+			throw new TypeError("cacheNamespace must be a string");
+		}
 		this.#loader = options.loader;
 		this.cache = options.cache ?? null;
+		this.cacheNamespace = options.cacheNamespace ?? "";
 		this.strict = options.strict ?? true;
 		this.debug = options.debug ?? false;
 		this.autoescape = options.autoescape ?? "html";
@@ -781,10 +818,13 @@ const tooLong = ({ resolved, state }: Prepared) =>
  * const html = await kiln.render("page", { title: "Home" });
  * ```
  */
-export const createKiln = <State = undefined>(
-	options: KilnOptions<State>,
-): Kiln<State> => {
-	const env = new Environment<State>(options);
+export const createKiln = <
+	State = undefined,
+	Schema extends KilnSchema = DefaultSchema,
+>(
+	options: KilnOptions<State, Schema>,
+): Kiln<State, Schema> => {
+	const env = new Environment<State, Schema>(options);
 	const kiln = createApi(env);
 	environments.set(kiln, env);
 	return kiln;
@@ -805,7 +845,9 @@ export const environmentOf = (kiln: object): ToolingEnvironment => {
 	return env;
 };
 
-const createApi = <State>(env: Environment<State>): Kiln<State> => {
+const createApi = <State, Schema extends KilnSchema>(
+	env: Environment<State, Schema>,
+): Kiln<State, Schema> => {
 	type Options = BaseRenderOptions & { state?: State };
 	// The typed signatures only narrow what callers may pass, so these take the plain shapes.
 	const render = (
@@ -830,9 +872,12 @@ const createApi = <State>(env: Environment<State>): Kiln<State> => {
 		renderOptions?: Options,
 	) => env.renderStream(name, context, renderOptions ?? {});
 	return {
-		render: render as Kiln<State>["render"],
-		renderBlock: renderBlock as Kiln<State>["renderBlock"],
-		renderStream: renderStream as Kiln<State>["renderStream"],
+		render: render as unknown as Kiln<State, Schema>["render"],
+		renderBlock: renderBlock as unknown as Kiln<State, Schema>["renderBlock"],
+		renderStream: renderStream as unknown as Kiln<
+			State,
+			Schema
+		>["renderStream"],
 		check: async (name, source) => {
 			const template = await env.compileFor(name, source);
 			if (!template) {

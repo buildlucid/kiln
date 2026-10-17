@@ -32,5 +32,11 @@
 	"license": "MIT",
 	"overrides": {
 		"vite": "npm:@voidzero-dev/vite-plus-core@1.2.0"
+	},
+	"allowScripts": {
+		"tree-sitter-cli@0.27.1": true,
+		"workerd@1.20261012.1": true,
+		"esbuild@0.28.2": true,
+		"@vscode/vsce-sign@2.1.0": true
 	}
 }

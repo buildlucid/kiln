@@ -26,6 +26,7 @@ const kiln = createKiln({
 
 	<ul>
 		<li>It never reads files or folders whose names start with a dot, such as <code>.env</code>.</li>
+		<li>It does not follow symlinks below its root, whether they point to files or folders. They are missing templates and are not listed. The root itself may be a symlink.</li>
 		<li>A name that points to a folder, or to nothing, is a missing template.</li>
 		<li>Other read errors name the template and the error code, such as <code>EACCES</code>, but never the path on disk.</li>
 	</ul>
@@ -62,7 +63,7 @@ const kvLoader = (kv: KVNamespace): Loader => ({
 
 	<ul>
 		<li><code>memoryLoader</code> lists every template you gave it.</li>
-		<li><code>fileLoader</code> lists every file under its root, skipping files and folders whose names start with a dot.</li>
+		<li><code>fileLoader</code> lists every file under its root, skipping symlinks and files and folders whose names start with a dot. It does not enter skipped folders.</li>
 		<li>In your own loader, <code>list</code> is optional and can be async.</li>
 	</ul>
 

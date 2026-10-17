@@ -122,6 +122,8 @@ npx kiln-language-server --stdio
 
 	<p>The language server reads its settings from a <code>kiln.json</code> file. It uses the nearest one in the template's folder or any folder above it.</p>
 
+	<p>Checks use unsaved text from every open template, including after <code>kiln.json</code> changes. Template discovery skips symlinks, hidden folders and <code>node_modules</code> without entering them.</p>
+
 	{% apply highlight("json") %}
 		{% verbatim %}
 {

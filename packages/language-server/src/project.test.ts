@@ -1,10 +1,11 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 import {
 	diagnose,
 	findManifest,
+	listTemplates,
 	openProject,
 	readManifest,
 	resolveName,
@@ -39,6 +40,22 @@ describe("projects", () => {
 		const pages = join(dir, "templates/pages");
 		expect(await findManifest(pages, dir)).toBe(join(dir, "kiln.json"));
 		expect(await findManifest(pages, pages)).toBeNull();
+	});
+
+	test("lists nested templates while pruning ignored folders and symlinks", async () => {
+		for (const folder of [".hidden", "node_modules", "pages/node_modules"]) {
+			await mkdir(join(dir, "templates", folder), { recursive: true });
+			await writeFile(join(dir, "templates", folder, "ignored.kiln"), "");
+		}
+		await writeFile(join(dir, "templates/pages/home.kiln"), "");
+		await writeFile(join(dir, "templates/pages/notes.txt"), "");
+		await symlink(
+			join(dir, "templates/pages"),
+			join(dir, "templates/linked"),
+			"dir",
+		);
+		const project = await openProject(null, join(dir, "templates"), warn);
+		expect(await listTemplates(project)).toEqual(["pages/home.kiln"]);
 	});
 
 	test("fills in defaults and rejects bad fields", async () => {

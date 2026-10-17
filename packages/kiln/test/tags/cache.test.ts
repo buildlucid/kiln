@@ -51,11 +51,11 @@ describe("cache", () => {
 		});
 		const [first, second] = [...saved];
 		expect(first?.[0]).toMatch(
-			/^index\.kiln\|\w+\|en\|UTC\|\["post",1,true,null\]$/,
+			/^""\|index\.kiln\|\w+\|en\|UTC\|\["post",1,true,null\]$/,
 		);
 		expect(first?.[1].seconds).toBe(600);
 		expect(second?.[0]).toMatch(
-			/^index\.kiln\|\w+\|de\|Europe\/Berlin\|\["post"\]$/,
+			/^""\|index\.kiln\|\w+\|de\|Europe\/Berlin\|\["post"\]$/,
 		);
 		expect(second?.[1].seconds).toBeNull();
 	});
@@ -67,6 +67,44 @@ describe("cache", () => {
 		);
 		expect(await render('{% cache "a" %}new{% endcache %}', { cache })).toBe(
 			"new",
+		);
+	});
+
+	test("a deployment namespace separates saved output when an included template changes", async () => {
+		const cache = memoryCache();
+		const template = '{% cache "footer" %}{% include "footer" %}{% endcache %}';
+		expect(
+			await render(template, {
+				cache,
+				cacheNamespace: "site:build-1",
+				templates: { footer: "old" },
+			}),
+		).toBe("old");
+		expect(
+			await render(template, {
+				cache,
+				cacheNamespace: "site:build-1",
+				templates: { footer: "new" },
+			}),
+		).toBe("old");
+		expect(
+			await render(template, {
+				cache,
+				cacheNamespace: "site:build-2",
+				templates: { footer: "new" },
+			}),
+		).toBe("new");
+	});
+
+	// Delimiters inside a namespace must never turn it into another key's prefix.
+	test("namespaces are encoded as whole strings", async () => {
+		const { cache, saved } = recording();
+		await render('{% cache "a" %}x{% endcache %}', {
+			cache,
+			cacheNamespace: 'a|"b',
+		});
+		expect([...saved.keys()][0]?.startsWith(JSON.stringify('a|"b') + "|")).toBe(
+			true,
 		);
 	});
 

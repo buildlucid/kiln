@@ -313,4 +313,25 @@ describe("language server", () => {
 		);
 		expect(symbols.map((symbol) => symbol.name)).toEqual(["content"]);
 	});
+	test("keeps unsaved component props after kiln.json reloads", async () => {
+		const component = "templates/components/unsaved.kiln";
+		const page = "templates/pages/unsaved.kiln";
+		await writeFile(
+			join(dir, component),
+			"{% props title: string %}{{ title }}",
+		);
+		await open(component, "{% props heading: string %}{{ heading }}");
+		await open(
+			page,
+			'{% component "components/unsaved" with { title: "x" } %}{% endcomponent %}',
+		);
+		const codes = () =>
+			diagnostics.get(uri(page))?.diagnostics.map((d) => d.code);
+		expect(codes()).toEqual(["missing-prop", "unknown-prop"]);
+		diagnostics.delete(uri(page));
+		await client.sendNotification("workspace/didChangeWatchedFiles", {
+			changes: [{ uri: uri("kiln.json"), type: 2 }],
+		});
+		await expect.poll(codes).toEqual(["missing-prop", "unknown-prop"]);
+	});
 });

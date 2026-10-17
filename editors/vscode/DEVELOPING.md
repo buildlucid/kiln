@@ -4,11 +4,10 @@ This file stays out of the published extension. `README.md` is the extension's p
 
 ## Building and trying it
 
-From the repository root, build everything once, then build the extension:
+From the repository root, build the extension and the packages it needs:
 
 ```sh
-npm run build
-npm run build --workspace editors/vscode
+npx vp run --filter ./editors/vscode build
 ```
 
 To try it, start VS Code with the extension loaded from this folder. Rebuild and reload the window after each change.
@@ -18,24 +17,3 @@ code --extensionDevelopmentPath="$PWD/editors/vscode" apps/documentation
 ```
 
 The grammar's tests run with the rest of the repository's tests (`npm test`). They tokenise templates with Shiki, which uses the same grammar engine and HTML grammar as VS Code.
-
-## Publishing
-
-The extension goes to two registries. The Visual Studio Marketplace serves VS Code. [Open VSX](https://open-vsx.org) serves Cursor, Windsurf, VSCodium and other editors built on VS Code.
-
-1. Bump `version` in `package.json`.
-2. Build, then package the extension into a `.vsix` file:
-
-   ```sh
-   npm run build --workspace editors/vscode
-   npm run package --workspace editors/vscode
-   ```
-
-3. Publish the same `.vsix` file to both registries:
-
-   ```sh
-   npx @vscode/vsce publish --packagePath kiln-<version>.vsix
-   npx ovsx publish kiln-<version>.vsix
-   ```
-
-`vsce` needs a personal access token from Azure DevOps for the `buildlucid` publisher, in `VSCE_PAT`. `ovsx` needs an Open VSX access token, in `OVSX_PAT`, and the `buildlucid` namespace must exist there first (`npx ovsx create-namespace buildlucid`).

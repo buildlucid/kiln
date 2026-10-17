@@ -60,6 +60,8 @@
 
 	<p><code>map</code> and <code>filter</code> run async arrow functions for every item at once and keep the original order. <code>reduce</code> runs them one at a time. <code>sort</code> needs synchronous arrow functions.</p>
 
+	<p>The 64-part limit applies to template statements and loop passes, not calls within an expression or callbacks in <code>map</code> and <code>filter</code>. For example, mapping 1,000 ids can start 1,000 calls before any finish. Your functions must limit access to databases and external APIs, using a shared connection pool or queue. Share that limit across renders when they use the same service. Kiln's step limits count work; they do not cap concurrent network requests.</p>
+
 	{% apply highlight("kiln") %}
 		{% verbatim %}
 {% set authors = post.authorIds|map(id => document("author", id: id)) %}

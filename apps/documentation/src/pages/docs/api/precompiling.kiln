@@ -74,7 +74,9 @@ const kiln = createKiln({ ...options, loader: memoryLoader(templates) });
 
 	<h2>Use the same options</h2>
 
-	<p>A precompiled template is built for the options it was compiled with. Create the environment that renders it with the same <code>autoescape</code> setting, and the same functions, filters and tests. If something the module depends on is different, such as a built-in filter you replaced with your own, or the module came from another version of Kiln, rendering it fails with a <code>precompiled-mismatch</code> error. Precompile again to fix it.</p>
+	<p>A precompiled template is built for the options it was compiled with. Create the environment that renders it with the same <code>autoescape</code> setting, and the same functions, filters and tests. If something the module depends on is different, such as a built-in filter you replaced with your own, or the generated-code format is incompatible, rendering it fails with a <code>precompiled-mismatch</code> error. Precompile again to fix it.</p>
+
+	<p>Build and render with the same exact version of <code>@lucidkiln/core</code>, and regenerate your modules whenever you upgrade it, including patch releases. Generated JavaScript and its runtime interface are build artifacts, not a stable public API. Kiln checks a format version and rejects known mismatches, but that check does not guarantee that modules from different package versions are compatible. Source templates and the documented public API follow semantic versioning.</p>
 
 	<h2>Only precompile templates you trust</h2>
 
