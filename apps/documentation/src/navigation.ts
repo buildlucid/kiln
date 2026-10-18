@@ -88,6 +88,12 @@ export const navigation = [
 				description: "Declare the variables a template expects.",
 			},
 			{
+				title: "export",
+				url: "/docs/tags/export/",
+				description:
+					"Give your code a value from a template without rendering it.",
+			},
+			{
 				title: "extends and block",
 				url: "/docs/tags/extends/",
 				description: "Share a layout between pages.",

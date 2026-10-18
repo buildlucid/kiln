@@ -26,6 +26,9 @@ export const TAGS: Record<string, TagDoc> = {
 	props: {
 		snippet: "props ${1:name} %}",
 	},
+	export: {
+		snippet: "export ${1:name} = ${2:value} %}",
+	},
 	extends: {
 		snippet: 'extends "${1:layouts/base}" %}',
 	},

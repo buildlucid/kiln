@@ -154,6 +154,8 @@ export type Statement =
 	  }
 	| { type: "Set"; name: string; value: Expression; span: Span }
 	| { type: "SetBlock"; name: string; body: Statement[]; span: Span }
+	/** A value the host reads with `evaluate`, never run during a render. */
+	| { type: "Export"; name: string; value: Expression; span: Span }
 	/** `rest` names the hash that collects undeclared variables, as in `...attributes`, or is null. */
 	| { type: "Props"; props: PropParam[]; rest: string | null; span: Span }
 	| { type: "Extends"; template: Expression; span: Span }

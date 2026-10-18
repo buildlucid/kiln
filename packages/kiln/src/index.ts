@@ -3,6 +3,7 @@ export type {
 	Analysis,
 	CallArgument,
 	FunctionCall,
+	TemplateExport,
 	TemplateReference,
 } from "./analyzer.js";
 export {

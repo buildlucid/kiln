@@ -114,6 +114,8 @@ export type CompiledTemplate = {
 	/** `blocks` as a list, made on first render, since a template's blocks never change once compiled. */
 	blockList: readonly (readonly [string, BlockDef])[] | undefined;
 	macros: Map<string, CompiledMacro>;
+	/** Top-level `export` values by name, which only `evaluate` runs. */
+	exports: Map<string, Compiled>;
 	/** Resolved names of imported templates, by import slot. */
 	imports: { name: string; span: Span }[];
 	/** Templates this template's includes, components and layouts name, so each name is resolved once. */
@@ -212,6 +214,7 @@ export type KilnCache = {
 
 /** What the runtime needs from the environment. */
 export interface EnvironmentCore {
+	readonly globals: Scope;
 	readonly strict: boolean;
 	readonly debug: boolean;
 	readonly autoescape: EscapeStrategy | false;

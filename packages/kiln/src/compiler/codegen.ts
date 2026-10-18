@@ -929,6 +929,9 @@ class Generator {
 				return this.#slot(statement, context);
 			case "Block":
 				return this.#block(statement, context);
+			// Exports never run in a render.
+			case "Export":
+				return [];
 			default:
 				return unsupported();
 		}

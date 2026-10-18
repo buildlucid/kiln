@@ -26,6 +26,14 @@ export type CallArgument = {
 	value: null | boolean | number | string;
 };
 
+/** A top-level `export`: its literal value, or `literal: false` when only `evaluate` can work it out. */
+export type TemplateExport = {
+	name: string;
+	literal: boolean;
+	/** The literal's value, or `null` when the export is computed. */
+	value: null | boolean | number | string;
+};
+
 export type FunctionCall = {
 	name: string;
 	args: CallArgument[];
@@ -57,6 +65,7 @@ export type Analysis = {
 	templates: TemplateReference[];
 	blocks: string[];
 	macros: string[];
+	exports: TemplateExport[];
 };
 
 /** Where variables are first read without a guard, by name: from the context, and inside macros. See `analyzeTemplate`. */
@@ -208,8 +217,15 @@ export const analyzeTemplate = (
 	// A template that outputs slots, or extends a layout that may, gets a `slots` hash.
 	if (template.slotNames.length > 0 || template.parent) scopes[0]?.add("slots");
 
+	// Exports run without the template's variables, and the compiler reports what they can't read.
+	let inExport = false;
 	const read = (name: string, span: Span, isGuarded: boolean) => {
-		if (declared(name) || importAliases.has(name) || importedNames.has(name)) {
+		if (
+			inExport ||
+			declared(name) ||
+			importAliases.has(name) ||
+			importedNames.has(name)
+		) {
 			return;
 		}
 		// Inside a macro, a missing name is never one from the context.
@@ -342,6 +358,11 @@ export const analyzeTemplate = (
 			case "Set":
 				expression(node.value);
 				declare(node.name);
+				return;
+			case "Export":
+				inExport = true;
+				withScope([], () => expression(node.value), true);
+				inExport = false;
 				return;
 			case "SetBlock":
 				statements(node.body);
@@ -481,5 +502,14 @@ export const analyzeTemplate = (
 		templates,
 		blocks,
 		macros: [...macroNames],
+		exports: template.ast.body.flatMap((node) =>
+			node.type === "Export"
+				? [
+						node.value.type === "Literal"
+							? { name: node.name, literal: true, value: node.value.value }
+							: { name: node.name, literal: false, value: null },
+					]
+				: [],
+		),
 	};
 };

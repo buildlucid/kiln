@@ -59,6 +59,7 @@ const html = await kiln.render("pages/home", { route: { path: "/" } });
 			<tr><td><code>renderBlock(name, block, context?, options?)</code></td><td>Renders one block of a template</td></tr>
 			<tr><td><code>check(name, source?)</code></td><td>Finds problems in a template without rendering it. See <a href="/docs/api/errors/#checking-templates">Errors and checks</a></td></tr>
 			<tr><td><code>analyze(name, source?)</code></td><td>Reports what a template uses</td></tr>
+			<tr><td><code>evaluate(name, exportName, options?)</code></td><td>Works out one of a template's exports without rendering it. See <a href="/docs/tags/export/">export</a></td></tr>
 			<tr><td><code>precompile(name, source?)</code></td><td>Compiles a template to a JavaScript module at build time. See <a href="/docs/api/precompiling/">Precompiling</a></td></tr>
 			<tr><td><code>invalidate(name?)</code></td><td>Clears one compiled template, or all of them, from the cache</td></tr>
 		</tbody>

@@ -32,6 +32,10 @@
 			"markdown": "Render content only when a condition holds.\n\n`if` renders its content only when a condition is true. Add `elseif` and `else` for other cases.\n\n---\n\n*page.kiln*\n\n```kiln\n{% if page.hero %}\n\t<div class=\"hero\">{{ page.hero }}</div>\n{% elseif page.image %}\n\t<img src=\"{{ page.image }}\" alt=\"\">\n{% else %}\n\t<hr>\n{% endif %}\n```\n\n*Output*\n\n```html\n<img src=\"/img/cover.jpg\" alt=\"\">\n```",
 			"url": "https://kilnlang.com/docs/tags/if/"
 		},
+		"export": {
+			"markdown": "Give your code a value from a template without rendering it.\n\n`export` gives your code a value from a template without rendering it, such as the pages a template builds or how long a server may cache it. Only your code reads exports. The template itself never sees them.\n\n---\n\n```kiln\n{% export paths = documents(\"post\")|map(post => post.url) %}\n{% export revalidate = 300 %}\n\n{% set post = document(\"post\", route.slug) %}\n<h1>{{ post.title }}</h1>\n```",
+			"url": "https://kilnlang.com/docs/tags/export/"
+		},
 		"extends": {
 			"markdown": "Share a layout between pages.\n\nLayouts hold the markup that pages share. A layout defines named `block` sections, and a page `extends` the layout and fills them in.\n\n---\n\n*page.kiln*\n\n```kiln\n{% extends \"layouts/base\" %}\n\n{% block title %}{{ page.title }} | {{ parent() }}{% endblock %}\n\n{% block content %}\n\t<h1>{{ page.title }}</h1>\n{% endblock %}\n```\n\n*layouts/base.kiln*\n\n```kiln\n<title>{% block title %}{{ site.name }}{% endblock %}</title>\n<main>\n\t{% block content %}{% endblock %}\n</main>\n```\n\n*Output*\n\n```html\n<title>About us | Example</title>\n<main>\n\t<h1>About us</h1>\n</main>\n```",
 			"url": "https://kilnlang.com/docs/tags/extends/"

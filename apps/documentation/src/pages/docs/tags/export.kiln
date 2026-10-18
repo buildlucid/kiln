@@ -1,0 +1,54 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+	<p><code>export</code> gives your code a value from a template without rendering it, such as the pages a template builds or how long a server may cache it. Only your code reads exports. The template itself never sees them.</p>
+
+	{% apply highlight("kiln") %}
+		{% verbatim %}
+{% export paths = documents("post")|map(post => post.url) %}
+{% export revalidate = 300 %}
+
+{% set post = document("post", route.slug) %}
+<h1>{{ post.title }}</h1>
+		{% endverbatim %}
+	{% endapply %}
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+const paths = await kiln.evaluate("pages/post", "paths");
+// ["/blog/hello", "/blog/world"]
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>Use exports for what a host needs to know about a template before, or instead of, rendering it: the paths a static build should render, a page's title for a menu, or how long to cache it. Your code decides what each export means. Kiln only works out its value.</p>
+
+	<h2>Reading exports</h2>
+
+	<ul>
+		<li><code>kiln.evaluate(name, exportName, options?)</code> works out one export and resolves to its value, waiting for async functions. It resolves to <code>undefined</code> when the template has no export with that name.</li>
+		<li>It takes the same <code>state</code>, <code>locale</code>, <code>timeZone</code> and <code>signal</code> options as <code>render</code>, so functions wrapped in <code>withRender</code> work.</li>
+		<li><code>kiln.analyze(name)</code> lists a template's exports in <code>exports</code> without running anything. Each has a <code>name</code>, and a <code>value</code> when the export is a literal, as in <code>{% verbatim %}{% export revalidate = 300 %}{% endverbatim %}</code>. <code>literal</code> says which.</li>
+	</ul>
+
+	<h2>Scope</h2>
+
+	<p>An export runs on its own, before there is a page to render, so it can only use globals, functions, filters, tests and its own arrow function parameters. Reading one of the template's variables, such as a prop or a variable it sets, is an <code>export-scope</code> error.</p>
+
+	{% apply highlight("kiln") %}
+		{% verbatim %}
+{% set posts = documents("post") %}
+
+{# export-scope: "posts" is a variable of the template #}
+{% export paths = posts|map(post => post.url) %}
+		{% endverbatim %}
+	{% endapply %}
+
+	<h2>Rules</h2>
+
+	<ul>
+		<li>Exports go at the top level of a template, including one that uses <code>extends</code>. Anywhere else is a <code>misplaced-export</code> error.</li>
+		<li>A template can export each name once. Exporting it again is a <code>duplicate-export</code> error.</li>
+		<li>An export never runs when its template renders, and outputs nothing, so it costs nothing per render.</li>
+		<li>Only a template's own exports count. The exports of its layout, includes and components are separate.</li>
+	</ul>
+{% endblock %}

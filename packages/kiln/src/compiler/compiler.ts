@@ -522,6 +522,7 @@ class Compiler {
 			blocks: new Map(),
 			blockList: undefined,
 			macros: new Map(),
+			exports: new Map(),
 			imports: [],
 			resolved: new Map(),
 			keyed: undefined,
@@ -539,6 +540,7 @@ class Compiler {
 
 		this.#collectNames(body);
 		this.#collectMacros(body);
+		this.#collectExports(body);
 
 		const first = body.find((statement) => !isBlank(statement));
 		const extendsNode = first?.type === "Extends" ? first : null;
@@ -803,6 +805,95 @@ class Compiler {
 		}
 	}
 
+	/** Compiles top-level exports on their own, since they never run with the template. */
+	#collectExports(body: Statement[]): void {
+		const exports = this.#template.exports;
+		for (const statement of body) {
+			if (statement.type !== "Export") continue;
+			if (exports.has(statement.name)) {
+				this.#error(
+					"duplicate-export",
+					`"${statement.name}" is exported more than once`,
+					statement.span,
+				);
+				continue;
+			}
+			this.#checkExportReads(statement.value, new Set());
+			exports.set(statement.name, this.#expr(statement.value));
+		}
+	}
+
+	/** Reports variables an export reads that only a render has, since `evaluate` runs it with globals alone. */
+	#checkExportReads(node: Expression, params: ReadonlySet<string>): void {
+		const visit = (child: Expression) => this.#checkExportReads(child, params);
+		switch (node.type) {
+			case "Literal":
+			case "Invalid":
+				return;
+			case "Name":
+				if (
+					!params.has(node.name) &&
+					!(node.name in this.#env.globals) &&
+					!this.#importAliases.has(node.name)
+				) {
+					this.#error(
+						"export-scope",
+						`"${node.name}" isn't available to an export, which can only read globals, its arrow functions' parameters and imported macros`,
+						node.span,
+					);
+				}
+				return;
+			case "Arrow":
+				this.#checkExportReads(node.body, new Set([...params, ...node.params]));
+				return;
+			case "Interpolation":
+				node.parts.forEach(visit);
+				return;
+			case "Array":
+				for (const element of node.elements) {
+					visit(element.type === "Spread" ? element.value : element);
+				}
+				return;
+			case "Hash":
+				for (const entry of node.entries) {
+					if (entry.type === "Property" && entry.key.type !== "Literal") {
+						visit(entry.key);
+					}
+					visit(entry.value);
+				}
+				return;
+			case "Unary":
+				visit(node.operand);
+				return;
+			case "Binary":
+				visit(node.left);
+				visit(node.right);
+				return;
+			case "Conditional":
+				visit(node.test);
+				visit(node.consequent);
+				if (node.alternate) visit(node.alternate);
+				return;
+			case "Member":
+				visit(node.object);
+				if (node.property.type !== "Literal") visit(node.property);
+				return;
+			case "OptionalChain":
+				visit(node.expression);
+				return;
+			case "Call":
+				// A named callee is a function or macro, not a variable.
+				if (node.callee.type !== "Name") visit(node.callee);
+				for (const arg of node.args) visit(arg.value);
+				return;
+			case "Filter":
+			case "Test":
+				visit(node.input);
+				for (const arg of node.args) visit(arg.value);
+				return;
+		}
+	}
+
 	/** Checks where tags may appear: `extends` first, child templates' top level, `props` and macros. */
 	#checkPlacement(body: Statement[], isChild: boolean): void {
 		let seenContent = false;
@@ -842,6 +933,7 @@ class Compiler {
 					break;
 				case "Set":
 				case "SetBlock":
+				case "Export":
 				case "Import":
 				case "FromImport":
 				case "Macro":
@@ -857,6 +949,7 @@ class Compiler {
 					statement.type === "Set" ||
 					statement.type === "SetBlock" ||
 					statement.type === "Props" ||
+					statement.type === "Export" ||
 					statement.type === "Import" ||
 					statement.type === "FromImport" ||
 					statement.type === "Macro" ||
@@ -864,7 +957,7 @@ class Compiler {
 				if (!allowed) {
 					this.#error(
 						"invalid-child-content",
-						'A template that uses "extends" can only contain blocks, "set", "props", "import", "from" and "macro" at its top level',
+						'A template that uses "extends" can only contain blocks, "set", "props", "export", "import", "from" and "macro" at its top level',
 						statement.span,
 					);
 				}
@@ -888,6 +981,13 @@ class Compiler {
 					this.#error(
 						"extends-not-first",
 						'"extends" must be the first tag in the template',
+						statement.span,
+					);
+				}
+				if (depth > 0 && statement.type === "Export") {
+					this.#error(
+						"misplaced-export",
+						"Exports must be at the top level of a template",
 						statement.span,
 					);
 				}
@@ -1128,6 +1228,8 @@ class Compiler {
 			case "Macro":
 			case "Import":
 			case "FromImport":
+			// `evaluate` runs exports; see `#collectExports`.
+			case "Export":
 				return NOOP;
 			case "With":
 				return this.#with(node);

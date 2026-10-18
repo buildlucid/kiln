@@ -121,6 +121,19 @@ describe("analyze", () => {
 		expect(analysis.sets).toEqual(["title", "intro"]);
 	});
 
+	test("reports exports, with the values of literal ones", async () => {
+		const analysis = await kiln.analyze(
+			"page",
+			'{% export revalidate = 300 %}{% export paths = document("post")|map(post => post.url) %}',
+		);
+		expect(analysis.exports).toEqual([
+			{ name: "revalidate", literal: true, value: 300 },
+			{ name: "paths", literal: false, value: null },
+		]);
+		expect(analysis.variables).toEqual([]);
+		expect(analysis.functions).toEqual(["document"]);
+	});
+
 	test("reports list, shape and host types", async () => {
 		const analysis = await createKiln({
 			loader: memoryLoader({}),

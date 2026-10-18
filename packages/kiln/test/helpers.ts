@@ -85,6 +85,16 @@ export const render = async (
 		signal: options.signal,
 	});
 
+/** Works out one of `template`'s exports with `evaluate`, with any other templates alongside it. */
+export const evaluate = async (
+	template: string,
+	exportName: string,
+	options: TestOptions = {},
+): Promise<unknown> =>
+	(await environment(template, options)).evaluate("index", exportName, {
+		signal: options.signal,
+	});
+
 /** Streams `template` as `index.kiln`, as `render` renders it. */
 export const renderStream = async (
 	template: string,

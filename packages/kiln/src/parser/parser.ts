@@ -397,6 +397,18 @@ class Parser {
 				return this.#parseSet(open);
 			case "props":
 				return this.#parseProps(open);
+			case "export": {
+				const name = this.#expectDeclarableName("an export name").value;
+				this.#expectPunct("=");
+				const value = this.#parseExpression();
+				const close = this.#expectTagEnd();
+				return {
+					type: "Export",
+					name,
+					value,
+					span: { start: open.start, end: close.end },
+				};
+			}
 			case "extends": {
 				const template = this.#parseExpression();
 				const close = this.#expectTagEnd();

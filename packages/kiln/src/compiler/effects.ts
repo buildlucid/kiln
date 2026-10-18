@@ -57,6 +57,8 @@ export const effectsOf = (
 			case "Macro":
 			case "Import":
 			case "FromImport":
+			// Exports never run in a render.
+			case "Export":
 				continue;
 			case "Name":
 				reads.add(node.name as string);

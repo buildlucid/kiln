@@ -28,9 +28,11 @@ import type { IslandMode } from "./runtime/islands.js";
 import { closeOutlets, takeOutput } from "./runtime/outlets.js";
 import {
 	addSlotFlags,
+	importsFor,
 	isPromise,
 	renderTemplate,
 	silence,
+	unhold,
 } from "./runtime/render.js";
 import { childScope } from "./runtime/scope.js";
 import { RenderStream } from "./runtime/stream.js";
@@ -44,6 +46,7 @@ import {
 	type Out,
 	type RenderInfo,
 	RenderState,
+	Run,
 	type Scope,
 	type TypeCheck,
 } from "./runtime/types.js";
@@ -278,8 +281,19 @@ export type Kiln<
 	): Promise<ReadableStream<Uint8Array>>;
 	/** Parses and checks a template without rendering it. Pass `source` to check unsaved text. */
 	check(name: string, source?: string): Promise<Diagnostic[]>;
-	/** Reports what a template uses: variables, props, functions, filters, tests, templates, blocks and macros. */
+	/** Reports what a template uses: variables, props, functions, filters, tests, templates, blocks, macros and exports. */
 	analyze(name: string, source?: string): Promise<Analysis>;
+	/**
+	 * Works out one of a template's exports without rendering it, waiting for async functions. Resolves to `undefined`
+	 * when the template has no export with that name.
+	 */
+	evaluate(
+		name: TemplateName<Schema["templates"]>,
+		exportName: string,
+		...options: undefined extends State
+			? [options?: RenderOptions<State>]
+			: [options: RenderOptions<State>]
+	): Promise<unknown>;
 	/**
 	 * Compiles a template to the source of a JavaScript module, at build time. Loaders return the module's default
 	 * export in place of the source. Rejects with `KilnSyntaxError` when the template has problems.
@@ -708,6 +722,29 @@ class Environment<State, Schema extends KilnSchema> implements EnvironmentCore {
 		});
 	}
 
+	/** Runs one export with only the globals in scope, for `evaluate`. */
+	async evaluate(
+		name: string,
+		exportName: string,
+		options: BaseRenderOptions & { state?: State },
+	): Promise<unknown> {
+		let render = this.#prepare(name, {}, options);
+		if (isPromise(render)) render = await render;
+		const { template, state, resolved } = render;
+		const compiled = template.exports.get(exportName);
+		if (!compiled) return undefined;
+
+		const run = new Run(state, template, 0, null, null);
+		const imports = importsFor(run, template);
+		run.imports = isPromise(imports) ? await imports : imports;
+		const value = compiled.ev(run, childScope(this.globals));
+		if (!isPromise(value)) return value;
+		const result = unhold(await untilAborted(value, state.signal, resolved));
+		// The signal may have been aborted while the last call was pending.
+		if (state.signal?.aborted) throw aborted(resolved);
+		return result;
+	}
+
 	/** Finds the template and makes the state, scope and output for one render. */
 	#prepare(
 		name: string,
@@ -919,6 +956,12 @@ const createApi = <State, Schema extends KilnSchema>(
 		context?: Record<string, unknown>,
 		renderOptions?: Options,
 	) => env.renderStream(name, context, renderOptions ?? {});
+	const evaluate = (name: string, exportName: string, options?: Options) => {
+		if (typeof exportName !== "string") {
+			throw new TypeError("evaluate needs an export name");
+		}
+		return env.evaluate(name, exportName, options ?? {});
+	};
 	return {
 		render: render as unknown as Kiln<State, Schema>["render"],
 		renderBlock: renderBlock as unknown as Kiln<State, Schema>["renderBlock"],
@@ -926,6 +969,7 @@ const createApi = <State, Schema extends KilnSchema>(
 			State,
 			Schema
 		>["renderStream"],
+		evaluate: evaluate as unknown as Kiln<State, Schema>["evaluate"],
 		check: async (name, source) => {
 			const template = await env.compileFor(name, source);
 			if (!template) {
