@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.0
+
+- New `builtins` export, which lists Kiln's own function, filter and test names. ([8d99639](https://github.com/buildlucid/kiln/commit/8d99639916ce3dfb920d567ed4de9069ec739cd7))
+- New `export` tag. A template can give your code a value without rendering, which `evaluate` works out and `analyze` lists in `exports`. ([1e5cff7](https://github.com/buildlucid/kiln/commit/1e5cff72e7416abbc4695334e405bd38e5986f01))
+
 ## 1.3.0
 
 - `analyze` now reports each function call and its arguments in `calls`, with the value of every literal argument. ([72780ec](https://github.com/buildlucid/kiln/commit/72780ec6a827a8d416141b0e8921efa22bcd5a65))

@@ -1,6 +1,6 @@
 {
 	"name": "@lucidkiln/language-server",
-	"version": "1.2.0",
+	"version": "1.3.0",
 	"description": "Language server for Kiln templates: errors as you type, formatting, completions, hover and go to definition.",
 	"repository": {
 		"type": "git",
@@ -25,7 +25,7 @@
 		"template"
 	],
 	"dependencies": {
-		"@lucidkiln/core": "^1.2.0",
+		"@lucidkiln/core": "^1.4.0",
 		"vscode-html-languageservice": "5.6.2",
 		"vscode-languageserver": "10.1.2",
 		"vscode-languageserver-textdocument": "1.0.15"

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0
+
+- Completion and hover docs for the new `export` tag. ([1e5cff7](https://github.com/buildlucid/kiln/commit/1e5cff72e7416abbc4695334e405bd38e5986f01))
+
 ## 1.2.0
 
 - Updated `outlet` hover docs. ([46e6cae](https://github.com/buildlucid/kiln/commit/46e6cae3afbbc88ded8a19dcd9018f8559d4e7ce))
