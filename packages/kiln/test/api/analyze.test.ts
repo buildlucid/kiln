@@ -89,6 +89,30 @@ describe("analyze", () => {
 		expect(analysis.templates.map((t) => t.name)).toContain("m.kiln");
 	});
 
+	test("reports each function call with its literal arguments", async () => {
+		const analysis = await kiln.analyze(
+			"page",
+			'{{ document("page", locale: "en") }}{% macro m() %}{% endmacro %}{{ m() }}{{ document(kind, ...rest) }}',
+		);
+		expect(analysis.calls).toMatchObject([
+			{
+				name: "document",
+				args: [
+					{ name: null, literal: true, value: "page" },
+					{ name: "locale", literal: true, value: "en" },
+				],
+				start: { line: 1, column: 4 },
+			},
+			{
+				name: "document",
+				args: [
+					{ name: null, literal: false, value: null },
+					{ name: null, literal: false, value: null },
+				],
+			},
+		]);
+	});
+
 	test("reports variables set at the top level", async () => {
 		const analysis = await kiln.analyze(
 			"page",

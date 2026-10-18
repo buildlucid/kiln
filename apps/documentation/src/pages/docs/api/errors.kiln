@@ -83,7 +83,7 @@ for (const problem of diagnostics) {
 
 	<h2>Analysing templates</h2>
 
-	<p><code>analyze</code> reports what a template uses: the variables it reads, its props, the variables it sets at its top level, the functions, filters and tests it calls, the templates it extends, includes or imports, and its blocks and macros. Use it to build tooling, or to work out which data a page depends on.</p>
+	<p><code>analyze</code> reports what a template uses: the variables it reads, its props, the variables it sets at its top level, the functions, filters and tests it calls, each function call with its arguments, the templates it extends, includes or imports, and its blocks and macros. Use it to build tooling, or to work out which data a page depends on.</p>
 
 	{% apply highlight("ts") %}
 		{% verbatim %}
@@ -95,6 +95,19 @@ analysis.templates; // [{ kind: "extends", name: "layouts/base.kiln", ... }]
 	{% endapply %}
 
 	<p>A name built at render time, such as <code>"sections/" ~ section.type</code>, is reported with a <code>name</code> of null.</p>
+
+	<p><code>calls</code> lists each function call with its arguments, so a build step can find the values a template passes, such as the paths of the files it needs. An argument written as a literal has <code>literal: true</code> and its <code>value</code>. One computed at render time has <code>literal: false</code>.</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+// {{ asset("styles/site.css") }}{{ asset(name) }}
+analysis.calls;
+// [
+//   { name: "asset", args: [{ name: null, literal: true, value: "styles/site.css" }], ... },
+//   { name: "asset", args: [{ name: null, literal: false, value: null }], ... },
+// ]
+		{% endverbatim %}
+	{% endapply %}
 
 	<h2>Reading the markup</h2>
 

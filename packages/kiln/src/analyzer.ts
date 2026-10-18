@@ -17,6 +17,22 @@ export type TemplateReference = {
 	end: Position;
 };
 
+/** An argument to a function call: its literal value, or `literal: false` when computed at render time. */
+export type CallArgument = {
+	/** The argument's name, or `null` when it is positional. */
+	name: string | null;
+	literal: boolean;
+	/** The literal's value, or `null` when the argument is computed. */
+	value: null | boolean | number | string;
+};
+
+export type FunctionCall = {
+	name: string;
+	args: CallArgument[];
+	start: Position;
+	end: Position;
+};
+
 export type AnalysedProp = {
 	name: string;
 	required: boolean;
@@ -34,6 +50,8 @@ export type Analysis = {
 	/** Variables set at the top level. A layout sees those its child template sets. */
 	sets: string[];
 	functions: string[];
+	/** Each call to a host or built-in function, in source order. */
+	calls: FunctionCall[];
 	filters: string[];
 	tests: string[];
 	templates: TemplateReference[];
@@ -90,6 +108,7 @@ export const analyzeTemplate = (
 	const source = template.source;
 	const variables = new Set<string>();
 	const functions = new Set<string>();
+	const calls: FunctionCall[] = [];
 	const filters = new Set<string>();
 	const tests = new Set<string>();
 	const templates: TemplateReference[] = [];
@@ -151,6 +170,13 @@ export const analyzeTemplate = (
 		work();
 		scopes.pop();
 		if (isolated) scopes.pop();
+	};
+
+	const callArgument = (arg: Argument): CallArgument => {
+		const name = arg.type === "Named" ? arg.name : null;
+		return arg.type !== "Spread" && arg.value.type === "Literal"
+			? { name, literal: true, value: arg.value.value }
+			: { name, literal: false, value: null };
 	};
 
 	const visitArguments = (args: Argument[]) => {
@@ -248,6 +274,12 @@ export const analyzeTemplate = (
 						!importedNames.has(name)
 					) {
 						functions.add(name);
+						calls.push({
+							name,
+							args: node.args.map(callArgument),
+							start: source.position(node.span.start),
+							end: source.position(node.span.end),
+						});
 					}
 				} else if (
 					!(
@@ -443,6 +475,7 @@ export const analyzeTemplate = (
 			node.type === "Set" || node.type === "SetBlock" ? [node.name] : [],
 		),
 		functions: [...functions],
+		calls,
 		filters: [...filters],
 		tests: [...tests],
 		templates,

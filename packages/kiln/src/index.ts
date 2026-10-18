@@ -1,4 +1,10 @@
-export type { AnalysedProp, Analysis, TemplateReference } from "./analyzer.js";
+export type {
+	AnalysedProp,
+	Analysis,
+	CallArgument,
+	FunctionCall,
+	TemplateReference,
+} from "./analyzer.js";
 export {
 	createKiln,
 	type Kiln,
