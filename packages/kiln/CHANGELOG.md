@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0
+
+- `analyze` now reports each function call and its arguments in `calls`, with the value of every literal argument. ([72780ec](https://github.com/buildlucid/kiln/commit/72780ec6a827a8d416141b0e8921efa22bcd5a65))
+
 ## 1.2.0
 
 - Inserted content is no longer re-indented to line up with its tag. ([46e6cae](https://github.com/buildlucid/kiln/commit/46e6cae3afbbc88ded8a19dcd9018f8559d4e7ce))
