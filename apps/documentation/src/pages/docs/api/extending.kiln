@@ -45,6 +45,7 @@ const kiln = createKiln({
 		<li>Names start with a letter or underscore, followed by letters, digits or underscores. Test names can be two words, such as <code>divisible by</code>.</li>
 		<li>Functions, filters and tests have separate names, so a filter and a function can share one.</li>
 		<li>Your own function, filter or test replaces a built-in one with the same name. The exceptions are <code>parent</code>, <code>block</code>, <code>default</code>, <code>raw</code>, <code>escape</code> and <code>defined</code>, which Kiln reserves.</li>
+		<li><code>builtins</code> lists Kiln's own function, filter and test names in alphabetical order, reserved ones included. Check it when a name shouldn't replace a built-in one, such as names that come from plugins: <code>builtins.filters.includes("upper")</code>.</li>
 	</ul>
 
 	<h2>Async functions</h2>

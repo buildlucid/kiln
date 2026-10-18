@@ -6,6 +6,7 @@ export type {
 	TemplateReference,
 } from "./analyzer.js";
 export {
+	builtins,
 	createKiln,
 	type Kiln,
 	type KilnCallable,

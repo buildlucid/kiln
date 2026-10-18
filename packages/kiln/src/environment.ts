@@ -356,6 +356,17 @@ const RESERVED = {
 	test: new Set(["defined"]),
 };
 
+/** Kiln's own function, filter and test names, sorted and including reserved ones, for hosts that stop a name replacing one. */
+export const builtins: {
+	readonly functions: readonly string[];
+	readonly filters: readonly string[];
+	readonly tests: readonly string[];
+} = {
+	functions: [...Object.keys(builtinFunctions), ...RESERVED.function].sort(),
+	filters: [...Object.keys(builtinFilters), ...RESERVED.filter].sort(),
+	tests: [...Object.keys(builtinTests), ...RESERVED.test].sort(),
+};
+
 const builtinMaps = new WeakMap<
 	Record<string, CallableEntry>,
 	ReadonlyMap<string, CallableEntry>
