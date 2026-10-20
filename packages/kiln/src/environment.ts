@@ -230,6 +230,12 @@ export type KilnOptions<
 	: { types: TypeChecks<Schema["types"]> });
 
 type BaseRenderOptions = {
+	/**
+	 * Globals for this render, layered over the environment's. `check`, generated types and exports only know the
+	 * environment's globals, so give each one a default there. `cache` keys don't include them, so add any that change a
+	 * cached section's output to its key.
+	 */
+	globals?: Record<string, unknown>;
 	locale?: string;
 	timeZone?: string;
 	/** Stops the render when aborted. A real `AbortSignal` works. */
@@ -518,12 +524,7 @@ class Environment<State, Schema extends KilnSchema> implements EnvironmentCore {
 			this.types.set(name, check);
 		}
 
-		const globals = childScope(null);
-		const provided = options.globals ?? {};
-		if (!isPlainObject(provided))
-			throw new TypeError("globals must be a plain object");
-		for (const key of hashKeys(provided)) globals[key] = provided[key] ?? null;
-		this.globals = globals;
+		this.globals = globalScope(null, options.globals ?? {});
 	}
 
 	load(
@@ -737,7 +738,7 @@ class Environment<State, Schema extends KilnSchema> implements EnvironmentCore {
 		const run = new Run(state, template, 0, null, null);
 		const imports = importsFor(run, template);
 		run.imports = isPromise(imports) ? await imports : imports;
-		const value = compiled.ev(run, childScope(this.globals));
+		const value = compiled.ev(run, childScope(state.globals));
 		if (!isPromise(value)) return value;
 		const result = unhold(await untilAborted(value, state.signal, resolved));
 		// The signal may have been aborted while the last call was pending.
@@ -798,9 +799,14 @@ class Environment<State, Schema extends KilnSchema> implements EnvironmentCore {
 			throw new TypeError("render context must be a plain object");
 		}
 
+		// Without per-render globals, the render reads the environment's directly, with nothing extra to make.
+		const globals =
+			options.globals === undefined
+				? this.globals
+				: globalScope(this.globals, options.globals);
 		const state = new RenderState(
 			this,
-			this.globals,
+			globals,
 			this.limits.maxSteps,
 			this.limits.maxOutputLength,
 			this.limits.maxDepth,
@@ -811,7 +817,7 @@ class Environment<State, Schema extends KilnSchema> implements EnvironmentCore {
 		);
 		if (options.signal?.aborted) throw aborted(resolved);
 
-		const scope = childScope(this.globals);
+		const scope = childScope(globals);
 		const passed = hashKeys(context);
 		for (const key of passed) scope[key] = context[key] ?? null;
 		addSlotFlags(scope, template, null);
@@ -848,6 +854,15 @@ type Prepared = {
 	scope: Scope;
 	passed: readonly string[];
 	out: Out;
+};
+
+/** A scope inside `parent` holding `values`: the environment's globals, or one render's over them. */
+const globalScope = (parent: Scope | null, values: unknown): Scope => {
+	if (!isPlainObject(values))
+		throw new TypeError("globals must be a plain object");
+	const scope = childScope(parent);
+	for (const key of hashKeys(values)) scope[key] = values[key] ?? null;
+	return scope;
 };
 
 const aborted = (resolved: string) =>

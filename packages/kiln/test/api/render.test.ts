@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { createKiln } from "../../src/index.js";
+import { createKiln, memoryLoader, streamIslands } from "../../src/index.js";
+import { lines, readParts } from "../helpers.js";
 
 describe("render caching", () => {
 	test("remembers a limited number of missing templates", async () => {
@@ -55,5 +56,53 @@ describe("render caching", () => {
 			},
 		});
 		expect(await kiln.render("a", { x: 1 })).toBe("1");
+	});
+});
+
+describe("render globals", () => {
+	const kiln = createKiln({
+		loader: memoryLoader({
+			layout: "{{ lang }} {% block body %}{% endblock %}",
+			page: lines(
+				'{% extends "layout" %}',
+				"{% macro say() %}{{ lang }}{% endmacro %}",
+				'{% block body %}{{ site }} {% include "partial" %} {% component "box" %}{% endcomponent %} {{ say() }} {% island "isle" %}{% endisland %}{% endblock %}',
+			),
+			partial: "{{ lang }}",
+			box: "{{ lang }}",
+			isle: "{{ lang }}",
+			"set-lang": '{% set lang = "x" %}',
+			"set-site": '{% set site = "x" %}',
+			label: '{% export label = lang ~ "!" %}',
+		}),
+		globals: { lang: "en", site: "S" },
+	});
+
+	test("every template in the render reads them over the environment's", async () => {
+		const stream = await kiln.renderStream(
+			"page",
+			{},
+			{ globals: { lang: "fr" }, islands: streamIslands({ script: false }) },
+		);
+		expect((await readParts(stream)).join("")).toBe(
+			'fr S fr fr fr <kiln-island stream="1"></kiln-island><template>fr</template><kiln-island fill="1"></kiln-island>',
+		);
+		expect(await kiln.render("page")).toBe("en S en en en en");
+	});
+
+	test("templates can't assign to them or to the environment's", async () => {
+		const options = { globals: { lang: "fr" } };
+		await expect(kiln.render("set-lang", {}, options)).rejects.toMatchObject({
+			code: "assign-global",
+		});
+		await expect(kiln.render("set-site", {}, options)).rejects.toMatchObject({
+			code: "assign-global",
+		});
+	});
+
+	test("evaluate reads them", async () => {
+		expect(
+			await kiln.evaluate("label", "label", { globals: { lang: "fr" } }),
+		).toBe("fr!");
 	});
 });

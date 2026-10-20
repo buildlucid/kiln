@@ -65,10 +65,14 @@ describe("island", () => {
 			[first as string]: {
 				template: "components/stock.kiln",
 				props: { id: 7 },
+				locale: "en",
+				timeZone: "UTC",
 			},
 			[second as string]: {
 				template: "components/stock.kiln",
 				props: { id: 8 },
+				locale: "en",
+				timeZone: "UTC",
 			},
 		});
 	});
@@ -105,6 +109,33 @@ describe("island", () => {
 		expect(seven).toMatch(/^[0-9a-f]{16}$/);
 		expect(await ids(7)).toEqual([seven]);
 		expect(await ids(8)).not.toEqual([seven]);
+	});
+
+	test("gives each locale and time zone its own id, recorded in the manifest", async () => {
+		const islands = deferIslands({ url: "" });
+		const template =
+			'{% island "components/stock" with { id: 1 } %}{% endisland %}';
+		await render(template, { templates, islands });
+		await render(template, {
+			templates,
+			islands,
+			locale: "fr",
+			timeZone: "Europe/Paris",
+		});
+		expect(Object.values(islands.manifest)).toEqual([
+			{
+				template: "components/stock.kiln",
+				props: { id: 1 },
+				locale: "en",
+				timeZone: "UTC",
+			},
+			{
+				template: "components/stock.kiln",
+				props: { id: 1 },
+				locale: "fr",
+				timeZone: "Europe/Paris",
+			},
+		]);
 	});
 
 	test("records an island used many times once", async () => {
@@ -217,7 +248,8 @@ describe("island", () => {
 		await kiln.render("page", {}, { islands });
 		const [entry] = Object.values(islands.manifest);
 		if (!entry) throw new Error("Expected an island");
-		expect(await kiln.render(entry.template, entry.props)).toBe(
+		const { template, props, locale, timeZone } = entry;
+		expect(await kiln.render(template, props, { locale, timeZone })).toBe(
 			"<p>Stock for 3</p>",
 		);
 	});

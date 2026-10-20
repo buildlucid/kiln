@@ -3270,7 +3270,8 @@ export const assign = (
 	span: Span,
 ): void => {
 	let owner = ownerOf(scope, name);
-	if (owner === run.state.globals) {
+	// A render's own globals sit over the environment's, so either may hold a global.
+	if (owner === run.state.globals || owner === run.state.env.globals) {
 		throw fail(run, span, "assign-global", `Cannot assign to global "${name}"`);
 	}
 	if (owner !== null && run.capture?.section) {

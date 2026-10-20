@@ -26,7 +26,7 @@ const paths = await kiln.evaluate("pages/post", "paths");
 
 	<ul>
 		<li><code>kiln.evaluate(name, exportName, options?)</code> works out one export and resolves to its value, waiting for async functions. It resolves to <code>undefined</code> when the template has no export with that name.</li>
-		<li>It takes the same <code>state</code>, <code>locale</code>, <code>timeZone</code> and <code>signal</code> options as <code>render</code>, so functions wrapped in <code>withRender</code> work.</li>
+		<li>It takes the same <code>state</code>, <code>globals</code>, <code>locale</code>, <code>timeZone</code> and <code>signal</code> options as <code>render</code>, so functions wrapped in <code>withRender</code> work.</li>
 		<li><code>kiln.analyze(name)</code> lists a template's exports in <code>exports</code> without running anything. Each has a <code>name</code>, and a <code>value</code> when the export is a literal, as in <code>{% verbatim %}{% export revalidate = 300 %}{% endverbatim %}</code>. <code>literal</code> says which.</li>
 	</ul>
 

@@ -65,14 +65,16 @@ await writeFile("build/islands.json", JSON.stringify(islands.manifest));
 		{% endverbatim %}
 	{% endapply %}
 
-	<p>The manifest holds each island's template and props, by id:</p>
+	<p>The manifest holds each island's template and props, and the locale and time zone of the render that deferred it, by id:</p>
 
 	{% apply highlight("json") %}
 		{% verbatim %}
 {
 	"4f0b6c1d9e2a7385": {
 		"template": "components/stock.kiln",
-		"props": { "productId": 42 }
+		"props": { "productId": 42 },
+		"locale": "en",
+		"timeZone": "UTC"
 	}
 }
 		{% endverbatim %}
@@ -80,7 +82,7 @@ await writeFile("build/islands.json", JSON.stringify(islands.manifest));
 
 	<ul>
 		<li>Only the id reaches the browser. The props stay in the manifest, on your server.</li>
-		<li>An id comes from the template and props, so an island has the same id on every page and in every build. After you deploy, a page that's still cached somewhere asks for an id that either means the same island or doesn't exist.</li>
+		<li>An id comes from the template, props, locale and time zone, so an island has the same id on every page and in every build, and a different one for each locale. After you deploy, a page that's still cached somewhere asks for an id that either means the same island or doesn't exist.</li>
 		<li>Kiln adds the id to the end of <code>url</code>, so <code>"/_islands?id="</code> works too.</li>
 	</ul>
 
@@ -111,8 +113,10 @@ export default {
 			if (!Object.hasOwn(manifest, id)) {
 				return new Response("Not found", { status: 404 });
 			}
-			const { template, props } = manifest[id];
+			const { template, props, locale, timeZone } = manifest[id];
 			const html = await kiln.render(template, props, {
+				locale,
+				timeZone,
 				state: { cookie: request.headers.get("cookie") },
 			});
 			return new Response(html, {
@@ -131,6 +135,7 @@ export default {
 
 	<ul>
 		<li>Each island loads with its own request, which carries the visitor's cookies. Pass what the island needs from the request as <a href="/docs/api/extending/#request-data"><code>state</code></a>.</li>
+		<li>This is a render of its own, so it doesn't get the page's render options. Pass the entry's <code>locale</code> and <code>timeZone</code>, so the island formats dates and numbers as the page did, and any <a href="/docs/api/rendering/#globals-for-one-render"><code>globals</code></a> it needs.</li>
 		<li>Check who is signed in here, as you would for any page. An id says which island to render, not who may see it.</li>
 		<li>Choose the caching for each island. Use <code>public</code> with a short <code>max-age</code> for data everyone sees, and <code>private</code> for one visitor's data.</li>
 		<li><code>x-robots-tag: noindex</code> stops search engines listing island responses as pages.</li>
@@ -173,7 +178,7 @@ const stream = await kiln.renderStream("pages/product", { product }, {
 	<ul>
 		<li>Islands arrive in the order they finish, not the order they appear in the page.</li>
 		<li>Kiln adds them after everything the page writes, even <code>&lt;/html&gt;</code>. Browsers put them in the body, where the script moves each into its place. Without JavaScript, the fallbacks stay.</li>
-		<li>An island renders with the same <code>state</code>, locale and time zone as the page.</li>
+		<li>An island renders with the same <code>state</code>, globals, locale and time zone as the page.</li>
 		<li>If an island fails, the stream ends with its error, as for any error once the page has been sent. Islands that haven't arrived keep their fallbacks.</li>
 		<li>The islands count towards the page's limits. <code>maxOutputLength</code> and <code>maxSteps</code> count them as part of the page, and each island's nesting starts at the depth of its tag.</li>
 		<li>Islands inside <code>cache</code>, <code>set</code>, <code>apply</code> or a macro render in place, since their output may be reused or never sent.</li>

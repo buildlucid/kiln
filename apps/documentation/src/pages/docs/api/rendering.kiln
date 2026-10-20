@@ -27,6 +27,7 @@ const html = await kiln.render("pages/post", {
 		<thead><tr><th>Option</th><th>Description</th></tr></thead>
 		<tbody>
 			<tr><td><code>state</code></td><td>Data for this request, passed to functions made with <code>withRender</code>. See <a href="/docs/api/extending/#request-data">Request data</a></td></tr>
+			<tr><td><code>globals</code></td><td>Globals for this render, layered over the environment's. See <a href="#globals-for-one-render">Globals for one render</a></td></tr>
 			<tr><td><code>locale</code></td><td>Overrides the environment's locale</td></tr>
 			<tr><td><code>timeZone</code></td><td>Overrides the environment's time zone</td></tr>
 			<tr><td><code>signal</code></td><td>An <code>AbortSignal</code>. Kiln stops the render as soon as it is aborted, even while it waits for your code</td></tr>
@@ -43,6 +44,30 @@ const html = await kiln.render("pages/home", context, {
 });
 		{% endverbatim %}
 	{% endapply %}
+
+	<h3>Globals for one render</h3>
+
+	<p><code>globals</code> sets variables that every template in the render can read, as <a href="/docs/api/extending/#globals">globals</a> do: the page, its layouts, included templates, components, macros and islands. Use it for a value that is the same for the whole render but changes between renders, such as the locale of the content.</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+const kiln = createKiln({
+	loader,
+	globals: { site: { name: "Acme" }, contentLocale: "en" },
+});
+
+const html = await kiln.render("pages/home", context, {
+	globals: { contentLocale: "fr" },
+});
+		{% endverbatim %}
+	{% endapply %}
+
+	<ul>
+		<li>A render's globals win over the environment's globals of the same name. The environment's other globals stay available.</li>
+		<li><code>check</code>, <code>analyze</code>, <a href="/docs/api/types/">generated types</a>, <a href="/docs/tags/export/">exports</a> and your editor only know the environment's globals. Give each per-render global a default there, as <code>contentLocale</code> has above. Otherwise they treat it as render data, and exports can't read it.</li>
+		<li>Templates can't assign to them, as with any global.</li>
+		<li><a href="/docs/tags/cache/"><code>cache</code></a> keys don't include them. Add any that change a cached section's output to its key.</li>
+	</ul>
 
 	<h2>Rendering one block</h2>
 

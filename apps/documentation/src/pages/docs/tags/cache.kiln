@@ -24,7 +24,7 @@
 
 	<ul>
 		<li>Put a version in the key, such as <code>post.updatedAt</code>. When the post changes, so does the key, and Kiln renders the section again. You never need to clear the cache.</li>
-		<li>Kiln adds the template's name and the render's locale and time zone to every key. Two templates can use the same key, and dates and numbers are never shown in the wrong language.</li>
+		<li>Kiln adds the template's name and the render's locale and time zone to every key. Two templates can use the same key, and dates and numbers are never shown in the wrong language. Globals passed to one render are not added, so include any the section's output depends on.</li>
 		<li>Kiln also adds a short hash of the tag's content. Editing that source gives it new keys, and two tags in one template only share copies when their content is the same. The hash does not cover included templates, macros, block overrides, slot fills or your functions.</li>
 		<li>Never cache content for one visitor under a key that doesn't include them, or other visitors will see it.</li>
 	</ul>

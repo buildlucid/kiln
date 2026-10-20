@@ -113,4 +113,6 @@ const kiln = createKiln({
 	{% endapply %}
 
 	<p>Templates can't assign to globals. Values are not awaited, so pass data that is ready, or a function.</p>
+
+	<p>To change a global for one render, such as the locale of the content, pass it in the <a href="/docs/api/rendering/#globals-for-one-render"><code>globals</code> render option</a>.</p>
 {% endblock %}

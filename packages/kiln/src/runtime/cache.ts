@@ -11,10 +11,13 @@ import { isPlainObject } from "./values.js";
 
 const VERSION = 3;
 
+/** A deferred island a saved copy holds. Its locale and time zone are the render's, which the copy's key includes. */
+type SavedIsland = Pick<IslandEntry, "template" | "props">;
+
 export type Saved = {
 	html: string;
 	additions: Addition[];
-	islands: IslandEntry[];
+	islands: SavedIsland[];
 	islandScript: boolean;
 	/** The section's tags, which a section around it gets when it uses this copy. */
 	tags: string[];
@@ -75,7 +78,7 @@ export const unpackSaved = (value: string): Saved | null => {
 		}
 		additions.push({ outlet, html: text, once });
 	}
-	const islands: IslandEntry[] = [];
+	const islands: SavedIsland[] = [];
 	for (const item of isl) {
 		if (!Array.isArray(item)) return null;
 		const [template, props] = item as unknown[];

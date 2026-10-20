@@ -11,6 +11,7 @@
 		<li>The parameters of the arrow function it is in.</li>
 		<li>Local scopes, from the innermost outwards.</li>
 		<li>The template scope: the render data, <code>props</code>, and top-level <code>set</code> tags.</li>
+		<li><a href="/docs/api/rendering/#globals-for-one-render">Globals passed to the render</a>.</li>
 		<li><a href="/docs/api/extending/#globals">Globals</a> registered with the environment.</li>
 	</ol>
 

@@ -24,8 +24,8 @@ import { isPlainObject, typeName } from "./values.js";
  * An island renders in place unless the render has an `islands` option. Either way the island writes a `<kiln-island>`
  * element holding its fallback:
  *
- * - `deferIslands(…)` records its template and props in the manifest under an id made from both. The host serves each
- *   id by rendering the manifest entry with `render`, and the element fetches that HTML.
+ * - `deferIslands(…)` records its template, props, locale and time zone in the manifest under an id made from them. The
+ *   host serves each id by rendering the manifest entry with `render`, and the element fetches that HTML.
  * - `streamIslands()` renders the island on its own while the page carries on, and `renderStream` sends its HTML after
  *   the page, in a `<template>` followed by a `<kiln-island fill>` that moves it into place.
  */
@@ -39,10 +39,16 @@ export type JsonValue =
 	| JsonValue[]
 	| { [key: string]: JsonValue };
 
-/** One deferred island: the template to render and the props to render it with. */
+/**
+ * One deferred island: the template to render, the props to render it with, and the locale and time zone of the render
+ * that deferred it. Hosts render it with `render(entry.template, entry.props, { locale: entry.locale, timeZone:
+ * entry.timeZone })`, plus any other render options it needs, such as `state` or `globals`.
+ */
 export type IslandEntry = {
 	template: string;
 	props: Record<string, JsonValue>;
+	locale: string;
+	timeZone: string;
 };
 
 /** Every island deferred in a build, by id. Hosts save it as JSON and look ids up in it. */
@@ -210,8 +216,9 @@ const hashId = (text: string): string => {
 };
 
 /**
- * Records an island in the manifest and returns its id. The id comes from the template and props, so it is the same
- * on every page and in every build, and a page cached from an earlier build never asks for a different island.
+ * Records an island in the manifest and returns its id. The id comes from the template, props, locale and time zone,
+ * so it is the same on every page and in every build, and a page cached from an earlier build never asks for a
+ * different island.
  */
 export const recordIsland = (
 	run: Run,
@@ -220,12 +227,22 @@ export const recordIsland = (
 	template: string,
 	props: Record<string, JsonValue>,
 ): string => {
-	const key = JSON.stringify([template, props]);
+	// The locale and time zone are part of the id, so pages in different locales defer different islands.
+	const { locale, timeZone } = run.state;
+	const key = JSON.stringify([template, props, locale, timeZone]);
 	const id = hashId(key);
 	const { manifest } = islands;
 	const existing = Object.hasOwn(manifest, id) ? manifest[id] : undefined;
-	if (existing === undefined) manifest[id] = { template, props };
-	else if (JSON.stringify([existing.template, existing.props]) !== key) {
+	if (existing === undefined) {
+		manifest[id] = { template, props, locale, timeZone };
+	} else if (
+		JSON.stringify([
+			existing.template,
+			existing.props,
+			existing.locale,
+			existing.timeZone,
+		]) !== key
+	) {
 		throw fail(
 			run,
 			span,
