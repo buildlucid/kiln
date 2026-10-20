@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.0
+
+- New `globals` render option, which adds globals for one render on top of the environment's. ([8560145](https://github.com/buildlucid/kiln/commit/8560145ff40508c0fff2390677bfb75d0d51e306))
+- Deferred island manifest entries now record the render's `locale` and `timeZone`, and both are part of the island's id, so ids from earlier versions change. ([8560145](https://github.com/buildlucid/kiln/commit/8560145ff40508c0fff2390677bfb75d0d51e306))
+
 ## 1.4.0
 
 - New `builtins` export, which lists Kiln's own function, filter and test names. ([8d99639](https://github.com/buildlucid/kiln/commit/8d99639916ce3dfb920d567ed4de9069ec739cd7))
