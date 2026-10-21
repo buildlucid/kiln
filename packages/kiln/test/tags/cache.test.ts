@@ -1,5 +1,11 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { type KilnCache, memoryCache, withRender } from "../../src/index.js";
+import {
+	createKiln,
+	type KilnCache,
+	memoryCache,
+	memoryLoader,
+	withRender,
+} from "../../src/index.js";
 import { errorCode, lines, render, renderError, settle } from "../helpers.js";
 
 /** A store that records what it saves. */
@@ -322,6 +328,26 @@ describe("cache tags", () => {
 			"collection:menus",
 			"collection:pages",
 		]);
+	});
+
+	test("gives the store the render's state, so it can read and save per request", async () => {
+		type SiteState = { request: string };
+		const seen: string[] = [];
+		const kiln = createKiln<SiteState>({
+			loader: memoryLoader({ index: '{% cache "a" %}x{% endcache %}' }),
+			cache: {
+				get: ({ state }) => {
+					seen.push(`get:${state.request}`);
+					return null;
+				},
+				set: ({ state }) => {
+					seen.push(`set:${state.request}`);
+				},
+			},
+		});
+		await kiln.render("index", {}, { state: { request: "1" } });
+		await kiln.render("index", {}, { state: { request: "2" } });
+		expect(seen).toEqual(["get:1", "set:1", "get:2", "set:2"]);
 	});
 
 	test("gives a section the tags of sections inside it, rendered or saved", async () => {

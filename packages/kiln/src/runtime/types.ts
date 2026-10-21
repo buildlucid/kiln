@@ -199,12 +199,14 @@ export type TypeCheck = (value: unknown) => boolean;
 
 /**
  * Where the `cache` tag saves output, given as the `cache` option. See `memoryCache`. Each method takes one object, so
- * more details can be added without breaking stores.
+ * more details can be added without breaking stores. `state` is the render's `state` option, for a store that keeps
+ * something per request, such as the connection it reads with.
  */
-export type KilnCache = {
+export type KilnCache<State = unknown> = {
 	/** Returns the value saved under `key`, or null when there is none. */
 	get(entry: {
 		key: string;
+		state: State;
 	}): string | null | undefined | Promise<string | null | undefined>;
 	/**
 	 * Saves `value` under `key`. The value is Kiln's own string, holding the HTML and what the section added to outlets,
@@ -216,6 +218,7 @@ export type KilnCache = {
 		value: string;
 		seconds: number | null;
 		tags: string[];
+		state: State;
 	}): void | Promise<void>;
 };
 

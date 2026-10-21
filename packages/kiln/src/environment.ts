@@ -223,7 +223,7 @@ export type KilnOptions<
 	/** Enables `dump`. Default `false`. */
 	debug?: boolean;
 	/** Where the `cache` tag saves output, such as `memoryCache()`. Without it, the tag renders every time. */
-	cache?: KilnCache;
+	cache?: KilnCache<State>;
 	/** App and build identity added to fragment cache keys. Default `""`. */
 	cacheNamespace?: string;
 	limits?: Partial<Limits>;
@@ -1069,16 +1069,27 @@ export const memoryCache = ({ max = 1000 }: { max?: number } = {}) => {
 		string,
 		{ value: string; expires: number; tags: string[] }
 	>();
-	// `satisfies` keeps the synchronous types, so callers can use the store without awaiting.
+	// `satisfies` keeps the synchronous types, so callers can use the store without awaiting. The entries are written
+	// out without `state`, which the store doesn't read, so calling it directly needs none.
 	return {
-		get: ({ key }) => {
+		get: ({ key }: { key: string }) => {
 			const entry = entries.get(key);
 			if (!entry) return null;
 			if (entry.expires > Date.now()) return entry.value;
 			entries.delete(key);
 			return null;
 		},
-		set: ({ key, value, seconds, tags }) => {
+		set: ({
+			key,
+			value,
+			seconds,
+			tags,
+		}: {
+			key: string;
+			value: string;
+			seconds: number | null;
+			tags: string[];
+		}) => {
 			// Deleting first moves the key to the end, so the oldest copy is always first.
 			entries.delete(key);
 			entries.set(key, {

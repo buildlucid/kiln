@@ -1972,7 +1972,7 @@ class Compiler {
 			const found = locating(
 				run,
 				span,
-				() => store.get({ key: name }),
+				() => store.get({ key: name, state: state.userState }),
 				"The cache store",
 			);
 			return after(found, (value) => {
@@ -2034,7 +2034,14 @@ class Compiler {
 					return locating(
 						run,
 						span,
-						() => store.set({ key: name, value, seconds: time, tags }),
+						() =>
+							store.set({
+								key: name,
+								value,
+								seconds: time,
+								tags,
+								state: state.userState,
+							}),
 						"The cache store",
 					);
 				});

@@ -123,8 +123,9 @@ const kiln = createKiln({
 	{% endapply %}
 
 	<ul>
-		<li><code>set({ key, value, seconds, tags })</code> saves a copy. <code>value</code> is a string Kiln makes, holding the HTML and anything the section <a href="/docs/tags/outlet/">added to an outlet</a>. Save it as it is. <code>seconds</code> is the value of <code>for</code>, or null. <code>tags</code> lists the section's <a href="#tags">tags</a> in sorted order, and is empty when it has none.</li>
-		<li><code>get({ key })</code> returns the saved value, or null when there is none.</li>
+		<li><code>set({ key, value, seconds, tags, state })</code> saves a copy. <code>value</code> is a string Kiln makes, holding the HTML and anything the section <a href="/docs/tags/outlet/">added to an outlet</a>. Save it as it is. <code>seconds</code> is the value of <code>for</code>, or null. <code>tags</code> lists the section's <a href="#tags">tags</a> in sorted order, and is empty when it has none.</li>
+		<li><code>get({ key, state })</code> returns the saved value, or null when there is none.</li>
+		<li><code>state</code> is the render's <a href="/docs/api/extending/#request-data"><code>state</code> option</a>, for a store that keeps something per request, such as the connection it reads with.</li>
 		<li>To clear copies by tag, keep the tags with each copy. A store that can't list its copies, such as Workers KV, can keep a version for each tag instead: save the versions with the copy, change a tag's version to clear it, and have <code>get</code> return null when a saved version is out of date.</li>
 		<li>Both take one object, so Kiln can pass more details later without breaking your store.</li>
 		<li>Either may return a promise. The render only waits when one does.</li>
