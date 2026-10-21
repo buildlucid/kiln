@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.0
+
+- Host components listed in `components` in `kiln.json` complete by name, with their props when you give a `props` type, and aren't checked as templates. ([8d43019](https://github.com/buildlucid/kiln/commit/8d43019e8a0278449232b518d9e0a0f22547d83e))
+
 ## 1.3.0
 
 - Completion and hover docs for the new `export` tag. ([1e5cff7](https://github.com/buildlucid/kiln/commit/1e5cff72e7416abbc4695334e405bd38e5986f01))

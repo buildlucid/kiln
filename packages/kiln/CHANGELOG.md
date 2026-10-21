@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.0
+
+- New host components. A loader can return a component written in JavaScript with `hostComponent`, such as one made with React or Svelte. ([8d43019](https://github.com/buildlucid/kiln/commit/8d43019e8a0278449232b518d9e0a0f22547d83e))
+- `withRender` functions and host components can add HTML to an outlet with `render.addTo`. ([8d43019](https://github.com/buildlucid/kiln/commit/8d43019e8a0278449232b518d9e0a0f22547d83e))
+- `generateManifest` takes a `components` list of the files your loader returns as host components. ([8d43019](https://github.com/buildlucid/kiln/commit/8d43019e8a0278449232b518d9e0a0f22547d83e))
+
 ## 1.5.0
 
 - New `globals` render option, which adds globals for one render on top of the environment's. ([8560145](https://github.com/buildlucid/kiln/commit/8560145ff40508c0fff2390677bfb75d0d51e306))
