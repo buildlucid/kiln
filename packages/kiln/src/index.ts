@@ -20,6 +20,7 @@ export {
 	type KilnTests,
 	type KilnTypes,
 	type Limits,
+	type LoadedTemplate,
 	type Loader,
 	memoryCache,
 	memoryLoader,
@@ -32,6 +33,11 @@ export {
 	type TypeChecks,
 	withRender,
 } from "./environment.js";
+export {
+	type HostComponent,
+	type HostRender,
+	hostComponent,
+} from "./compiler/host.js";
 export type { PrecompiledTemplate } from "./compiler/precompiled.js";
 export {
 	type Diagnostic,
@@ -51,7 +57,11 @@ export {
 	type HtmlChecks,
 	templateText,
 } from "./html/index.js";
-export { generateManifest, type KilnManifest } from "./manifest.js";
+export {
+	generateManifest,
+	type KilnManifest,
+	type ManifestComponent,
+} from "./manifest.js";
 export { expose, lookup } from "./runtime/exposure.js";
 export {
 	type DeferredIslands,

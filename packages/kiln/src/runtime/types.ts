@@ -4,7 +4,12 @@ import type { EscapeStrategy, TemplateNode } from "../parser/ast.js";
 import type { Source, Span } from "../source.js";
 import type { Sequence } from "./ahead.js";
 import type { IslandMode } from "./islands.js";
-import type { Addition, LateAddition, OutletMark } from "./outlets.js";
+import {
+	type Addition,
+	type LateAddition,
+	type OutletMark,
+	recordAddition,
+} from "./outlets.js";
 import { childScope, isWithin, type Scope, sectionScope } from "./scope.js";
 import type { RenderStream } from "./stream.js";
 
@@ -133,6 +138,8 @@ export type CompiledTemplate = {
 	top: Sequence | null;
 	/** For a page, what its top-level statements read and set, or null when its layout must wait for them. */
 	early: (() => Effects | null) | null;
+	/** A host component from the loader, which can't be extended or imported. See `compileHost`. */
+	host?: true;
 };
 
 /**
@@ -245,6 +252,11 @@ export type RenderInfo<State = unknown> = {
 	 * when that data changes. Does nothing outside a cached section.
 	 */
 	tagCache(...tags: string[]): void;
+	/**
+	 * Adds HTML to an outlet, as `add to` does where the call happens. `once` adds it only the first time the render
+	 * sees that key, which never clashes with an `add to once` tag.
+	 */
+	addTo(outlet: string, html: string, options?: { once?: string }): void;
 };
 
 /** Counters and settings for one call to `render`. */
@@ -360,6 +372,9 @@ export const endCapture = (run: Run, capture: Capture): void => {
 	}
 };
 
+/** Where errors from `addTo` point: the template making the call, as host code has no place in it. */
+const HOST_SPAN = { start: 0, end: 0 };
+
 const NO_BLOCKS = new Map<string, BlockEntry[]>();
 /** The imports of a template that imports nothing, shared. */
 export const NO_IMPORTS: readonly CompiledTemplate[] = [];
@@ -419,6 +434,20 @@ export class Run {
 					}
 					section?.tags.add(tag);
 				}
+			},
+			addTo: (outlet, html, options) => {
+				if (typeof outlet !== "string" || typeof html !== "string") {
+					throw new TypeError(
+						"addTo needs an outlet name and HTML, as strings",
+					);
+				}
+				const once = options?.once;
+				// Template names can't hold a null character, so these keys never match an `add to once` tag's.
+				recordAddition(this, HOST_SPAN, {
+					outlet,
+					html,
+					once: once === undefined ? null : `\0${once}`,
+				});
 			},
 		};
 		return this.#info;

@@ -28,7 +28,23 @@ describe("generateManifest", () => {
 			globals: ["menu", "site"],
 			types: ["Post"],
 			htmlChecks: true,
+			components: [],
 		});
+	});
+
+	test("lists the files the loader returns as host components", () => {
+		const components = [
+			{ extensions: [".tsx"], include: ["components/solid/**"] },
+			{ extensions: [".vue"], props: "VueProps<$file>" },
+		];
+		expect(
+			JSON.parse(
+				generateManifest(createKiln({ loader: memoryLoader({}) }), {
+					root: ".",
+					components,
+				}),
+			).components,
+		).toEqual(components);
 	});
 
 	test("writes only the HTML check levels that differ from a warning", () => {

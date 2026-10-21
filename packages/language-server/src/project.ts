@@ -1,8 +1,13 @@
 import { readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, sep } from "node:path";
+import { dirname, join, posix, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import * as bundledKiln from "@lucidkiln/core";
-import type { Diagnostic, Kiln, KilnManifest } from "@lucidkiln/core";
+import type {
+	Diagnostic,
+	Kiln,
+	KilnManifest,
+	ManifestComponent,
+} from "@lucidkiln/core";
 import * as bundledFormat from "@lucidkiln/core/format";
 import {
 	type FileChange,
@@ -10,7 +15,8 @@ import {
 	type TypeScriptProject,
 } from "./typescript.js";
 
-type KilnModule = Pick<typeof bundledKiln, "createKiln">;
+type KilnModule = Pick<typeof bundledKiln, "createKiln"> &
+	Partial<Pick<typeof bundledKiln, "hostComponent">>;
 type FormatModule = Pick<
 	typeof bundledFormat,
 	"formatEdits" | "KilnFormatError"
@@ -80,7 +86,24 @@ export const nameOf = (project: Project, path: string): string | null => {
 export const pathOf = (project: Project, name: string): string =>
 	join(project.root, ...name.split("/"));
 
-/** Every template under the root, skipping dot folders and node_modules. */
+/** The `kiln.json` entry for a host component's resolved name, such as `components/Counter.tsx`, or null. */
+export const componentOf = (
+	manifest: KilnManifest | null,
+	name: string,
+): ManifestComponent | null => {
+	const matches = (globs: string[] | undefined) =>
+		globs?.some((glob) => posix.matchesGlob(name, glob)) ?? false;
+	return (
+		manifest?.components.find(
+			(entry) =>
+				entry.extensions.includes(posix.extname(name)) &&
+				(!entry.include || matches(entry.include)) &&
+				!matches(entry.exclude),
+		) ?? null
+	);
+};
+
+/** Every template and host component under the root, skipping dot folders and node_modules. */
 export const listTemplates = async (project: Project): Promise<string[]> => {
 	const names: string[] = [];
 	const visit = async (folder: string, from: string): Promise<void> => {
@@ -93,7 +116,12 @@ export const listTemplates = async (project: Project): Promise<string[]> => {
 			const name = from + entry.name;
 			if (entry.isDirectory())
 				await visit(join(folder, entry.name), name + "/");
-			else if (entry.isFile() && name.endsWith(".kiln")) names.push(name);
+			else if (
+				entry.isFile() &&
+				(name.endsWith(".kiln") || componentOf(project.manifest, name))
+			) {
+				names.push(name);
+			}
 		}
 	};
 	await visit(project.root, "");
@@ -138,6 +166,7 @@ export const readManifest = async (path: string): Promise<KilnManifest> => {
 		root = ".",
 		strict = true,
 		htmlChecks = true,
+		components = [],
 	} = data as Partial<KilnManifest>;
 	if (typeof root !== "string")
 		throw new Error('"root" in kiln.json must be a string');
@@ -155,10 +184,32 @@ export const readManifest = async (path: string): Promise<KilnManifest> => {
 			'"htmlChecks" in kiln.json must be true, false or an object',
 		);
 	}
+	const names = (value: unknown) =>
+		value === undefined ||
+		(Array.isArray(value) && value.every((item) => typeof item === "string"));
+	if (
+		!Array.isArray(components) ||
+		components.some(
+			(entry: unknown) =>
+				typeof entry !== "object" ||
+				entry === null ||
+				!("extensions" in entry) ||
+				!Array.isArray(entry.extensions) ||
+				!names(entry.extensions) ||
+				("include" in entry && !names(entry.include)) ||
+				("exclude" in entry && !names(entry.exclude)) ||
+				("props" in entry && typeof entry.props !== "string"),
+		)
+	) {
+		throw new Error(
+			'"components" in kiln.json must be a list of { extensions, include?, exclude?, props? }',
+		);
+	}
 	return {
 		root,
 		strict,
 		htmlChecks,
+		components,
 		functions: field("functions"),
 		filters: field("filters"),
 		tests: field("tests"),
@@ -215,8 +266,11 @@ export const openProject = async (
 			? join(dirname(manifestPath), manifest.root)
 			: fallbackRoot;
 	const base = manifestPath ? dirname(manifestPath) : fallbackRoot;
-	const { createKiln } =
+	const { createKiln, hostComponent } =
 		(await importInstalled<KilnModule>(base, ".")) ?? bundledKiln;
+	// The project's own Kiln makes it, since Kiln knows host components by a symbol of its own. One too old for them
+	// gets an empty template.
+	const component = hostComponent ? hostComponent(() => "") : "";
 	const format =
 		(await importInstalled<FormatModule>(base, "./format")) ?? bundledFormat;
 
@@ -227,6 +281,7 @@ export const openProject = async (
 				const open = overlay.get(name);
 				if (open !== undefined) return open;
 				if (!manifest) return null;
+				if (componentOf(manifest, name)) return component;
 				try {
 					return await readFile(join(root, ...name.split("/")), "utf8");
 				} catch {

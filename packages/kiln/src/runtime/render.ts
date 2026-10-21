@@ -619,6 +619,18 @@ export const importsFor = (
 	}
 	const finish = (list: (CompiledTemplate | null)[]) => {
 		const imports = list as CompiledTemplate[];
+		for (let i = 0; i < imports.length; i++) {
+			const imported = imports[i] as CompiledTemplate;
+			if (imported.host) {
+				const { span } = template.imports[i] as { span: Span };
+				throw notTemplate(
+					new Run(state, template, run.depth, null, null),
+					span,
+					imported,
+					"imported",
+				);
+			}
+		}
 		state.importsCache ??= new Map();
 		state.importsCache.set(template, imports);
 		return imports;
@@ -627,6 +639,20 @@ export const importsFor = (
 	if (loaded.some(isPromise)) return Promise.all(loaded).then(finish);
 	return finish(loaded as (CompiledTemplate | null)[]);
 };
+
+/** A host component has no blocks or macros, so it can only be rendered. */
+const notTemplate = (
+	run: Run,
+	span: Span,
+	template: CompiledTemplate,
+	use: string,
+): KilnRenderError =>
+	fail(
+		run,
+		span,
+		"not-a-template",
+		`"${template.name}" is a host component, so it can't be ${use}`,
+	);
 
 /** Creates an isolated scope holding globals plus the given variables. Each variable passed counts as a step. */
 export const isolatedScope = (
@@ -687,6 +713,11 @@ export const renderTemplate = (
 			"limit-depth",
 			`Render stopped after nesting ${state.maxDepth} templates, macros or layouts deep`,
 		);
+	}
+
+	// Only layouts get an inherited block table.
+	if (inherited && template.host && caller) {
+		throw notTemplate(caller, callerSpan, template, "extended");
 	}
 
 	// Which layout a template extends is only known now, so the layout's slots join the `slots` hash here.

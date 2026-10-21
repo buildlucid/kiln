@@ -212,6 +212,11 @@ export const navigation = [
 				description: "Tell Kiln where templates come from.",
 			},
 			{
+				title: "Host components",
+				url: "/docs/api/host-components/",
+				description: "Render components written in JavaScript, such as React.",
+			},
+			{
 				title: "Precompiling",
 				url: "/docs/api/precompiling/",
 				description: "Compile your templates to JavaScript at build time.",

@@ -43,7 +43,7 @@ const kiln = createKiln({
 
 	<h2>Your own loader</h2>
 
-	<p>A loader is an object with a <code>load</code> method. It gets a resolved name, such as <code>pages/home.kiln</code>, and returns the source or a <a href="/docs/api/precompiling/">precompiled module</a>, or null if the template doesn't exist. It can be async, returning a promise or any other thenable.</p>
+	<p>A loader is an object with a <code>load</code> method. It gets a resolved name, such as <code>pages/home.kiln</code>, and returns the source, a <a href="/docs/api/precompiling/">precompiled module</a> or a <a href="/docs/api/host-components/">host component</a>, or null if the template doesn't exist. It can be async, returning a promise or any other thenable.</p>
 
 	<p>Kiln keeps each template it loads until you call <code>invalidate</code>. It remembers only a limited number of missing names, so names built from requests can't fill memory. A template that fails to load or compile is loaded again the next time it is used.</p>
 

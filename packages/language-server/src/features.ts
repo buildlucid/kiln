@@ -34,7 +34,13 @@ import {
 } from "./context.js";
 import { type DocKind, docsFor } from "./docs.js";
 import { htmlCompletions, htmlHover } from "./html.js";
-import { listTemplates, pathOf, type Project, resolveName } from "./project.js";
+import {
+	componentOf,
+	listTemplates,
+	pathOf,
+	type Project,
+	resolveName,
+} from "./project.js";
 import {
 	type Binding,
 	bindingAt,
@@ -206,6 +212,29 @@ const membersOf = async (
 	);
 };
 
+/**
+ * The props of a host component, from the TypeScript type `kiln.json` gives for its files. Empty without one, or
+ * without TypeScript.
+ */
+const componentProps = async (
+	open: OpenTemplate,
+	target: string,
+): Promise<Member[] | null> => {
+	const component = componentOf(open.project.manifest, target);
+	if (!component) return null;
+	const typescript = component.props ? await open.project.typescript() : null;
+	if (!typescript || !component.props) return [];
+	// The module without its extension, which TypeScript resolves to the file.
+	const file = pathOf(open.project, target).replace(/\.[^./\\]+$/, "");
+	return (
+		withTypes(
+			typescript,
+			{ Props: component.props.replaceAll("$file", JSON.stringify(file)) },
+			(read) => read.members("Props"),
+		) ?? []
+	);
+};
+
 /** A function, filter, test or global the project describes in TypeScript. */
 const registered = async (
 	open: OpenTemplate,
@@ -336,6 +365,18 @@ export const complete = async (
 			}));
 		case "prop": {
 			const target = resolveName(context.template, name ?? undefined);
+			const members = target ? await componentProps(open, target) : null;
+			if (members) {
+				return members.map((member) => ({
+					label: member.name,
+					kind: CompletionItemKind.Field,
+					detail: `${member.name}${member.optional ? "?" : ""}: ${member.type}`,
+					documentation: memberDocs(member)
+						? markdown(memberDocs(member))
+						: undefined,
+					insertText: `${member.name}: `,
+				}));
+			}
 			const analysis = target ? await analyse(project, target) : null;
 			return (analysis?.props ?? []).map((prop) => ({
 				label: prop.name,
@@ -572,6 +613,19 @@ export const hover = async (
 		}
 		case "template": {
 			const target = resolveName(symbol.name, name ?? undefined);
+			const members = target ? await componentProps(open, target) : null;
+			if (target && members) {
+				const props = members.map(
+					(member) =>
+						`${member.name}${member.optional ? "?" : ""}: ${member.type}`,
+				);
+				value = [
+					`**${target}**`,
+					"A host component your loader returns.",
+					...(props.length > 0 ? [codeBlock(`props ${props.join(", ")}`)] : []),
+				].join("\n\n");
+				break;
+			}
 			const analysis = target ? await analyse(project, target) : null;
 			if (!target || !analysis) {
 				value = project.manifest

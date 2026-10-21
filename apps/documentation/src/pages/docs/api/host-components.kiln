@@ -1,0 +1,71 @@
+{% extends "layouts/docs" %}
+
+{% block content %}
+	<p>A host component is a component written in JavaScript instead of a template. Your loader returns one in place of template source. Use them to render components made with a UI library, such as React or Svelte, from your templates.</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+import { createKiln, hostComponent, safe } from "@lucidkiln/core";
+import { fileLoader } from "@lucidkiln/core/node";
+
+const templates = fileLoader({ root: "src/templates" });
+
+const kiln = createKiln({
+	loader: {
+		list: templates.list,
+		load: (name) =>
+			name.endsWith(".tsx")
+				? hostComponent(async (props, slots) =>
+						safe(await renderReact(name, props, slots)),
+					)
+				: templates.load(name),
+	},
+});
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>Templates use a host component like any other component, by its name. A name with an extension, such as <code>Counter.tsx</code>, keeps it, so the loader can tell which names are host components.</p>
+
+	{% apply highlight("kiln") %}
+		{% verbatim %}
+{% component "components/Counter.tsx" with { start: 3 } %}
+	<p>Passed in as the default slot</p>
+	{% fill "footer" %}<small>Passed in as the footer slot</small>{% endfill %}
+{% endcomponent %}
+
+{% include "components/PriceTable.tsx" with { plans: page.plans } %}
+		{% endverbatim %}
+	{% endapply %}
+
+	<h2>What it receives</h2>
+
+	<p><code>hostComponent</code> takes a function that Kiln calls each time the component renders. It gets three arguments:</p>
+
+	<ul>
+		<li><code>props</code> is a plain object holding the hash passed with <code>with</code>, or the context passed to <code>render</code>.</li>
+		<li><code>slots</code> holds each slot the caller filled, rendered to <a href="/docs/api/safe-markup/">safe markup</a>. Content outside any <code>fill</code> is the <code>default</code> slot. A slot the caller didn't fill isn't there.</li>
+		<li><code>render</code> is the same <a href="/docs/api/extending/#request-data">request data</a> that <code>withRender</code> functions get, such as <code>state</code>, <code>locale</code> and <code>tagCache</code>.</li>
+	</ul>
+
+	<p>It returns safe markup made with <code>safe</code>, or a promise of it. A plain string is escaped, as it is when a function returns one. An error it throws stops the render with a <code>host-error</code>, like an error from a function.</p>
+
+	<h2>Where it works</h2>
+
+	<ul>
+		<li>With <a href="/docs/tags/component/"><code>component</code></a>, <a href="/docs/tags/include/"><code>include</code></a> and <a href="/docs/tags/island/"><code>island</code></a>, in every island mode.</li>
+		<li>With <code>render</code> and <code>renderStream</code>, which render it as the whole output. A server that renders deferred islands from their manifest renders host components this way.</li>
+		<li>Not with <code>extends</code> or <code>import</code>. A host component has no blocks or macros, so these fail with a <code>not-a-template</code> error.</li>
+	</ul>
+
+	<h2>How it differs from a template</h2>
+
+	<ul>
+		<li>Every fill renders before the component, since a UI library needs its children up front. A template component only renders a fill when it reaches the slot, so an <code>add to</code> inside an unused fill adds nothing there.</li>
+		<li>Kiln doesn't check its props. Strict mode's prop checks only apply to templates with a <code>props</code> tag.</li>
+		<li>Kiln keeps the host component your loader returned until you call <code>invalidate</code>, as it keeps templates.</li>
+	</ul>
+
+	<h2>In your editor</h2>
+
+	<p>List the files your loader returns as host components in <code>kiln.json</code>, so the editor completes their names and props. See <a href="/docs/tooling/editors/#host-components">Host components</a> in editor support.</p>
+{% endblock %}

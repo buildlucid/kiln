@@ -1,6 +1,7 @@
 import {
 	createKiln,
 	type Diagnostic,
+	type HostComponent,
 	type IslandMode,
 	type KilnOptions,
 	KilnRenderError,
@@ -12,8 +13,8 @@ import {
 export type TestOptions = Omit<KilnOptions, "loader"> & {
 	/** Variables passed to `render`. */
 	context?: Record<string, unknown>;
-	/** Other templates the test template uses, by name, such as `{ "layouts/base": "..." }`. */
-	templates?: Record<string, string>;
+	/** Other templates the test template uses, by name, such as `{ "layouts/base": "..." }`, or host components. */
+	templates?: Record<string, string | HostComponent>;
 	/** The `islands` render option, to defer or stream `island` tags. */
 	islands?: IslandMode;
 	/** The `signal` render option, to abort the render. */
@@ -41,12 +42,19 @@ export const loadModule = async (
  * they would without precompiling.
  */
 const precompileAll = async (
-	sources: Record<string, string>,
+	sources: Record<string, string | HostComponent>,
 	options: Omit<KilnOptions, "loader">,
-): Promise<Record<string, string | PrecompiledTemplate>> => {
+): Promise<Record<string, string | PrecompiledTemplate | HostComponent>> => {
 	const builder = createKiln({ ...options, loader: memoryLoader(sources) });
-	const templates: Record<string, string | PrecompiledTemplate> = {};
+	const templates: Record<
+		string,
+		string | PrecompiledTemplate | HostComponent
+	> = {};
 	for (const [name, source] of Object.entries(sources)) {
+		if (typeof source !== "string") {
+			templates[name] = source;
+			continue;
+		}
 		try {
 			templates[name] = await loadModule(await builder.precompile(name));
 		} catch (error) {

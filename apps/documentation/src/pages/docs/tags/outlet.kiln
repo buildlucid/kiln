@@ -56,6 +56,23 @@
 		{% endverbatim %}
 	{% endapply %}
 
+	<h2>From your code</h2>
+
+	<p>A <a href="/docs/api/extending/#request-data"><code>withRender</code></a> function or a <a href="/docs/api/host-components/">host component</a> can add to an outlet with <code>addTo</code>. The HTML is added as it is, so escape anything it holds from your data. It follows the same rules as <code>add to</code>, where the call happens.</p>
+
+	{% apply highlight("ts") %}
+		{% verbatim %}
+const datePicker = withRender((render) => {
+	render.addTo("head", '<script type="module" src="/date-picker.js"></script>', {
+		once: "date-picker",
+	});
+	return safe("<date-picker></date-picker>");
+});
+		{% endverbatim %}
+	{% endapply %}
+
+	<p>A <code>once</code> key is yours to choose. Keys from your code and <code>add to once</code> tags never clash.</p>
+
 	<h2>Rules</h2>
 
 	<ul>

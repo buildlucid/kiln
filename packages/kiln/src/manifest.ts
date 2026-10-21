@@ -14,6 +14,20 @@ export type KilnManifest = {
 	globals: string[];
 	types: string[];
 	htmlChecks: HtmlChecks;
+	/** The files the loader returns as host components. The first entry matching a file applies. */
+	components: ManifestComponent[];
+};
+
+/** Files a loader returns as host components, which editors complete and don't check as templates. */
+export type ManifestComponent = {
+	/** File extensions, such as `[".tsx"]`. */
+	extensions: string[];
+	/** Globs relative to `root` the files must match. Any file with the extensions when left out. */
+	include?: string[];
+	/** Globs relative to `root` the files must not match. */
+	exclude?: string[];
+	/** The TypeScript type of a component's props, with `$file` standing for the component's module. */
+	props?: string;
 };
 
 const hostNames = (registry: ReadonlyMap<string, CallableEntry>) =>
@@ -23,7 +37,7 @@ const hostNames = (registry: ReadonlyMap<string, CallableEntry>) =>
 		.sort();
 
 /**
- * Writes `kiln.json` for an environment: the names of its functions, filters, tests, globals and prop types, and its HTML check levels, so editors can check templates without running your code. `root` is the template folder, relative to where you write the file.
+ * Writes `kiln.json` for an environment: the names of its functions, filters, tests, globals and prop types, and its HTML check levels, so editors can check templates without running your code. `root` is the template folder, relative to where you write the file, and `components` the files your loader returns as host components.
  *
  * ```ts
  * await writeFile("kiln.json", generateManifest(kiln, { root: "src/templates" }));
@@ -31,7 +45,7 @@ const hostNames = (registry: ReadonlyMap<string, CallableEntry>) =>
  */
 export const generateManifest = <State, Schema extends KilnSchema>(
 	kiln: Kiln<State, Schema>,
-	options: { root: string },
+	options: { root: string; components?: ManifestComponent[] },
 ): string => {
 	const env = environmentOf(kiln);
 	const manifest: KilnManifest = {
@@ -43,6 +57,7 @@ export const generateManifest = <State, Schema extends KilnSchema>(
 		globals: variableNames(env.globals).sort(),
 		types: [...env.types.keys()].sort(),
 		htmlChecks: htmlChecksOption(env.htmlChecks),
+		components: options.components ?? [],
 	};
 	return `${JSON.stringify(manifest, null, "\t")}\n`;
 };

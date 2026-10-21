@@ -94,6 +94,7 @@ await kiln.render("pages/page", context, {
 			<tr><td><code>template</code></td><td>The name of the template making the call</td></tr>
 			<tr><td><code>signal</code></td><td>The render's abort signal, if there is one</td></tr>
 			<tr><td><code>tagCache(...tags)</code></td><td>Tags the cached section the call runs in, so your store can clear it when that data changes. See <a href="/docs/tags/cache/#tags">Tags</a></td></tr>
+			<tr><td><code>addTo(outlet, html, options?)</code></td><td>Adds HTML to an outlet, as <code>add to</code> does. Pass <code>{ once: key }</code> to add it only the first time the render sees that key. See <a href="/docs/tags/outlet/#from-your-code">From your code</a></td></tr>
 		</tbody>
 	</table>
 

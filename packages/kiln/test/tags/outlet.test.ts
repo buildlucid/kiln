@@ -1,4 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
+import {
+	hostComponent,
+	memoryCache,
+	safe,
+	withRender,
+} from "../../src/index.js";
 import { errorCode, lines, render } from "../helpers.js";
 
 const base = lines(
@@ -96,5 +102,77 @@ describe("outlet", () => {
 
 	test("needs a string name", async () => {
 		expect(await errorCode("{% outlet head %}")).toBe("unexpected-token");
+	});
+});
+
+describe("addTo", () => {
+	const functions = {
+		picker: withRender((info) => {
+			info.addTo("head", "<script src=/picker.js></script>", {
+				once: "picker",
+			});
+			return safe("<date-picker></date-picker>");
+		}),
+		note: withRender((info, text: string) => {
+			info.addTo("head", `<meta name=${text}>`);
+			return "";
+		}),
+	};
+
+	test("adds HTML from a function, once per key", async () => {
+		expect(
+			await render(
+				'<head>{% outlet "head" %}</head>{{ picker() }}{{ picker() }}{{ note("a") }}',
+				{ functions },
+			),
+		).toBe(
+			"<head><script src=/picker.js></script><meta name=a></head><date-picker></date-picker><date-picker></date-picker>",
+		);
+	});
+
+	test("adds HTML from a host component", async () => {
+		const templates = {
+			"Meta.tsx": hostComponent((_props, _slots, info) => {
+				info.addTo("head", "<title>Hi</title>");
+				return safe("<p></p>");
+			}),
+		};
+		expect(
+			await render('<head>{% outlet "head" %}</head>{% include "Meta.tsx" %}', {
+				templates,
+			}),
+		).toBe("<head><title>Hi</title></head><p></p>");
+	});
+
+	test("never shares a once key with an add to once tag", async () => {
+		const template = lines(
+			'<head>{% outlet "head" %}</head>',
+			'{% add to "head" once %}tag{% endadd %}',
+			"{{ picker() }}",
+		);
+		expect(await render(template, { functions })).toContain(
+			"<head>tag<script src=/picker.js></script></head>",
+		);
+	});
+
+	test("is saved and added again with a cached section", async () => {
+		const cache = memoryCache();
+		const template =
+			'<head>{% outlet "head" %}</head>{% cache "c" %}{{ note("cached") }}{% endcache %}';
+		await render(template, { functions, cache });
+		expect(
+			await render(template, {
+				functions: { ...functions, note: () => "" },
+				cache,
+			}),
+		).toBe("<head><meta name=cached></head>");
+	});
+
+	test("fails for a closed outlet, as add to does", async () => {
+		expect(
+			await errorCode('{% outlet "head" %}{% flush %}{{ note("late") }}', {
+				functions,
+			}),
+		).toBe("outlet-closed");
 	});
 });

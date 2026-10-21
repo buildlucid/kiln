@@ -20,7 +20,7 @@ import {
 	type OpenTemplate,
 	signatureHelp,
 } from "./features.js";
-import { openProject, type Project } from "./project.js";
+import { diagnose, openProject, type Project } from "./project.js";
 import { createTestProject } from "./test-project.js";
 
 describe("definition", () => {
@@ -252,5 +252,80 @@ describe("TypeScript types", () => {
 				'This argument should be `keyof Collections`, not `"pgaes"`.',
 			],
 		]);
+	});
+});
+
+describe("host components", () => {
+	let dir: string;
+	let project: Project;
+	const open = (text: string): OpenTemplate => ({
+		document: TextDocument.create(
+			pathToFileURL(join(dir, "src/templates/page.kiln")).href,
+			"kiln",
+			1,
+			text,
+		),
+		project,
+		name: "page.kiln",
+	});
+
+	beforeAll(async () => {
+		dir = await createTestProject(7);
+		await writeFile(
+			join(dir, "kiln.json"),
+			JSON.stringify({
+				root: "src/templates",
+				components: [
+					{
+						extensions: [".tsx"],
+						props: "Parameters<typeof import($file).default>[0]",
+					},
+					{ extensions: [".vue"] },
+				],
+			}),
+		);
+		await writeFile(
+			join(dir, "src/templates/Card.tsx"),
+			"/** A card. */\nexport default (props: { /** Shown on top. */ title: string; count?: number }) => null;\n",
+		);
+		await writeFile(
+			join(dir, "src/templates/Note.vue"),
+			"<template></template>",
+		);
+		project = await openProject(join(dir, "kiln.json"), dir, (message) => {
+			throw new Error(message);
+		});
+	});
+	afterAll(async () => {
+		project.close();
+		await rm(dir, { recursive: true });
+	});
+
+	test("completes their names with their extensions", async () => {
+		const text = '{% include "" %}';
+		const items = await complete(open(text), text.indexOf('" %}'));
+		expect(items.map((item) => item.label)).toEqual(
+			expect.arrayContaining(["Card.tsx", "Note.vue"]),
+		);
+	});
+
+	test("completes and describes their props from TypeScript", async () => {
+		const text = '{% include "Card.tsx" with { } %}';
+		const items = await complete(open(text), text.indexOf("} %}"));
+		expect(items.map((item) => [item.label, item.detail])).toEqual([
+			["title", "title: string"],
+			["count", "count?: number | undefined"],
+		]);
+		const result = await hover(open(text), text.indexOf("Card"));
+		expect(result?.contents).toMatchObject({
+			value: expect.stringContaining("props title: string, count?: number"),
+		});
+	});
+
+	test("completes no props without a type, and isn't checked as a template", async () => {
+		const text = '{% include "Note.vue" with { } %}';
+		expect(await complete(open(text), text.indexOf("} %}"))).toEqual([]);
+		const checked = '{% include "Note.vue" with { any: 1 } %}';
+		expect(await diagnose(project, "page.kiln", checked)).toEqual([]);
 	});
 });

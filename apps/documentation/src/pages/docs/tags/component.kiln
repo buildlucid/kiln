@@ -54,4 +54,8 @@
 	<h2>Without content</h2>
 
 	<p>A component with no content can be rendered with <a href="/docs/tags/include/"><code>include</code></a>. Every slot then shows its fallback.</p>
+
+	<h2>Components written in JavaScript</h2>
+
+	<p>Your loader can return a <a href="/docs/api/host-components/">host component</a> for a name, such as <code>components/Counter.tsx</code>, to render a component made with a UI library. Templates use it the same way, with props and fills.</p>
 {% endblock %}

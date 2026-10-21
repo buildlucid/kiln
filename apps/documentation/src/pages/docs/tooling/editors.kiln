@@ -148,6 +148,7 @@ npx kiln-language-server --stdio
 			<tr><td><code>globals</code></td><td>The names of your globals.</td></tr>
 			<tr><td><code>types</code></td><td>The names of the prop types you register in the <code>types</code> option, such as <code>Post</code>.</td></tr>
 			<tr><td><code>htmlChecks</code></td><td>Your <a href="/docs/tooling/html-checks/#turning-rules-off"><code>htmlChecks</code></a> option. Default <code>true</code>.</td></tr>
+			<tr><td><code>components</code></td><td>The files your loader returns as <a href="/docs/api/host-components/">host components</a>. See <a href="#host-components">Host components</a>. Default <code>[]</code>.</td></tr>
 		</tbody>
 	</table>
 
@@ -170,6 +171,34 @@ await writeFile("kiln.json", generateManifest(kiln, { root: "src/templates" }));
 	{% endapply %}
 
 	<p>Names are sorted, so the file only changes when you add or remove one.</p>
+
+	<h3>Host components</h3>
+
+	<p>When your loader returns <a href="/docs/api/host-components/">host components</a> for some files, list them in <code>components</code>, so the editor completes their names and doesn't check them as templates. Each entry names the file extensions it covers, and optional <code>include</code> and <code>exclude</code> globs relative to <code>root</code>. The first entry that matches a file applies.</p>
+
+	{% apply highlight("json") %}
+		{% verbatim %}
+{
+	"root": ".",
+	"components": [
+		{
+			"extensions": [".tsx"],
+			"include": ["components/solid/**"],
+			"props": "Parameters<typeof import($file).default>[0]"
+		},
+		{
+			"extensions": [".tsx"],
+			"props": "import(\"react\").ComponentProps<typeof import($file).default>"
+		},
+		{ "extensions": [".vue"] }
+	]
+}
+		{% endverbatim %}
+	{% endapply %}
+
+	<p><code>props</code> is the TypeScript type of a component's props, with <code>$file</code> standing for the component's module. With it, the editor completes and describes the props you pass with <code>with</code>, using <a href="#types-from-typescript">your project's TypeScript</a>. Without it, the editor completes the component's name only.</p>
+
+	<p>Pass the same list to <code>generateManifest</code> as <code>components</code>.</p>
 
 	<h2>Types from TypeScript</h2>
 

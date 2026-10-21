@@ -69,10 +69,18 @@ describe("projects", () => {
 			globals: [],
 			types: [],
 			htmlChecks: true,
+			components: [],
 		});
 		await writeFile(join(dir, "kiln.json"), '{ "filters": "markdown" }');
 		await expect(readManifest(join(dir, "kiln.json"))).rejects.toThrow(
 			'"filters" in kiln.json must be a list of names',
+		);
+		await writeFile(
+			join(dir, "kiln.json"),
+			'{ "components": [{ "extensions": ".tsx" }] }',
+		);
+		await expect(readManifest(join(dir, "kiln.json"))).rejects.toThrow(
+			'"components" in kiln.json must be a list',
 		);
 	});
 

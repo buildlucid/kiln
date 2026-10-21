@@ -5,6 +5,11 @@ import { checkReferences } from "./checker.js";
 import { generateModule } from "./compiler/codegen.js";
 import { compileTemplate } from "./compiler/compiler.js";
 import {
+	compileHost,
+	type HostComponent,
+	isHostComponent,
+} from "./compiler/host.js";
+import {
 	compilePrecompiled,
 	isPrecompiled,
 	type PrecompiledTemplate,
@@ -54,22 +59,21 @@ import { hashKeys, isPlainObject, typeName } from "./runtime/values.js";
 
 export type { RenderInfo };
 
+/** What a loader returns for a template that exists: its source, a precompiled module's default export, or a host component. */
+export type LoadedTemplate = string | PrecompiledTemplate | HostComponent;
+
 /**
  * Where templates come from. Kiln calls `load` once per resolved name that exists, until `invalidate`, and remembers
  * a limited number of missing names.
  */
 export type Loader = {
 	/**
-	 * Returns the source for a resolved name, such as `pages/page.kiln`, or a precompiled module's default export, or
-	 * `null` if it does not exist. May return a promise or another thenable.
+	 * Returns the source for a resolved name, such as `pages/page.kiln`, a precompiled module's default export, a
+	 * `hostComponent`, or `null` if it does not exist. May return a promise or another thenable.
 	 */
 	load(
 		name: string,
-	):
-		| string
-		| PrecompiledTemplate
-		| null
-		| PromiseLike<string | PrecompiledTemplate | null>;
+	): LoadedTemplate | null | PromiseLike<LoadedTemplate | null>;
 	/** Returns every resolved name the loader holds. Rendering never calls it; tools such as `generateTypes` do. */
 	list?(): string[] | Promise<string[]>;
 };
@@ -534,14 +538,15 @@ class Environment<State, Schema extends KilnSchema> implements EnvironmentCore {
 		if (cached !== undefined) return cached;
 		if (this.#missing.has(name)) return null;
 
-		const compile = (source: string | PrecompiledTemplate | null) => {
+		const compile = (source: LoadedTemplate | null) => {
 			if (source === null) return null;
 			if (typeof source === "string") {
 				return compileTemplate(this, name, source);
 			}
 			if (isPrecompiled(source)) return compilePrecompiled(this, name, source);
+			if (isHostComponent(source)) return compileHost(this, name, source);
 			throw new TypeError(
-				`Loader returned a ${typeName(source)} for "${name}", not a string, a precompiled template or null`,
+				`Loader returned a ${typeName(source)} for "${name}", not a string, a precompiled template, a host component or null`,
 			);
 		};
 		const keep = (template: CompiledTemplate | null) => {
@@ -1035,16 +1040,14 @@ const createApi = <State, Schema extends KilnSchema>(
 
 /**
  * A loader for templates held in memory, keyed by name. Keys without an extension get `.kiln`. Each template is its
- * source or a precompiled module's default export.
+ * source, a precompiled module's default export or a host component.
  *
  * Works on every runtime, including Cloudflare Workers.
  */
 export const memoryLoader = (
-	templates:
-		| Record<string, string | PrecompiledTemplate>
-		| Map<string, string | PrecompiledTemplate>,
+	templates: Record<string, LoadedTemplate> | Map<string, LoadedTemplate>,
 ): Omit<Loader, "list"> & { list(): string[] } => {
-	const map = new Map<string, string | PrecompiledTemplate>();
+	const map = new Map<string, LoadedTemplate>();
 	const entries =
 		templates instanceof Map ? templates : Object.entries(templates);
 	for (const [name, source] of entries) {
