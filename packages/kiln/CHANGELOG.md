@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.0
+
+- Cache stores now receive the render's `state` in `get` and `set`, so a store can keep something per request, such as the connection it reads with. See [Cache stores](https://kilnlang.com/docs/tags/cache/#cache-stores). ([2fa3f0a](https://github.com/buildlucid/kiln/commit/2fa3f0a37d8f9b1e5dd51c1ece78e5938998f72e))
+
 ## 1.6.0
 
 - New host components. A loader can return a component written in JavaScript with `hostComponent`, such as one made with React or Svelte. ([8d43019](https://github.com/buildlucid/kiln/commit/8d43019e8a0278449232b518d9e0a0f22547d83e))
