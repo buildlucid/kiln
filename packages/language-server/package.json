@@ -1,6 +1,6 @@
 {
 	"name": "@lucidkiln/language-server",
-	"version": "1.4.0",
+	"version": "1.4.1",
 	"description": "Language server for Kiln templates: errors as you type, formatting, completions, hover and go to definition.",
 	"repository": {
 		"type": "git",

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.1
+
+- Supports Node 26 as well as Node 24. ([de608f3](https://github.com/buildlucid/kiln/commit/de608f35b8e5a022eb28e03e8083e8c64f4e3d15))
+
 ## 1.7.0
 
 - Cache stores now receive the render's `state` in `get` and `set`, so a store can keep something per request, such as the connection it reads with. See [Cache stores](https://kilnlang.com/docs/tags/cache/#cache-stores). ([2fa3f0a](https://github.com/buildlucid/kiln/commit/2fa3f0a37d8f9b1e5dd51c1ece78e5938998f72e))

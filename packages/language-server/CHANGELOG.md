@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1
+
+- Supports Node 26 as well as Node 24. ([de608f3](https://github.com/buildlucid/kiln/commit/de608f35b8e5a022eb28e03e8083e8c64f4e3d15))
+
 ## 1.4.0
 
 - Host components listed in `components` in `kiln.json` complete by name, with their props when you give a `props` type, and aren't checked as templates. ([8d43019](https://github.com/buildlucid/kiln/commit/8d43019e8a0278449232b518d9e0a0f22547d83e))
