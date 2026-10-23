@@ -12,7 +12,7 @@ Kiln is a template language for building websites on the server. The syntax will
 
 - **Async data.** Templates can call async functions to load what they need. Kiln only waits where a call returns a promise, and runs calls that don't depend on each other at the same time.
 - **Server islands.** Build a page as static HTML and let the parts that need live data load on each visit, or stream them in from a server.
-- **Runs anywhere.** No dependencies and no `eval`. Works on Node 24 and Cloudflare Workers.
+- **Runs anywhere.** No dependencies and no `eval`. Works on Node 24, Node 26 and Cloudflare Workers.
 - **Safe by default.** Templates only read what you give them, output is escaped, and limits stop runaway templates.
 - **Layouts and components.** Blocks, includes, components with typed props and slots, and macros.
 - **Clear errors.** Strict mode catches typos, and every error shows the template, line and column.

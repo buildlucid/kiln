@@ -53,7 +53,7 @@ Install it with \`npm install ${site.package}\`. Things to know when writing Kil
 - Strict mode is on by default, so unknown variables, properties, filters and functions are errors.
 - Output is HTML-escaped by default. \`raw\` marks trusted HTML.
 - Templates can call async functions to load data. Kiln only waits where a call returns a promise.
-- Kiln has no runtime dependencies and runs on Node 24 and Cloudflare Workers.
+- Kiln has no runtime dependencies and runs on Node 24, Node 26 and Cloudflare Workers.
 
 ${index.join("\n\n")}
 

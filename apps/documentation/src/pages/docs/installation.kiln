@@ -9,7 +9,7 @@ npm install @lucidkiln/core
 		{% endverbatim %}
 	{% endapply %}
 
-	<p>Kiln needs Node 24 or later, or Cloudflare Workers. It is an ES module and includes its own TypeScript types. Template files use the <code>.kiln</code> extension.</p>
+	<p>Kiln needs Node 24 or 26, or Cloudflare Workers. It is an ES module and includes its own TypeScript types. Template files use the <code>.kiln</code> extension.</p>
 
 	<h2>Node</h2>
 
